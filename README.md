@@ -122,6 +122,8 @@ To launch both pinned to the right profile/scene + obs-websocket port:
 
 That brings up two OBS processes — `viture` instance on ws port 4455, `projector` instance on ws port 4456.
 
+**One-time setup** before running the script for the first time: enable obs-websocket in OBS (Tools → WebSocket Server Settings → "Enable WebSocket server"). This flips `server_enabled` to `true` in `~/Library/Application Support/obs-studio/plugin_config/obs-websocket/config.json` — the config is shared by both instances, but each binds its own port via the `--websocket_port` launch flag. Note the auto-generated password there; the control bridge needs it.
+
 ## Analog control via the OWL-ACDC
 
 The Rebel Technology **OWL-ACDC** is a DC-coupled USB audio interface (4 in, 4 out, 48 kHz). With it patched into the synth rack, modular CV can drive OBS shader parameters in real time, the same way it already drives Structure's onboard shaders.

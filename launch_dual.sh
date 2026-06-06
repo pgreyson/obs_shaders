@@ -25,10 +25,26 @@ PROJECTOR_COLLECTION='structure-elegato-stereo'
 PROJECTOR_WS_PORT=4456
 
 echo "Stopping any existing OBS instances..."
+# OBS sometimes hangs on a hidden "save changes?" dialog and ignores both
+# osascript quit and SIGTERM. Try the polite paths, then escalate to KILL
+# for any PIDs that are still alive — we have nothing in the UI worth
+# preserving since OBS auto-saves scene collections every minute.
 osascript -e 'tell application "OBS" to quit' >/dev/null 2>&1 || true
 sleep 1
-pkill -x OBS 2>/dev/null || true
-sleep 1
+for pid in $(pgrep -f "OBS.app/Contents/MacOS/OBS" 2>/dev/null); do
+    kill -TERM "$pid" 2>/dev/null || true
+done
+sleep 2
+for pid in $(pgrep -f "OBS.app/Contents/MacOS/OBS" 2>/dev/null); do
+    echo "  PID $pid did not exit on TERM, sending KILL"
+    kill -KILL "$pid" 2>/dev/null || true
+done
+# Final guard: wait until they're truly gone before launching new ones,
+# else the new `open -n` calls can race with the dying processes.
+for _ in 1 2 3 4 5; do
+    pgrep -f "OBS.app/Contents/MacOS/OBS" >/dev/null 2>&1 || break
+    sleep 1
+done
 
 echo "Launching Viture instance (ws :$VITURE_WS_PORT)..."
 open -n "$OBS_APP" --args \
