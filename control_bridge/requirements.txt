@@ -1,0 +1,4 @@
+simpleobsws>=1.4.0
+sounddevice>=0.4.6
+numpy>=1.24
+pyyaml>=6.0

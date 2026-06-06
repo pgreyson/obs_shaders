@@ -110,14 +110,23 @@ open /tmp/obs-shaderfilter-2.6.0-macos-arm64.pkg
 # click through installer, restart OBS
 ```
 
-## Planned: analog control (Rebel Technology AC/DC)
+## Dual OBS instances and the control bridge
 
-Goal: drive shader parameters from Eurorack CV in real time, so the modular controls the OBS shaders the same way it controls Structure's onboard shaders. CV comes into the computer via a **Rebel Technology AC/DC** (DC-coupled USB audio interface).
+The Viture (32:9) and 3D projector (16:9) displays have incompatible aspect ratios, so each needs its own profile + scene collection + OBS instance (see [`obs_config/`](obs_config/)). The two instances share the Elgato capture device but otherwise run independently.
 
-Not designed yet. Candidate mechanisms to evaluate when we get there:
-- OBS WebSocket plugin + a bridge daemon that reads the DC-coupled audio inputs and pokes filter properties.
-- An OBS MIDI mapping plugin (if CV is first converted to MIDI by a CV→MIDI module).
-- A native obs-shaderfilter audio-source input that maps audio buffer values directly to uniforms.
+To launch both pinned to the right profile/scene + obs-websocket port:
+
+```bash
+./launch_dual.sh
+```
+
+That brings up two OBS processes — `viture` instance on ws port 4455, `projector` instance on ws port 4456.
+
+## Analog control via the OWL-ACDC
+
+The Rebel Technology **OWL-ACDC** is a DC-coupled USB audio interface (4 in, 4 out, 48 kHz). With it patched into the synth rack, modular CV can drive OBS shader parameters in real time, the same way it already drives Structure's onboard shaders.
+
+The CV-to-OBS bridge lives at [`control_bridge/`](control_bridge/). It reads CV from the OWL-ACDC, connects to both obs-websocket endpoints, and pushes the values into mapped shader-filter properties so both instances stay locked together. It also bidirectionally mirrors GUI slider changes between the two instances (planned, v2). See [`control_bridge/README.md`](control_bridge/README.md) for setup and current implementation status.
 
 ## License
 
