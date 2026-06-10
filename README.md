@@ -31,6 +31,8 @@ All shaders are obs-shaderfilter `.shader` files. Add them as a **User-defined s
 
 | Shader | Input | Output | Purpose |
 |--------|-------|--------|---------|
+| `chromadepth.shader` | mono | half-SBS | Stereo from hue + luma×saturation weighting. Low-confidence (dim or achromatic) pixels collapse to far; bright vivid colors get wide depth spread. Three knobs: `depth`, `hue_rotation`, `color_weight`. See [`SHADERS.md`](SHADERS.md). |
+| `lumadepth.shader` | mono | half-SBS | Stereo from luma. Robust on grayscale or low-color content but flattens distinctions in vivid scenes. Three knobs: `depth`, `luma_anchor`, `falloff`. See [`SHADERS.md`](SHADERS.md). |
 | `stereo_displace.shader` | mono | half-SBS | Color-based parallax (luma or chromadepth). Mono→stereo. |
 | `stereo_displace_b.shader` | mono | half-SBS | Same + narrow 3-tap depth blur (1px) to reduce edge aliasing. |
 | `stereo_displace_bw.shader` | mono | half-SBS | Same + wide depth blur (4px) for stronger smoothing. |

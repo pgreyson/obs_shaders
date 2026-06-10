@@ -14,7 +14,7 @@ obs_instances:
     # Set via env var OBS_PROJECTOR_PASSWORD if you've enabled auth in OBS.
     password: ""
 
-# The Rebel Technology OWL-ACDC USB interface.
+# The Rebel Technology OWL-ACDC USB interface (4 DC-coupled in @ 48 kHz).
 cv:
   device_name_match: "OWL-ACDC"
   sample_rate: 48000
@@ -23,64 +23,54 @@ cv:
   change_threshold: 0.01     # only act/log when channel moves more than this
 
 # CV channel → shader filter property mappings. Each mapping pushes one CV
-# channel's value (after smoothing) to one or more (instance, source, filter,
-# property) targets in OBS. The same channel value goes to every target, so
-# both OBS instances stay locked together for that property.
+# channel's value to one or more (instance, source, filter, property) targets
+# in OBS, so both OBS instances stay locked together for that property.
 #
-# v1 of bridge.py reads each target's current value at startup but does NOT
-# yet write values from CV — confirm the source/filter/property names look
-# right, then enable writes in v2.
+# Defaults below match chromadepth.shader (single-purpose chromadepth variant):
+#   ch0 → depth            (parallax amount)
+#   ch1 → hue_rotation     (which hue is the "near" plane)
+#   ch2 → chroma_threshold (gate dark/gray regions so they anchor at screen)
+#   ch3 → reserved
+#
+# The OBS filter is named "stereo displace" in both scene collections.
 mappings:
   - cv_channel: 0
     name: depth
     targets:
       - instance: viture
         source: "Video Capture Device"
-        filter: "User-defined shader 2"
+        filter: "stereo displace"
         property: depth
       - instance: projector
         source: "Video Capture Device"
-        filter: "User-defined shader 2"
+        filter: "stereo displace"
         property: depth
 
   - cv_channel: 1
-    name: contrast
+    name: hue_rotation
     targets:
       - instance: viture
         source: "Video Capture Device"
-        filter: "User-defined shader 2"
-        property: contrast
+        filter: "stereo displace"
+        property: hue_rotation
       - instance: projector
         source: "Video Capture Device"
-        filter: "User-defined shader 2"
-        property: contrast
+        filter: "stereo displace"
+        property: hue_rotation
 
   - cv_channel: 2
-    name: mode
+    name: chroma_threshold
     targets:
       - instance: viture
         source: "Video Capture Device"
-        filter: "User-defined shader 2"
-        property: mode
+        filter: "stereo displace"
+        property: chroma_threshold
       - instance: projector
         source: "Video Capture Device"
-        filter: "User-defined shader 2"
-        property: mode
+        filter: "stereo displace"
+        property: chroma_threshold
 
-# Bidirectional mirroring: when a property changes in one instance (e.g. the
-# user moves a slider in the OBS UI), apply the same value to the other instance.
-# Not yet implemented in v1 of bridge.py.
+# Bidirectional mirroring (planned v2.5): when a property changes in one
+# instance, apply the same value to the other. Not yet implemented.
 mirror:
   enabled: false
-  properties:
-    - source: "Video Capture Device"
-      filter: "User-defined shader 2"
-      property: depth
-    - source: "Video Capture Device"
-      filter: "User-defined shader 2"
-      property: contrast
-    - source: "Video Capture Device"
-      filter: "User-defined shader 2"
-      property: mode
-  pairs:
-    - [viture, projector]

@@ -3,14 +3,11 @@
 control_bridge/bridge.py — CV/USB → obs-websocket bridge.
 
 Reads DC-coupled CV from a Rebel Technology OWL-ACDC USB interface and pushes
-the values to mapped shader-filter properties in both OBS instances. Also
-bidirectionally mirrors GUI changes so tweaking a slider in one OBS UI updates
-the matching property in the other instance automatically.
+the values to mapped shader-filter properties in both OBS instances.
 
-v1 (this file): proves plumbing. Connects to both obs-websocket endpoints,
-prints the current filter property values, opens an audio stream on the OWL-ACDC,
-and prints CV channel changes. Does NOT yet write filter values from CV or
-mirror GUI changes — that comes next, once we've confirmed the plumbing works.
+v2: actually writes filter-property values from CV (using SetSourceFilterSettings)
+in addition to the v1 plumbing. Bidirectional GUI mirror via event subscription
+is a planned v2.5 follow-on.
 """
 
 from __future__ import annotations
@@ -21,6 +18,7 @@ import logging
 import os
 import signal
 import sys
+import threading
 from pathlib import Path
 
 import numpy as np
@@ -71,7 +69,7 @@ async def connect_obs(
 
 async def read_filter_settings(
     name: str, ws: simpleobsws.WebSocketClient, source: str, filter_name: str
-) -> None:
+) -> dict | None:
     req = simpleobsws.Request(
         "GetSourceFilter", {"sourceName": source, "filterName": filter_name}
     )
@@ -81,14 +79,124 @@ async def read_filter_settings(
             f"[{name}] couldn't read filter '{filter_name}' on '{source}': "
             f"{resp.responseData}"
         )
-        return
-    settings = resp.responseData.get("filterSettings", {})
-    log.info(f"[{name}] {source}/{filter_name} settings: {settings}")
+        return None
+    return resp.responseData.get("filterSettings", {})
+
+
+async def write_filter_property(
+    ws: simpleobsws.WebSocketClient,
+    source: str,
+    filter_name: str,
+    prop: str,
+    value: float,
+) -> bool:
+    req = simpleobsws.Request(
+        "SetSourceFilterSettings",
+        {
+            "sourceName": source,
+            "filterName": filter_name,
+            "filterSettings": {prop: value},
+            "overlay": True,  # merge with existing settings instead of replacing
+        },
+    )
+    resp = await ws.call(req)
+    return resp.ok()
+
+
+def clamp_and_remap(v: float, cv_range: tuple[float, float], out_range: tuple[float, float]) -> float:
+    cv_lo, cv_hi = cv_range
+    out_lo, out_hi = out_range
+    t = (v - cv_lo) / (cv_hi - cv_lo) if cv_hi != cv_lo else 0.0
+    t = max(0.0, min(1.0, t))
+    return out_lo + t * (out_hi - out_lo)
+
+
+async def _write_filter_batch(
+    name: str,
+    ws: simpleobsws.WebSocketClient,
+    source: str,
+    filter_name: str,
+    settings: dict,
+) -> None:
+    """Push multiple property values to one filter in a single obs-websocket call."""
+    req = simpleobsws.Request(
+        "SetSourceFilterSettings",
+        {
+            "sourceName": source,
+            "filterName": filter_name,
+            "filterSettings": settings,
+            "overlay": True,
+        },
+    )
+    try:
+        resp = await ws.call(req)
+        if not resp.ok():
+            log.warning(f"[{name}] batch write failed for {filter_name}: {settings}")
+    except Exception as exc:
+        log.error(f"[{name}] batch write error: {exc}")
+
+
+async def cv_writer_loop(
+    latest_means: np.ndarray,
+    latest_lock: threading.Lock,
+    mappings: list[dict],
+    obs_clients: dict[str, simpleobsws.WebSocketClient],
+    write_hz: float,
+    write_threshold: float,
+    stop_event: asyncio.Event,
+) -> None:
+    """Periodically push the latest CV value of each mapped channel to OBS.
+
+    Each pass groups all property writes targeting the same (instance, source,
+    filter) into a single SetSourceFilterSettings call, then dispatches the
+    group-writes for all instances in parallel via asyncio.gather. Total
+    obs-websocket round-trips per pass = number of distinct (instance, source,
+    filter) tuples, executed concurrently. Was ~6 sequential round-trips
+    before, now typically ~2 parallel.
+    """
+    last_written: dict[tuple, float] = {}
+    interval = 1.0 / write_hz
+    while not stop_event.is_set():
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=interval)
+            break  # stop_event was set
+        except asyncio.TimeoutError:
+            pass  # normal — wake up and do a write pass
+
+        with latest_lock:
+            means = latest_means.copy()
+
+        # Group property writes by (instance, source, filter) so each filter
+        # gets one SetSourceFilterSettings call per pass with all changed
+        # properties merged.
+        batched: dict[tuple, dict] = {}  # (inst, source, filter) -> {prop: value}
+        for mapping in mappings:
+            ch = mapping["cv_channel"]
+            cv_range = tuple(mapping.get("cv_range", [0.0, 1.0]))
+            out_range = tuple(mapping.get("out_range", [0.0, 1.0]))
+            v = clamp_and_remap(float(means[ch]), cv_range, out_range)
+            for target in mapping.get("targets", []):
+                inst = target["instance"]
+                if inst not in obs_clients:
+                    continue
+                prop_key = (inst, target["source"], target["filter"], target["property"])
+                prev = last_written.get(prop_key)
+                if prev is not None and abs(prev - v) < write_threshold:
+                    continue
+                last_written[prop_key] = v
+                group_key = (inst, target["source"], target["filter"])
+                batched.setdefault(group_key, {})[target["property"]] = v
+
+        if not batched:
+            continue
+
+        await asyncio.gather(*(
+            _write_filter_batch(inst, obs_clients[inst], source, filter_name, settings)
+            for (inst, source, filter_name), settings in batched.items()
+        ))
 
 
 async def main_async(config: dict) -> None:
-    # Connect to all configured OBS instances. Failures are non-fatal —
-    # the bridge can still report CV values even if obs-websocket is down.
     obs_clients: dict[str, simpleobsws.WebSocketClient] = {}
     for inst_name, inst_cfg in config.get("obs_instances", {}).items():
         host = inst_cfg.get("host", "localhost")
@@ -100,42 +208,80 @@ async def main_async(config: dict) -> None:
         except Exception as exc:
             log.error(f"[{inst_name}] failed to connect: {exc}")
 
-    # For each mapping target, show the current filter property values so we
-    # know we're pointing at the right filter / property name in each instance.
+    # Dump current values for each unique (instance, source, filter) the config
+    # touches, so we know our names match the OBS scene.
+    seen: set[tuple[str, str, str]] = set()
     for mapping in config.get("mappings", []):
         for target in mapping.get("targets", []):
             inst = target["instance"]
             if inst not in obs_clients:
                 continue
-            await read_filter_settings(
+            key = (inst, target["source"], target["filter"])
+            if key in seen:
+                continue
+            seen.add(key)
+            settings = await read_filter_settings(
                 inst, obs_clients[inst], target["source"], target["filter"]
             )
+            if settings is not None:
+                log.info(f"[{inst}] {target['source']}/{target['filter']} → {settings}")
 
-    # Open the CV input stream.
     cv_cfg = config["cv"]
     device_idx = find_cv_device(cv_cfg["device_name_match"])
     sample_rate = cv_cfg.get("sample_rate", 48000)
     channels = cv_cfg.get("channels", 4)
     poll_hz = cv_cfg.get("poll_hz", 30)
     change_threshold = cv_cfg.get("change_threshold", 0.01)
+    write_hz = cv_cfg.get("write_hz", poll_hz)
+    write_threshold = cv_cfg.get("write_threshold", 0.005)
     block_size = max(1, sample_rate // poll_hz)
 
     log.info(
-        f"Opening CV stream: device=[{device_idx}], sr={sample_rate}, "
-        f"channels={channels}, block={block_size} ({poll_hz} Hz polling)"
+        f"CV stream: device=[{device_idx}], sr={sample_rate}, channels={channels}, "
+        f"block={block_size} ({poll_hz} Hz polling, {write_hz} Hz writes)"
     )
 
+    latest_means = np.zeros(channels, dtype=np.float32)
+    latest_lock = threading.Lock()
     last_reported = np.zeros(channels, dtype=np.float32)
+    heartbeat_counter = [0]
+    heartbeat_every = max(1, poll_hz * 5)  # full snapshot every ~5s
 
     def audio_callback(indata: np.ndarray, frames: int, time_info, status) -> None:
         if status:
             log.warning(f"audio status: {status}")
         means = indata.mean(axis=0)
+        with latest_lock:
+            latest_means[:] = means
         for ch in range(channels):
             v = float(means[ch])
             if abs(v - last_reported[ch]) > change_threshold:
                 last_reported[ch] = v
                 log.info(f"CV ch{ch}: {v:+.3f}")
+        heartbeat_counter[0] += 1
+        if heartbeat_counter[0] % heartbeat_every == 0:
+            with latest_lock:
+                snap = " ".join(
+                    f"ch{c}={latest_means[c]:+.3f}" for c in range(channels)
+                )
+            log.info(f"CV heartbeat: {snap}")
+
+    stop_event = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, stop_event.set)
+
+    writer_task = asyncio.create_task(
+        cv_writer_loop(
+            latest_means,
+            latest_lock,
+            config.get("mappings", []),
+            obs_clients,
+            write_hz,
+            write_threshold,
+            stop_event,
+        )
+    )
 
     stream = sd.InputStream(
         device=device_idx,
@@ -145,14 +291,15 @@ async def main_async(config: dict) -> None:
         callback=audio_callback,
     )
 
-    stop_event = asyncio.Event()
-    loop = asyncio.get_running_loop()
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, stop_event.set)
-
     with stream:
-        log.info("Bridge running. Move CV inputs to see values. Ctrl-C to exit.")
+        log.info("Bridge running. CV writes are live. Ctrl-C to exit.")
         await stop_event.wait()
+
+    writer_task.cancel()
+    try:
+        await writer_task
+    except asyncio.CancelledError:
+        pass
 
     log.info("Disconnecting OBS clients...")
     for ws in obs_clients.values():
