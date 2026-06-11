@@ -446,14 +446,6 @@ static void splat_render(void *data, gs_effect_t *unused_effect)
 
 		struct vec2 dims;
 		vec2_set(&dims, (float)w, (float)h);
-		gs_effect_set_texture(s->p_image, input_tex);
-		gs_effect_set_vec2(s->p_dims, &dims);
-		gs_effect_set_float(s->p_f0, f0);
-		gs_effect_set_float(s->p_vis_lo, vis_lo);
-		gs_effect_set_float(s->p_span, span);
-		gs_effect_set_float(s->p_eye_w, eye_w);
-		gs_effect_set_float(s->p_window_on,
-				    s->window ? 1.0f : 0.0f);
 
 		if (s->debug == 2 || s->debug == 3) {
 			/* blit the grabbed input: 2 = rgb, 3 = alpha gray */
@@ -492,6 +484,18 @@ static void splat_render(void *data, gs_effect_t *unused_effect)
 					     .cx = (int)eye_w,
 					     .cy = (int)h};
 			gs_set_scissor_rect(&sc);
+			/* ALL params re-set per pass: the effect upload is
+			   changed-only and resets flags after each technique
+			   — a texture set once goes stale on the second eye
+			   (measured: warp R eye rendered black fragments). */
+			gs_effect_set_texture(s->p_image, input_tex);
+			gs_effect_set_vec2(s->p_dims, &dims);
+			gs_effect_set_float(s->p_f0, f0);
+			gs_effect_set_float(s->p_vis_lo, vis_lo);
+			gs_effect_set_float(s->p_span, span);
+			gs_effect_set_float(s->p_eye_w, eye_w);
+			gs_effect_set_float(s->p_window_on,
+					    s->window ? 1.0f : 0.0f);
 			gs_effect_set_float(s->p_eye_sign,
 					    eye == 0 ? 1.0f : -1.0f);
 			gs_effect_set_float(s->p_eye_base,
