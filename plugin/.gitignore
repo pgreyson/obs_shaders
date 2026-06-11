@@ -1,0 +1,4 @@
+obs-headers/
+build_manual/
+build_macos/
+.deps/

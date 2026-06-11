@@ -44,7 +44,10 @@ import simpleobsws  # noqa: E402
 WS_URL = "ws://127.0.0.1:4455"
 WS_PASSWORD = "fcXnj9dDSRctKq8N"
 SOURCE = "Test Pattern"
-FILTER = "chromadepth"
+# "stereo splat" = the native plugin (true forward splat + z-buffer);
+# "chromadepth" = the legacy fragment march (disabled in the chain but
+# kept as rollback — pass --filter chromadepth to compare against it).
+FILTER = "stereo splat"
 MONO_PNG = "/tmp/harness_mono.png"
 
 TARGET_MEANDIFF = 0.01
@@ -136,9 +139,13 @@ async def run(configs):
 
 
 def main():
+    global FILTER
     ap = argparse.ArgumentParser()
     ap.add_argument("--quick", action="store_true")
+    ap.add_argument("--filter", default=FILTER,
+                    help="displacement filter name on Test Pattern")
     args = ap.parse_args()
+    FILTER = args.filter
     if args.quick:
         # quick now mirrors the LIVE-CONTENT failure modes: gradients
         # (scene 2 — real synth is gradients everywhere), lumadepth mode

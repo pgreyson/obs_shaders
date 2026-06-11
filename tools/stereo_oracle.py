@@ -356,6 +356,14 @@ def compute_field(src, hue_rotation=0.0, color_weight=1.0, backdrop=0.0,
             # weight is 0.114) and must still ride with its body.
             ok = (bdist > 0.04) & (same_surface | (delta < 0.06))
             cand = np.maximum(cand, np.where(ok, dn, 0.0))
+    # The deployed chain carries the field as 8-bit encoded alpha
+    # (a = 0.5 + d/2, chromadepth_bake.shader) — model that quantization
+    # ALWAYS, same fairness rationale as quantizing the oracle source to
+    # the PNG's 8 bits. Without it, float-vs-8-bit dust at depth
+    # boundaries measures as straggler ghosts (~50/eye at d0.5) that no
+    # GPU implementation reading the bake could ever avoid.
+    cand = (np.round(np.clip(0.5 + 0.5 * np.clip(cand, 0.0, 1.0), 0.0, 1.0)
+                     * 255.0) / 255.0 - 0.5) * 2.0
     if field_sigma > 0.0:
         cand = field_smooth(cand, field_sigma)
     return cand
