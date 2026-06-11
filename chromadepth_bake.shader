@@ -306,6 +306,11 @@ float4 mainImage(VertData v_in) : TARGET
         return float4(d, d, d, 1.0);
 
     // Displayed color stays ORIGINAL — only the field is prefiltered.
+    // ALPHA ENCODING a = 0.5 + d/2. Empirically (march probes 3/4): with
+    // a ≥ 0.5 the chain passes rgb AND alpha completely unmodified; but
+    // content stored with a ≈ 0 arrives BLACK at the next filter (the
+    // ramp band measured black at a = luma³ ≈ 0.005, lit at a = 0.502 —
+    // some OBS path punishes near-zero alpha). Stay in the safe half.
     float3 orig = image.Sample(textureSampler, safe_uv(xq, yq)).rgb;
-    return float4(orig, d);
+    return float4(orig, 0.5 + 0.5 * saturate(d));
 }

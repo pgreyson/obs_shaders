@@ -135,16 +135,24 @@ def main():
     ap.add_argument("--quick", action="store_true")
     args = ap.parse_args()
     if args.quick:
-        configs = [(1, 2, 0.0, 0.5, 0.0, 1.0), (1, 2, 0.0, 0.84, 0.0, 1.0),
+        # quick now mirrors the LIVE-CONTENT failure modes: gradients
+        # (scene 2 — real synth is gradients everywhere), lumadepth mode
+        # (cw 0, where the user's CV sits), and noise.
+        configs = [(1, 2, 0.0, 0.5, 0.0, 1.0),
+                   (2, 2, 0.0, 0.5, 0.0, 1.0),
+                   (2, 2, 0.0, 0.5, 0.0, 0.0),
+                   (5, 2, 1.0, 0.5, 0.0, 0.0),
                    (5, 2, 1.0, 0.84, 0.0, 1.0)]
     else:
         configs = []
         for scene, soft, noise in ((0, 2, 0.0), (1, 2, 0.0), (1, 0, 0.0),
-                                   (3, 2, 0.0), (4, 2, 0.0), (5, 2, 1.0)):
+                                   (2, 2, 0.0), (3, 2, 0.0), (4, 2, 0.0),
+                                   (5, 2, 1.0)):
             for depth in (0.3, 0.5, 0.84, 1.0):
                 configs.append((scene, soft, noise, depth, 0.0, 1.0))
         configs += [(1, 2, 0.0, 0.5, 0.3, 1.0), (1, 2, 0.0, 0.5, 0.0, 0.0),
-                    (1, 2, 0.0, 0.5, 0.0, 0.5), (5, 2, 0.5, 1.0, 0.0, 1.0)]
+                    (1, 2, 0.0, 0.5, 0.0, 0.5), (5, 2, 0.5, 1.0, 0.0, 1.0),
+                    (2, 2, 0.0, 0.84, 0.0, 0.0), (5, 2, 1.0, 0.5, 0.0, 0.0)]
     failures = asyncio.run(run(configs))
     print(f"\n{'ALL PASS' if failures == 0 else f'{failures} FAILURES'}")
     sys.exit(0 if failures == 0 else 1)
