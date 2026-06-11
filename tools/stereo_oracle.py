@@ -199,6 +199,41 @@ def field_smooth(d, field_sigma):
     return 2.0 * (e - 0.5)
 
 
+def field_smooth_bilateral(d, sigma_s, sigma_r):
+    """CANDIDATE convention: edge-preserving field smoothing. Spatial
+    Gaussian sigma_s as in field_smooth, but each tap is range-weighted by
+    exp(-(d_tap - d_center)^2 / (2 sigma_r^2)): depth variation smaller
+    than ~sigma_r (texture) smooths away (pepper suppression), genuine
+    shape cliffs (delta >> sigma_r) are preserved — they render as ONE
+    clean reveal gap instead of the picket-fence comb that plain Gaussian
+    smoothing produces on hard edges (each ramp pixel landing at its own
+    disparity). Separable h-then-v approximation, same kernel size rules
+    as field_smooth. Demo-grade: no 8-bit chain modeling yet."""
+    R = 10
+    n = int(round(2.0 * sigma_s * sigma_s))
+    if n <= 0:
+        return d
+    sig2 = n * 0.5
+    i = np.arange(-R, R + 1, dtype=float)
+    w_s = np.exp(-(i * i) / (2.0 * sig2))
+    out = d
+    for ax in (1, 0):
+        pad = [(R, R) if a == ax else (0, 0) for a in (0, 1)]
+        p = np.pad(out, pad, mode="edge")
+        acc = np.zeros_like(out)
+        wacc = np.zeros_like(out)
+        for k in range(2 * R + 1):
+            sl = (slice(k, k + out.shape[0]) if ax == 0 else slice(None),
+                  slice(k, k + out.shape[1]) if ax == 1 else slice(None))
+            tap = p[sl]
+            w = w_s[k] * np.exp(-((tap - out) ** 2) /
+                                (2.0 * sigma_r * sigma_r))
+            acc += w * tap
+            wacc += w
+        out = acc / wacc
+    return out
+
+
 # ---- depth model (bit-faithful to chromadepth.shader) ----
 def depth_for(img, hue_rotation=0.0, color_weight=1.0):
     cmax = img.max(axis=2)
@@ -388,7 +423,7 @@ def compute_field(src, hue_rotation=0.0, color_weight=1.0, backdrop=0.0,
 
 # ---- ground truth render: forward splat + z-buffer ----
 def render_eyes(src, depth_slider, hue_rotation=0.0, color_weight=1.0, eye_w=W,
-                backdrop=0.0, field_sigma=0.0):
+                backdrop=0.0, field_sigma=0.0, micro_fill=0):
     """Return (L, R) eye images, each H x eye_w x 3. Splat at 2x subpixel.
 
     backdrop = the known uniform background layer behind all content. Holes
@@ -451,6 +486,27 @@ def render_eyes(src, depth_slider, hue_rotation=0.0, color_weight=1.0, eye_w=W,
             offs = np.arange(ends[-1]) - np.repeat(ends - k, k)
             px = lo[order][idx] + offs
             img[row, px] = src[sr, cols_v[order][idx]]
+            # MICRO-FILL (candidate convention): reveal gaps no wider than
+            # micro_fill px are texture-scale disocclusions — fill them by
+            # continuing the FARTHER flank (da Vinci at texture scale
+            # only). Larger gaps stay backdrop per the v10 rigid-shape
+            # rule. micro_fill=0 reproduces pure black reveals.
+            if micro_fill > 0:
+                written = np.zeros(eye_w, dtype=bool)
+                written[px] = True
+                zrow = np.zeros(eye_w)
+                zrow[px] = dt_v[order][idx]
+                e = np.diff(written.astype(int))
+                starts = np.where(e == -1)[0] + 1   # lit -> gap
+                stops = np.where(e == 1)[0] + 1     # gap -> lit
+                for a in starts:
+                    b_idx = stops[stops > a]
+                    if not len(b_idx):
+                        continue
+                    b = b_idx[0]
+                    if b - a <= micro_fill:
+                        donor = a - 1 if zrow[a - 1] <= zrow[b] else b
+                        img[row, a:b] = img[row, donor]
             # Splat holes (disocclusions) stay backdrop black — black IS the
             # infinity plane here. Every shape keeps its rigid silhouette in
             # both eyes: no carve eats the far surface, no fill extends it.
@@ -505,13 +561,13 @@ def render_eyes_warp(src, depth_slider, hue_rotation=0.0, color_weight=1.0,
             # resolves to the later emission = larger source x, matching
             # the GPU's LEQUAL + ascending-x draw order
             order = np.lexsort((np.arange(len(px)), z_e))
-            # linear color resample from the source row
-            uf = u_e * W - 0.5
-            i0 = np.clip(np.floor(uf).astype(int), 0, W - 1)
-            i1 = np.clip(i0 + 1, 0, W - 1)
-            ft = np.clip(uf - i0, 0.0, 1.0)[:, None]
-            cols = src[sr, i0] * (1 - ft) + src[sr, i1] * ft
-            img[row, px[order]] = cols[order]
+            # POINT color sampling: a stretch zone REPLICATES pixels
+            # instead of blending them, so hard color edges stay a single
+            # hard transition riding the smooth disparity ramp (linear
+            # sampling washed every contact into in-between colors that
+            # belong to neither surface — user-rejected smear).
+            i_near = np.clip(np.round(u_e * W - 0.5).astype(int), 0, W - 1)
+            img[row, px[order]] = src[sr, i_near[order]]
         out[eye] = img
     return out["L"], out["R"]
 

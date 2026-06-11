@@ -184,9 +184,11 @@ float4 PSSplat(SplatOut v_in) : TARGET
 
 float4 PSWarp(WarpOut v_in) : TARGET
 {
-	// Linear: stretched spans resample the source smoothly; at rest the
-	// uv sits on texel centers so this degrades to an exact fetch.
-	float4 texel = image.SampleLevel(linearSampler, v_in.uv, 0.0);
+	// POINT sampling: stretch zones replicate pixels instead of blending
+	// them — hard color edges stay hard while the disparity ramp under
+	// them is smooth. (Linear washed every contact into in-between
+	// colors; measured/rejected as smear.) Matches render_eyes_warp.
+	float4 texel = image.SampleLevel(pointSampler, v_in.uv, 0.0);
 	return float4(texel.rgb, 1.0);
 }
 
