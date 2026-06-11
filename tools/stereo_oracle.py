@@ -128,6 +128,60 @@ def field_source(src):
     return out
 
 
+def field_smooth(d, field_sigma):
+    """REGIONAL-DEPTH smoothing (user-selected convention 2026-06-10 for
+    analog/textured content): Gaussian-smooth the FINAL depth field — after
+    dilation/lift/reassignment, before taper/splat. Depth cliffs become
+    ramps wider than the disocclusion gap they would open, so textured
+    content stops punching 1-6px black pepper holes and sloped contacts
+    stop tearing into staircase zippers (both measured on a real captured
+    frame; pure-oracle renders showed them, so this is a convention fix,
+    not a shader bug fix).
+
+    Smoothing DEPTH (not the source colors) keeps every σ=0 rule exactly
+    as signed off, never drags blended hues through the depth wheel, and
+    measured 3.7× fewer residual black holes than source-side blur at σ=4
+    on the real frame. σ is continuous: 0 = rigid-shape sign-off behavior
+    for graphic content, ≈4 = the regional look the user picked.
+
+    Kernel: separable 21-tap discrete Gaussian, σ_eff = sqrt(round(2σ²)/2)
+    (quantized so tiny σ snaps to off), radius R=10, EDGE-CLAMPED (not
+    wrapped). This is BIT-THE-SAME construction as chromadepth_smooth.
+    shader's two passes — change both together.
+
+    8-BIT CHAIN MODEL: on the rig the field rides the alpha channel
+    (a = 0.5 + d/2) through RGBA8 filter hops — quantized to 1/255 after
+    the bake, after the h pass, and after the v pass. A smoothed field is
+    ramps EVERYWHERE, so float-vs-8-bit staircase dust lands on every
+    silhouette (same class as the oracle-source PNG quantization fix).
+    Model the hops exactly: encode, quantize, blur h, quantize, blur v,
+    quantize, decode — shader pass order (h then v) matters once
+    quantization sits between the passes."""
+    R = 10
+    n = int(round(2.0 * field_sigma * field_sigma))
+    if n <= 0:
+        return d
+    sig2 = n * 0.5
+    i = np.arange(-R, R + 1, dtype=float)
+    w = np.exp(-(i * i) / (2.0 * sig2))
+    w /= w.sum()
+
+    def q8(x):
+        return np.round(np.clip(x, 0.0, 1.0) * 255.0) / 255.0
+
+    e = q8(0.5 + 0.5 * np.clip(d, 0.0, 1.0))      # bake's encoded alpha
+    for ax in (1, 0):                              # shader order: h then v
+        pad = [(R, R) if a == ax else (0, 0) for a in (0, 1)]
+        p = np.pad(e, pad, mode="edge")
+        acc = np.zeros_like(e)
+        for k in range(2 * R + 1):
+            sl = (slice(k, k + e.shape[0]) if ax == 0 else slice(None),
+                  slice(k, k + e.shape[1]) if ax == 1 else slice(None))
+            acc += w[k] * p[sl]
+        e = q8(acc)
+    return 2.0 * (e - 0.5)
+
+
 # ---- depth model (bit-faithful to chromadepth.shader) ----
 def depth_for(img, hue_rotation=0.0, color_weight=1.0):
     cmax = img.max(axis=2)
@@ -181,29 +235,14 @@ def edge_taper(x, f0):
     return t * t * (3 - 2 * t)
 
 
-# ---- ground truth render: forward splat + z-buffer ----
-def render_eyes(src, depth_slider, hue_rotation=0.0, color_weight=1.0, eye_w=W,
-                backdrop=0.0):
-    """Return (L, R) eye images, each H x eye_w x 3. Splat at 2x subpixel.
-
-    backdrop = the known uniform background layer behind all content. Holes
-    (disocclusions) show this layer — it continues behind every shape. At
-    backdrop luma³ depth the layer's own disparity is sub-pixel, so it is
-    laid down as a uniform zero-disparity fill. backdrop=0.0 reproduces the
-    black-void convention exactly.
-    """
-    f0 = depth_slider * depth_slider * MAX_PARALLAX
-    vis_lo, vis_hi = PIC_LO + f0, PIC_HI - f0
-    span = vis_hi - vis_lo
-    SS = 4  # subpixel splat density
-    xs = (np.arange(int(W * SS)) + 0.5) / (W * SS)          # source x in [0,1]
-    keep = (xs >= PIC_LO) & (xs <= PIC_HI)
-    xs = xs[keep]
-    src_cols = np.clip((xs * W).astype(int), 0, W - 1)
-    out = {}
-    eyes = {"L": +1.0, "R": -1.0}  # dest = x + sign * D (crossed)
-    # vertical crop mapping: output row -> source row
-    vy = np.clip(((f0 + (np.arange(H) + 0.5) / H * (1 - 2 * f0)) * H).astype(int), 0, H - 1)
+# ---- field computation: prefilter + dilation + reassignment + lift ----
+def compute_field(src, hue_rotation=0.0, color_weight=1.0, backdrop=0.0,
+                  field_sigma=0.0):
+    """The complete depth-field pipeline (what chromadepth_bake.shader
+    bakes into alpha): prefiltered source -> raw depth -> hue-stability ->
+    contact-mix reassignment -> donor-restricted lift -> field_smooth(σ)
+    regional smoothing. Returns d_full (H x W). Splat colors are NOT
+    touched here — callers splat original src colors at these depths."""
     # The entire field pipeline reads the prefiltered source; only the
     # splatted COLORS come from the original src.
     src_f = field_source(src)
@@ -317,7 +356,36 @@ def render_eyes(src, depth_slider, hue_rotation=0.0, color_weight=1.0, eye_w=W,
             # weight is 0.114) and must still ride with its body.
             ok = (bdist > 0.04) & (same_surface | (delta < 0.06))
             cand = np.maximum(cand, np.where(ok, dn, 0.0))
-    d_full = cand
+    if field_sigma > 0.0:
+        cand = field_smooth(cand, field_sigma)
+    return cand
+
+
+# ---- ground truth render: forward splat + z-buffer ----
+def render_eyes(src, depth_slider, hue_rotation=0.0, color_weight=1.0, eye_w=W,
+                backdrop=0.0, field_sigma=0.0):
+    """Return (L, R) eye images, each H x eye_w x 3. Splat at 2x subpixel.
+
+    backdrop = the known uniform background layer behind all content. Holes
+    (disocclusions) show this layer — it continues behind every shape. At
+    backdrop luma³ depth the layer's own disparity is sub-pixel, so it is
+    laid down as a uniform zero-disparity fill. backdrop=0.0 reproduces the
+    black-void convention exactly.
+    """
+    f0 = depth_slider * depth_slider * MAX_PARALLAX
+    vis_lo, vis_hi = PIC_LO + f0, PIC_HI - f0
+    span = vis_hi - vis_lo
+    SS = 4  # subpixel splat density
+    xs = (np.arange(int(W * SS)) + 0.5) / (W * SS)          # source x in [0,1]
+    keep = (xs >= PIC_LO) & (xs <= PIC_HI)
+    xs = xs[keep]
+    src_cols = np.clip((xs * W).astype(int), 0, W - 1)
+    out = {}
+    eyes = {"L": +1.0, "R": -1.0}  # dest = x + sign * D (crossed)
+    # vertical crop mapping: output row -> source row
+    vy = np.clip(((f0 + (np.arange(H) + 0.5) / H * (1 - 2 * f0)) * H).astype(int), 0, H - 1)
+    d_full = compute_field(src, hue_rotation, color_weight, backdrop,
+                           field_sigma)
     taper = edge_taper(xs, f0) if f0 > 0 else np.ones_like(xs)
     for eye, sign in eyes.items():
         img = np.full((H, eye_w, 3), backdrop, dtype=float)

@@ -81,7 +81,7 @@ async def run(configs):
     failures = 0
     last_scene = None
     src_q = None
-    for scene, soft, noise, depth, rot, cw in configs:
+    for scene, soft, noise, depth, rot, cw, sigma in configs:
         if (scene, soft, noise) != last_scene:
             src = pattern(scene, softness_px=soft, noise_amp=noise)
             # Quantize the oracle's source to the PNG's 8 bits: the shader
@@ -101,6 +101,11 @@ async def run(configs):
         await ws.call(simpleobsws.Request("SetSourceFilterSettings", {
             "sourceName": SOURCE, "filterName": FILTER,
             "filterSettings": {"depth": depth}}))
+        # regional-depth smoothing: both separable passes get the same sigma
+        for fname in ("field smooth h", "field smooth v"):
+            await ws.call(simpleobsws.Request("SetSourceFilterSettings", {
+                "sourceName": SOURCE, "filterName": fname,
+                "filterSettings": {"smoothing": sigma}}))
         await asyncio.sleep(0.8)
         r = await ws.call(simpleobsws.Request("GetSourceScreenshot", {
             "sourceName": SOURCE, "imageFormat": "png",
@@ -108,8 +113,8 @@ async def run(configs):
         b64 = r.responseData["imageData"].split(",", 1)[1]
         cap = np.asarray(Image.open(io.BytesIO(base64.b64decode(b64)))
                          .convert("RGB")).astype(float) / 255.0
-        oL, oR = render_eyes(src_q, depth,
-                             hue_rotation=rot, color_weight=cw, eye_w=960)
+        oL, oR = render_eyes(src_q, depth, hue_rotation=rot,
+                             color_weight=cw, eye_w=960, field_sigma=sigma)
         for eye, m in zip("LR", compare(cap, oL, oR)):
             ok = (m["meandiff"] < TARGET_MEANDIFF
                   and m["ghost"] < TARGET_GHOST and m["stray"] < TARGET_STRAY)
@@ -137,22 +142,39 @@ def main():
     if args.quick:
         # quick now mirrors the LIVE-CONTENT failure modes: gradients
         # (scene 2 — real synth is gradients everywhere), lumadepth mode
-        # (cw 0, where the user's CV sits), and noise.
-        configs = [(1, 2, 0.0, 0.5, 0.0, 1.0),
-                   (2, 2, 0.0, 0.5, 0.0, 1.0),
-                   (2, 2, 0.0, 0.5, 0.0, 0.0),
-                   (5, 2, 1.0, 0.5, 0.0, 0.0),
-                   (5, 2, 1.0, 0.84, 0.0, 1.0)]
+        # (cw 0, where the user's CV sits), noise, and the live sigma=4
+        # regional-depth configs (config = ..., field_sigma).
+        configs = [(1, 2, 0.0, 0.5, 0.0, 1.0, 0.0),
+                   (2, 2, 0.0, 0.5, 0.0, 1.0, 0.0),
+                   (2, 2, 0.0, 0.5, 0.0, 0.0, 0.0),
+                   (5, 2, 1.0, 0.5, 0.0, 0.0, 0.0),
+                   (5, 2, 1.0, 0.84, 0.0, 1.0, 0.0),
+                   (1, 2, 0.0, 0.5, 0.0, 1.0, 4.0),
+                   (2, 2, 0.0, 0.5, 0.0, 0.0, 4.0),
+                   (5, 2, 1.0, 0.84, 0.0, 1.0, 4.0)]
     else:
         configs = []
         for scene, soft, noise in ((0, 2, 0.0), (1, 2, 0.0), (1, 0, 0.0),
                                    (2, 2, 0.0), (3, 2, 0.0), (4, 2, 0.0),
                                    (5, 2, 1.0)):
             for depth in (0.3, 0.5, 0.84, 1.0):
-                configs.append((scene, soft, noise, depth, 0.0, 1.0))
-        configs += [(1, 2, 0.0, 0.5, 0.3, 1.0), (1, 2, 0.0, 0.5, 0.0, 0.0),
-                    (1, 2, 0.0, 0.5, 0.0, 0.5), (5, 2, 0.5, 1.0, 0.0, 1.0),
-                    (2, 2, 0.0, 0.84, 0.0, 0.0), (5, 2, 1.0, 0.5, 0.0, 0.0)]
+                configs.append((scene, soft, noise, depth, 0.0, 1.0, 0.0))
+        configs += [(1, 2, 0.0, 0.5, 0.3, 1.0, 0.0),
+                    (1, 2, 0.0, 0.5, 0.0, 0.0, 0.0),
+                    (1, 2, 0.0, 0.5, 0.0, 0.5, 0.0),
+                    (5, 2, 0.5, 1.0, 0.0, 1.0, 0.0),
+                    (2, 2, 0.0, 0.84, 0.0, 0.0, 0.0),
+                    (5, 2, 1.0, 0.5, 0.0, 0.0, 0.0)]
+        # sigma=4 regional-depth sweep (the live convention): every scene
+        # class once, plus depth extremes on rects and noise.
+        configs += [(0, 2, 0.0, 0.5, 0.0, 1.0, 4.0),
+                    (1, 2, 0.0, 0.5, 0.0, 1.0, 4.0),
+                    (1, 2, 0.0, 1.0, 0.0, 1.0, 4.0),
+                    (2, 2, 0.0, 0.5, 0.0, 0.0, 4.0),
+                    (3, 2, 0.0, 0.84, 0.0, 1.0, 4.0),
+                    (4, 2, 0.0, 0.84, 0.0, 1.0, 4.0),
+                    (5, 2, 1.0, 0.84, 0.0, 1.0, 4.0),
+                    (5, 2, 1.0, 1.0, 0.0, 0.0, 4.0)]
     failures = asyncio.run(run(configs))
     print(f"\n{'ALL PASS' if failures == 0 else f'{failures} FAILURES'}")
     sys.exit(0 if failures == 0 else 1)

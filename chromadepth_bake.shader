@@ -113,6 +113,11 @@ float2 safe_uv(float x, float y) {
 // bilinear corner taps: exact [1,2,1]x[1,2,1]/16 in 4 samples (x, y must
 // be a texel center, which every call site guarantees).
 float3 blur3(float x, float y) {
+    // ±0.5 texel corners = exact 3×3 binomial. DO NOT widen by moving
+    // these offsets: at ±1.0 the bilinear lands ON the diagonal texel
+    // centers — no interpolation, center pixel excluded, an aliasing
+    // X-kernel (user saw black speckle). Widening the prefilter must be
+    // done with additional taps, prototyped in the oracle first.
     float hw = 0.5 * uv_pixel_interval.x;
     float hh = 0.5 * uv_pixel_interval.y;
     return 0.25 * (image.Sample(textureSampler, safe_uv(x - hw, y - hh)).rgb
