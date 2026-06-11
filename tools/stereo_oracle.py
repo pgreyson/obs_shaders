@@ -112,6 +112,22 @@ def pattern(scene, noise_amp=0.0, softness_px=2.0, seed=7, backdrop=0.0):
     return img
 
 
+def field_source(src):
+    """Depth-source prefilter: one 3×3 binomial ([1,2,1] both axes). The
+    FIELD pipeline (depth, hue, confidence, gates, lit floor) reads this;
+    displayed colors stay the original. Analog noise (±0.1) attenuates ~4×
+    — below the confidence deadband — so per-pixel gate flicker cannot
+    become displacement speckle at high depth. Clean hard edges become 2 px
+    soft ramps, which is exactly the regime the donor/reassignment rules
+    were built for."""
+    k = np.array([1.0, 2.0, 1.0]) / 4.0
+    out = src
+    for ax in (0, 1):
+        out = (np.roll(out, -1, axis=ax) * k[0] + out * k[1]
+               + np.roll(out, 1, axis=ax) * k[2])
+    return out
+
+
 # ---- depth model (bit-faithful to chromadepth.shader) ----
 def depth_for(img, hue_rotation=0.0, color_weight=1.0):
     cmax = img.max(axis=2)
@@ -188,7 +204,10 @@ def render_eyes(src, depth_slider, hue_rotation=0.0, color_weight=1.0, eye_w=W,
     eyes = {"L": +1.0, "R": -1.0}  # dest = x + sign * D (crossed)
     # vertical crop mapping: output row -> source row
     vy = np.clip(((f0 + (np.arange(H) + 0.5) / H * (1 - 2 * f0)) * H).astype(int), 0, H - 1)
-    d_full = depth_for(src, hue_rotation, color_weight)
+    # The entire field pipeline reads the prefiltered source; only the
+    # splatted COLORS come from the original src.
+    src_f = field_source(src)
+    d_full = depth_for(src_f, hue_rotation, color_weight)
     # Foreground depth dilation (standard 2D->3D practice): AA/soft edge
     # pixels mix toward gray and would otherwise compute a FAR depth,
     # peeling object edges off as stranded ribbons. Max-filter so edge
@@ -225,13 +244,13 @@ def render_eyes(src, depth_slider, hue_rotation=0.0, color_weight=1.0, eye_w=W,
     # corner fringes (partial in both axes) find their body diagonally.
     # Known limit: dim achromatic solids (mid-gray bodies) don't donate, so
     # their fringes keep luma³ depth — offsets there are a few px at most.
-    hue, delta = hue_delta(src)
-    conf = conf_for(src, color_weight)
-    luma = src @ np.array([0.299, 0.587, 0.114])
+    hue, delta = hue_delta(src_f)
+    conf = conf_for(src_f, color_weight)
+    luma = src_f @ np.array([0.299, 0.587, 0.114])
     # "Lit" = visibly distinct from the backdrop layer (with a black
     # backdrop this is just max-channel). Backdrop-colored pixels must
     # never lift, whatever the backdrop value — see bite note below.
-    bdist = np.abs(src - backdrop).max(axis=2)
+    bdist = np.abs(src_f - backdrop).max(axis=2)
 
     def sh2(a, dy, dx):
         return np.roll(np.roll(a, dy, axis=0), dx, axis=1)

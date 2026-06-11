@@ -80,13 +80,18 @@ async def run(configs):
     await ws.wait_until_identified()
     failures = 0
     last_scene = None
-    for scene, soft, depth, rot, cw in configs:
-        if (scene, soft) != last_scene:
-            src = pattern(scene, softness_px=soft)
-            Image.fromarray((src * 255).astype(np.uint8)).save(MONO_PNG)
+    src_q = None
+    for scene, soft, noise, depth, rot, cw in configs:
+        if (scene, soft, noise) != last_scene:
+            src = pattern(scene, softness_px=soft, noise_amp=noise)
+            # Quantize the oracle's source to the PNG's 8 bits: the shader
+            # can only ever see the PNG, and float-vs-8-bit dust at exact
+            # grid boundaries measured as whole ghost rows.
+            src_q = np.round(np.clip(src, 0, 1) * 255.0) / 255.0
+            Image.fromarray((src_q * 255).astype(np.uint8)).save(MONO_PNG)
             await ws.call(simpleobsws.Request("SetInputSettings", {
                 "inputName": SOURCE, "inputSettings": {"file": MONO_PNG}}))
-            last_scene = (scene, soft)
+            last_scene = (scene, soft, noise)
             await asyncio.sleep(0.6)
         await ws.call(simpleobsws.Request("SetSourceFilterSettings", {
             "sourceName": SOURCE, "filterName": FILTER,
@@ -99,7 +104,7 @@ async def run(configs):
         b64 = r.responseData["imageData"].split(",", 1)[1]
         cap = np.asarray(Image.open(io.BytesIO(base64.b64decode(b64)))
                          .convert("RGB")).astype(float) / 255.0
-        oL, oR = render_eyes(pattern(scene, softness_px=soft), depth,
+        oL, oR = render_eyes(src_q, depth,
                              hue_rotation=rot, color_weight=cw, eye_w=960)
         for eye, m in zip("LR", compare(cap, oL, oR)):
             ok = (m["meandiff"] < TARGET_MEANDIFF
@@ -107,7 +112,7 @@ async def run(configs):
             if not ok:
                 failures += 1
             print(f"{'PASS' if ok else 'FAIL'} scene{scene} soft{soft} "
-                  f"d{depth} rot{rot} cw{cw} {eye}: "
+                  f"n{noise} d{depth} rot{rot} cw{cw} {eye}: "
                   f"diff {m['meandiff']:.4f} ghost {m['ghost']} "
                   f"hole {m['hole']} stray {m['stray']}")
     r = await ws.call(simpleobsws.Request("GetStats"))
@@ -126,14 +131,16 @@ def main():
     ap.add_argument("--quick", action="store_true")
     args = ap.parse_args()
     if args.quick:
-        configs = [(1, 2, 0.5, 0.0, 1.0), (1, 2, 0.84, 0.0, 1.0)]
+        configs = [(1, 2, 0.0, 0.5, 0.0, 1.0), (1, 2, 0.0, 0.84, 0.0, 1.0),
+                   (5, 2, 1.0, 0.84, 0.0, 1.0)]
     else:
         configs = []
-        for scene, soft in ((0, 2), (1, 2), (1, 0), (3, 2)):
+        for scene, soft, noise in ((0, 2, 0.0), (1, 2, 0.0), (1, 0, 0.0),
+                                   (3, 2, 0.0), (4, 2, 0.0), (5, 2, 1.0)):
             for depth in (0.3, 0.5, 0.84, 1.0):
-                configs.append((scene, soft, depth, 0.0, 1.0))
-        configs += [(1, 2, 0.5, 0.3, 1.0), (1, 2, 0.5, 0.0, 0.0),
-                    (1, 2, 0.5, 0.0, 0.5)]
+                configs.append((scene, soft, noise, depth, 0.0, 1.0))
+        configs += [(1, 2, 0.0, 0.5, 0.3, 1.0), (1, 2, 0.0, 0.5, 0.0, 0.0),
+                    (1, 2, 0.0, 0.5, 0.0, 0.5), (5, 2, 0.5, 1.0, 0.0, 1.0)]
     failures = asyncio.run(run(configs))
     print(f"\n{'ALL PASS' if failures == 0 else f'{failures} FAILURES'}")
     sys.exit(0 if failures == 0 else 1)
