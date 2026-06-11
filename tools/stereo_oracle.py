@@ -402,7 +402,7 @@ def compute_field(src, hue_rotation=0.0, color_weight=1.0, backdrop=0.0,
 # ---- ground truth render: forward splat + z-buffer ----
 def render_eyes(src, depth_slider, hue_rotation=0.0, color_weight=1.0, eye_w=W,
                 backdrop=0.0, field_sigma=0.0, micro_fill=0, range_sigma=0.0,
-                ss_v=1):
+                ss_v=1, mlaa=False):
     """Return (L, R) eye images, each H x eye_w x 3. Splat at 2x subpixel.
 
     backdrop = the known uniform background layer behind all content. Holes
@@ -443,6 +443,7 @@ def render_eyes(src, depth_slider, hue_rotation=0.0, color_weight=1.0, eye_w=W,
                            field_sigma, range_sigma)
     for eye, sign in eyes.items():
         img = np.full((out_h, eye_w, 3), backdrop, dtype=float)
+        wmask = np.zeros((out_h, eye_w), dtype=bool)
         for row in range(out_h):
             sr = vy[row]
             d = d_full[sr, cols_all]
@@ -470,6 +471,7 @@ def render_eyes(src, depth_slider, hue_rotation=0.0, color_weight=1.0, eye_w=W,
             offs = np.arange(ends[-1]) - np.repeat(ends - k, k)
             px = lo[order][idx] + offs
             img[row, px] = src[sr, cols_v[order][idx]]
+            wmask[row, px] = True
             # MICRO-FILL (candidate convention): reveal gaps no wider than
             # micro_fill px are texture-scale disocclusions — fill them by
             # continuing the FARTHER flank (da Vinci at texture scale
@@ -491,10 +493,24 @@ def render_eyes(src, depth_slider, hue_rotation=0.0, color_weight=1.0, eye_w=W,
                     if b - a <= micro_fill:
                         donor = a - 1 if zrow[a - 1] <= zrow[b] else b
                         img[row, a:b] = img[row, donor]
+                        wmask[row, a:b] = True
             # Splat holes (disocclusions) stay backdrop black — black IS the
             # infinity plane here. Every shape keeps its rigid silhouette in
             # both eyes: no carve eats the far surface, no fill extends it.
             # (v10 user-locked; v19 only removes intra-pixel sampling gaps.)
+        if mlaa:
+            # REVEAL-EDGE MLAA (cheap alternative to SSAA for the zipper):
+            # vertical [1,2,1]/4 blend ONLY where the written mask changes
+            # vertically — i.e. exactly along reveal staircase boundaries.
+            # Content edges (written both sides) are never touched.
+            # Mirrors the GPU Present pass (mlaa_on) — change together.
+            mU = np.vstack([wmask[:1], wmask[:-1]])
+            mD = np.vstack([wmask[1:], wmask[-1:]])
+            sel = (mU != wmask) | (mD != wmask)
+            iU = np.vstack([img[:1], img[:-1]])
+            iD = np.vstack([img[1:], img[-1:]])
+            blend = (iU + 2.0 * img + iD) * 0.25
+            img[sel] = blend[sel]
         if ss_v > 1:
             img = img.reshape(H, ss_v, eye_w, 3).mean(axis=1)
         out[eye] = img

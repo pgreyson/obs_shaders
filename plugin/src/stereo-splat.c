@@ -49,6 +49,7 @@ struct stereo_splat {
 	gs_eparam_t *p_span;
 	gs_eparam_t *p_window_on;
 	gs_eparam_t *p_fill_px;
+	gs_eparam_t *p_mlaa_on;
 
 	gs_texrender_t *input_rt;
 	gs_texrender_t *output_rt;
@@ -83,6 +84,7 @@ struct stereo_splat {
 	bool window;    /* floating window instead of edge taper */
 	int fill;       /* micro-fill width px (0 = off) */
 	bool ssaa;      /* 2x vertical supersampling of the splat */
+	bool mlaa;      /* reveal-edge MLAA in the present pass */
 	bool sync;      /* true = same-frame readback (correct for
 			   on-demand/screenshot sources); false = one-frame
 			   latency, no GPU sync stall (live chains) */
@@ -103,6 +105,7 @@ static void splat_update(void *data, obs_data_t *settings)
 	s->window = obs_data_get_bool(settings, "window");
 	s->fill = (int)obs_data_get_int(settings, "fill");
 	s->ssaa = obs_data_get_bool(settings, "ssaa");
+	s->mlaa = obs_data_get_bool(settings, "mlaa");
 	s->sync = obs_data_get_bool(settings, "sync");
 	s->debug = (int)obs_data_get_int(settings, "debug");
 }
@@ -114,6 +117,7 @@ static void splat_defaults(obs_data_t *settings)
 	obs_data_set_default_bool(settings, "window", false);
 	obs_data_set_default_int(settings, "fill", 3);
 	obs_data_set_default_bool(settings, "ssaa", true);
+	obs_data_set_default_bool(settings, "mlaa", false);
 	obs_data_set_default_bool(settings, "sync", true);
 	obs_data_set_default_int(settings, "debug", 0);
 }
@@ -135,6 +139,7 @@ static obs_properties_t *splat_properties(void *data)
 	obs_properties_add_int_slider(props, "fill",
 				      obs_module_text("MicroFill"), 0, 5, 1);
 	obs_properties_add_bool(props, "ssaa", obs_module_text("SSAA"));
+	obs_properties_add_bool(props, "mlaa", obs_module_text("MLAA"));
 	obs_properties_add_bool(props, "sync", obs_module_text("SyncReadback"));
 	obs_properties_add_int_slider(props, "debug",
 				      obs_module_text("DebugDepth"), 0, 5, 1);
@@ -195,6 +200,7 @@ static void *splat_create(obs_data_t *settings, obs_source_t *context)
 	s->p_span = gs_effect_get_param_by_name(s->effect, "span");
 	s->p_window_on = gs_effect_get_param_by_name(s->effect, "window_on");
 	s->p_fill_px = gs_effect_get_param_by_name(s->effect, "fill_px");
+	s->p_mlaa_on = gs_effect_get_param_by_name(s->effect, "mlaa_on");
 
 	splat_update(s, settings);
 	return s;
@@ -604,8 +610,14 @@ present:;
 	}
 
 	/* ---- pass 3: present (downsamples 2x-tall buffers via one
-	   linear tap at the output row center; forces alpha to 1) ---- */
+	   linear tap at the output row center; forces alpha to 1; or
+	   reveal-edge MLAA on 1x buffers) ---- */
+	bool use_mlaa = s->mlaa && out_h == h && !warp_mode && s->debug < 2;
+	struct vec2 pdims;
+	vec2_set(&pdims, (float)w, (float)out_h);
 	gs_effect_set_texture(s->p_image, out_tex);
+	gs_effect_set_vec2(s->p_dims, &pdims);
+	gs_effect_set_float(s->p_mlaa_on, use_mlaa ? 1.0f : 0.0f);
 	while (gs_effect_loop(s->effect, "Present"))
 		gs_draw_sprite(out_tex, 0, w, h);
 }

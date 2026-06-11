@@ -38,6 +38,7 @@ uniform float vis_lo;    // PIC_LO + f0
 uniform float span;      // (PIC_HI - f0) - vis_lo
 uniform float window_on; // 1 = floating window (no edge taper)
 uniform float fill_px;   // micro-fill: gaps <= this many px (0 = off)
+uniform float mlaa_on;   // reveal-edge MLAA in the present pass
 
 sampler_state pointSampler {
 	Filter    = Point;
@@ -276,9 +277,32 @@ float4 PSFill(WarpOut v_in) : TARGET
 // present: downsample the (possibly 2x-tall) buffer to output height —
 // one LINEAR tap at the output row center lands exactly between the two
 // sub-rows = box filter — and force alpha to 1 (z rode in alpha).
+// With mlaa_on (1x buffers): REVEAL-EDGE MLAA — vertical [1,2,1]/4 blend
+// ONLY where the written sentinel (alpha >= 0.25) changes vertically,
+// i.e. exactly along reveal staircase boundaries; content edges are
+// never touched. Mirrors render_eyes(mlaa=True) — change together.
 float4 PSPresent(WarpOut v_in) : TARGET
 {
 	float4 texel = image.SampleLevel(linearSampler, v_in.uv, 0.0);
+	if (mlaa_on > 0.5) {
+		float th = 1.0 / dims.y;
+		float yu = max(v_in.uv.y - th, 0.5 * th);
+		float yd = min(v_in.uv.y + th, 1.0 - 0.5 * th);
+		float4 cu = image.SampleLevel(pointSampler,
+					      float2(v_in.uv.x, yu), 0.0);
+		float4 cd = image.SampleLevel(pointSampler,
+					      float2(v_in.uv.x, yd), 0.0);
+		float4 cc = image.SampleLevel(pointSampler, v_in.uv, 0.0);
+		bool mc = cc.a >= 0.25;
+		bool mu = cu.a >= 0.25;
+		bool md = cd.a >= 0.25;
+		if (mu != mc || md != mc) {
+			float3 blend = (cu.rgb + 2.0 * cc.rgb + cd.rgb)
+				       * 0.25;
+			return float4(blend, 1.0);
+		}
+		return float4(cc.rgb, 1.0);
+	}
 	return float4(texel.rgb, 1.0);
 }
 
