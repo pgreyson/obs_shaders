@@ -39,6 +39,8 @@ uniform float span;      // (PIC_HI - f0) - vis_lo
 uniform float window_on; // 1 = floating window (no edge taper)
 uniform float fill_px;   // micro-fill: gaps <= this many px (0 = off)
 uniform float mlaa_on;   // reveal-edge MLAA in the present pass
+uniform float convergence; // depth whose plane sits AT the screen (0 =
+			   // original black-at-screen convention)
 
 sampler_state pointSampler {
 	Filter    = Point;
@@ -104,7 +106,7 @@ SplatOut VSSplat(VertIn v_in)
 	float u_c = v_in.pos.z;
 	float d = clamp(2.0 * (v_in.col.a - 0.5), 0.0, 1.0);
 	float dt_e = d * edge_taper(u_edge);
-	float dest = u_edge + eye_sign * dt_e * f0;
+	float dest = u_edge + eye_sign * (dt_e - convergence) * f0;
 	float q = (dest - vis_lo) / span;
 	// +5e-4 px epsilon inside the floor: shared bin-boundary
 	// convention with the oracle (f32-vs-f64 lattice dust); change
@@ -142,7 +144,7 @@ WarpOut VSWarp(VertIn v_in)
 	float out_row = v_in.pos.y;
 	float d = clamp(2.0 * (v_in.col.a - 0.5), 0.0, 1.0);
 	float dt = d * edge_taper(u);
-	float dest = u + eye_sign * dt * f0;
+	float dest = u + eye_sign * (dt - convergence) * f0;
 	float q = (dest - vis_lo) / span;
 	float out_x = eye_base + clamp(q, 0.0, 1.0) * eye_w;
 	float out_y = out_row + v_in.pos.z; // z flag: 0 top, 1 bottom
@@ -162,7 +164,7 @@ SplatOut VSDebugQ(VertIn v_in)
 	float u_sub = v_in.pos.x;
 	float d = clamp(2.0 * (v_in.col.a - 0.5), 0.0, 1.0);
 	float dt = d * edge_taper(u_sub);
-	float dest = u_sub + eye_sign * dt * f0;
+	float dest = u_sub + eye_sign * (dt - convergence) * f0;
 	float q = (dest - vis_lo) / span;
 	float v = q * eye_w; // the value under test
 

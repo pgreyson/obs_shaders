@@ -402,7 +402,7 @@ def compute_field(src, hue_rotation=0.0, color_weight=1.0, backdrop=0.0,
 # ---- ground truth render: forward splat + z-buffer ----
 def render_eyes(src, depth_slider, hue_rotation=0.0, color_weight=1.0, eye_w=W,
                 backdrop=0.0, field_sigma=0.0, micro_fill=0, range_sigma=0.0,
-                ss_v=1, mlaa=False):
+                ss_v=1, mlaa=False, convergence=0.0):
     """Return (L, R) eye images, each H x eye_w x 3. Splat at 2x subpixel.
 
     backdrop = the known uniform background layer behind all content. Holes
@@ -451,10 +451,14 @@ def render_eyes(src, depth_slider, hue_rotation=0.0, color_weight=1.0, eye_w=W,
             # +5e-4 px epsilon: shared bin-boundary convention with the
             # GPU splat (stereo-splat.effect VSSplat); change both
             # together.
-            b_lo = np.floor(((u_lo + sign * d * t_lo * f0) - vis_lo) /
-                            span * eye_w + 5.0e-4).astype(int)
-            b_hi = np.floor(((u_hi + sign * d * t_hi * f0) - vis_lo) /
-                            span * eye_w + 5.0e-4).astype(int)
+            # CONVERGENCE: bias the whole depth volume so the depth==
+            # convergence plane sits AT the screen (zero disparity);
+            # nearer content stays crossed, farther goes uncrossed.
+            # Default 0 = the original black-at-screen convention.
+            b_lo = np.floor(((u_lo + sign * (d * t_lo - convergence) * f0) -
+                             vis_lo) / span * eye_w + 5.0e-4).astype(int)
+            b_hi = np.floor(((u_hi + sign * (d * t_hi - convergence) * f0) -
+                             vis_lo) / span * eye_w + 5.0e-4).astype(int)
             lo = np.minimum(b_lo, b_hi)
             hi = np.maximum(b_lo, b_hi)
             vis = (hi >= 0) & (lo <= eye_w - 1)
@@ -519,7 +523,8 @@ def render_eyes(src, depth_slider, hue_rotation=0.0, color_weight=1.0, eye_w=W,
 
 # ---- warp ground truth: connected per-row mesh (stereo splat "Warp") ----
 def render_eyes_warp(src, depth_slider, hue_rotation=0.0, color_weight=1.0,
-                     eye_w=W, field_sigma=0.0, range_sigma=0.0):
+                     eye_w=W, field_sigma=0.0, range_sigma=0.0,
+                     convergence=0.0):
     """Connected-stretch convention: each row is a continuous piecewise-
     linear mapping from source x to destination x — disocclusions STRETCH
     the surface between near and far content instead of opening backdrop
@@ -543,7 +548,7 @@ def render_eyes_warp(src, depth_slider, hue_rotation=0.0, color_weight=1.0,
         for row in range(H):
             sr = vy[row]
             d = d_full[sr]
-            dest = u + sign * d * taper * f0
+            dest = u + sign * (d * taper - convergence) * f0
             x = np.clip((dest - vis_lo) / span, 0.0, 1.0) * eye_w
             # adaptive per-segment sampling: enough samples that every
             # crossed destination pixel receives one
