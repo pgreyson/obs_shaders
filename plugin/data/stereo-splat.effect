@@ -37,6 +37,7 @@ uniform float f0;        // depth_slider^2 * MAX_PARALLAX
 uniform float vis_lo;    // PIC_LO + f0
 uniform float span;      // (PIC_HI - f0) - vis_lo
 uniform float window_on; // 1 = floating window (no edge taper)
+uniform float fill_px;   // micro-fill: gaps <= this many px (0 = off)
 
 sampler_state pointSampler {
 	Filter    = Point;
@@ -58,6 +59,9 @@ struct VertIn {
 struct SplatOut {
 	float4 pos : POSITION;
 	float4 col : COLOR;
+	float zenc : TEXCOORD1; // 0.5 + dt/2; becomes output alpha (fill
+				// pass picks the FARTHER flank by it;
+				// cleared alpha 0 = unwritten reveal)
 };
 
 struct WarpOut {
@@ -115,6 +119,7 @@ SplatOut VSSplat(VertIn v_in)
 	float zw = ok ? (-100.0 + dt_c * 200.0) : 10000.0;
 	v_out.pos = mul(float4(out_x, out_y, zw, 1.0), ViewProj);
 	v_out.col = float4(v_in.col.rgb, 1.0);
+	v_out.zenc = 0.5 + 0.5 * dt_c;
 	return v_out;
 }
 
@@ -174,12 +179,16 @@ SplatOut VSDebugQ(VertIn v_in)
 	float g = floor(k * 65536.0) - r * 256.0;
 	float b = floor(k * 16777216.0) - floor(k * 65536.0) * 256.0;
 	v_out.col = float4(r / 255.0, g / 255.0, b / 255.0, 1.0);
+	v_out.zenc = 1.0;
 	return v_out;
 }
 
 float4 PSSplat(SplatOut v_in) : TARGET
 {
-	return v_in.col;
+	// alpha = encoded tapered depth: the fill pass needs per-pixel z
+	// to continue the FARTHER flank; the present pass forces alpha
+	// back to 1. Cleared (unwritten) pixels keep alpha 0 = reveal.
+	return float4(v_in.col.rgb, v_in.zenc);
 }
 
 float4 PSWarp(WarpOut v_in) : TARGET
@@ -216,6 +225,79 @@ float4 PSBlitA(WarpOut v_in) : TARGET
 {
 	float4 texel = image.SampleLevel(pointSampler, v_in.uv, 0.0);
 	return float4(texel.a, texel.a, texel.a, 1.0);
+}
+
+// micro-fill post-pass (sprite-drawn over the splat texrender): reveal
+// runs no wider than fill_px are texture-scale disocclusions — continue
+// the FARTHER flank (smaller encoded z). Wider gaps stay backdrop per
+// the v10 rigid-shape rule. Mirrors render_eyes(micro_fill=...).
+float4 PSFill(WarpOut v_in) : TARGET
+{
+	float4 c = image.SampleLevel(pointSampler, v_in.uv, 0.0);
+	if (fill_px < 0.5 || c.a >= 0.25)
+		return c;
+	float tw = 1.0 / dims.x;
+	float lo = (v_in.uv.x < 0.5) ? 0.0 : 0.5; // stay inside this eye
+	float hi = lo + 0.5;
+	float dl = 0.0;
+	float dr = 0.0;
+	float4 cl = c;
+	float4 cr = c;
+	for (int k = 1; k <= 5; k++) {
+		float fk = float(k);
+		float xl = v_in.uv.x - fk * tw;
+		if (dl < 0.5 && xl > lo) {
+			float4 sl2 = image.SampleLevel(pointSampler,
+						       float2(xl, v_in.uv.y),
+						       0.0);
+			if (sl2.a >= 0.25) {
+				dl = fk;
+				cl = sl2;
+			}
+		}
+		float xr = v_in.uv.x + fk * tw;
+		if (dr < 0.5 && xr < hi) {
+			float4 sr2 = image.SampleLevel(pointSampler,
+						       float2(xr, v_in.uv.y),
+						       0.0);
+			if (sr2.a >= 0.25) {
+				dr = fk;
+				cr = sr2;
+			}
+		}
+	}
+	if (dl > 0.5 && dr > 0.5 && (dl + dr - 1.0) <= fill_px) {
+		// farther flank = smaller encoded z; tie -> LEFT (oracle)
+		return (cl.a <= cr.a) ? cl : cr;
+	}
+	return c;
+}
+
+// present: downsample the (possibly 2x-tall) buffer to output height —
+// one LINEAR tap at the output row center lands exactly between the two
+// sub-rows = box filter — and force alpha to 1 (z rode in alpha).
+float4 PSPresent(WarpOut v_in) : TARGET
+{
+	float4 texel = image.SampleLevel(linearSampler, v_in.uv, 0.0);
+	return float4(texel.rgb, 1.0);
+}
+
+technique Fill
+{
+	pass
+	{
+		vertex_shader = VSSprite(v_in);
+		pixel_shader  = PSFill(v_in);
+	}
+}
+
+technique Present
+{
+	pass
+	{
+		vertex_shader = VSSprite(v_in);
+		pixel_shader  = PSPresent(v_in);
+	}
 }
 
 technique Splat

@@ -145,7 +145,7 @@ def field_source(src):
     return out
 
 
-def field_smooth(d, field_sigma):
+def field_smooth(d, field_sigma, range_sigma=0.0):
     """REGIONAL-DEPTH smoothing (user-selected convention 2026-06-10 for
     analog/textured content): Gaussian-smooth the FINAL depth field — after
     dilation/lift/reassignment, before taper/splat. Depth cliffs become
@@ -191,47 +191,25 @@ def field_smooth(d, field_sigma):
         pad = [(R, R) if a == ax else (0, 0) for a in (0, 1)]
         p = np.pad(e, pad, mode="edge")
         acc = np.zeros_like(e)
+        wacc = np.full_like(e, 0.0)
         for k in range(2 * R + 1):
             sl = (slice(k, k + e.shape[0]) if ax == 0 else slice(None),
                   slice(k, k + e.shape[1]) if ax == 1 else slice(None))
-            acc += w[k] * p[sl]
-        e = q8(acc)
-    return 2.0 * (e - 0.5)
-
-
-def field_smooth_bilateral(d, sigma_s, sigma_r):
-    """CANDIDATE convention: edge-preserving field smoothing. Spatial
-    Gaussian sigma_s as in field_smooth, but each tap is range-weighted by
-    exp(-(d_tap - d_center)^2 / (2 sigma_r^2)): depth variation smaller
-    than ~sigma_r (texture) smooths away (pepper suppression), genuine
-    shape cliffs (delta >> sigma_r) are preserved — they render as ONE
-    clean reveal gap instead of the picket-fence comb that plain Gaussian
-    smoothing produces on hard edges (each ramp pixel landing at its own
-    disparity). Separable h-then-v approximation, same kernel size rules
-    as field_smooth. Demo-grade: no 8-bit chain modeling yet."""
-    R = 10
-    n = int(round(2.0 * sigma_s * sigma_s))
-    if n <= 0:
-        return d
-    sig2 = n * 0.5
-    i = np.arange(-R, R + 1, dtype=float)
-    w_s = np.exp(-(i * i) / (2.0 * sig2))
-    out = d
-    for ax in (1, 0):
-        pad = [(R, R) if a == ax else (0, 0) for a in (0, 1)]
-        p = np.pad(out, pad, mode="edge")
-        acc = np.zeros_like(out)
-        wacc = np.zeros_like(out)
-        for k in range(2 * R + 1):
-            sl = (slice(k, k + out.shape[0]) if ax == 0 else slice(None),
-                  slice(k, k + out.shape[1]) if ax == 1 else slice(None))
             tap = p[sl]
-            w = w_s[k] * np.exp(-((tap - out) ** 2) /
-                                (2.0 * sigma_r * sigma_r))
-            acc += w * tap
-            wacc += w
-        out = acc / wacc
-    return out
+            if range_sigma > 0.0:
+                # range weight in DEPTH units (alpha delta x2), matching
+                # chromadepth_smooth.shader's bilateral term: smoothing
+                # applies WITHIN surfaces; cliffs deeper than ~range_sigma
+                # keep their geometry (silhouettes stay rigid).
+                dd = 2.0 * (tap - e)
+                wk = w[k] * np.exp(-(dd * dd) /
+                                   (2.0 * range_sigma * range_sigma))
+            else:
+                wk = w[k]
+            acc += wk * tap
+            wacc += wk
+        e = q8(acc / wacc)
+    return 2.0 * (e - 0.5)
 
 
 # ---- depth model (bit-faithful to chromadepth.shader) ----
@@ -289,7 +267,7 @@ def edge_taper(x, f0):
 
 # ---- field computation: prefilter + dilation + reassignment + lift ----
 def compute_field(src, hue_rotation=0.0, color_weight=1.0, backdrop=0.0,
-                  field_sigma=0.0):
+                  field_sigma=0.0, range_sigma=0.0):
     """The complete depth-field pipeline (what chromadepth_bake.shader
     bakes into alpha): prefiltered source -> raw depth -> hue-stability ->
     contact-mix reassignment -> donor-restricted lift -> field_smooth(σ)
@@ -417,13 +395,14 @@ def compute_field(src, hue_rotation=0.0, color_weight=1.0, backdrop=0.0,
     cand = (np.round(np.clip(0.5 + 0.5 * np.clip(cand, 0.0, 1.0), 0.0, 1.0)
                      * 255.0) / 255.0 - 0.5) * 2.0
     if field_sigma > 0.0:
-        cand = field_smooth(cand, field_sigma)
+        cand = field_smooth(cand, field_sigma, range_sigma)
     return cand
 
 
 # ---- ground truth render: forward splat + z-buffer ----
 def render_eyes(src, depth_slider, hue_rotation=0.0, color_weight=1.0, eye_w=W,
-                backdrop=0.0, field_sigma=0.0, micro_fill=0):
+                backdrop=0.0, field_sigma=0.0, micro_fill=0, range_sigma=0.0,
+                ss_v=1):
     """Return (L, R) eye images, each H x eye_w x 3. Splat at 2x subpixel.
 
     backdrop = the known uniform background layer behind all content. Holes
@@ -453,13 +432,18 @@ def render_eyes(src, depth_slider, hue_rotation=0.0, color_weight=1.0, eye_w=W,
     t_c = edge_taper(u_c, f0) if f0 > 0 else np.ones_like(u_c)
     out = {}
     eyes = {"L": +1.0, "R": -1.0}  # dest = x + sign * D (crossed)
-    # vertical crop mapping: output row -> source row
-    vy = np.clip(((f0 + (np.arange(H) + 0.5) / H * (1 - 2 * f0)) * H).astype(int), 0, H - 1)
+    # vertical crop mapping at the SUPERSAMPLED output grid: ss_v=2 renders
+    # 2 sub-rows per output row and box-downsamples — antialiases the
+    # row-quantized staircase ("zipper") of sloped silhouettes and reveal
+    # edges without touching any depth convention.
+    out_h = H * ss_v
+    vy = np.clip(((f0 + (np.arange(out_h) + 0.5) / out_h *
+                   (1 - 2 * f0)) * H).astype(int), 0, H - 1)
     d_full = compute_field(src, hue_rotation, color_weight, backdrop,
-                           field_sigma)
+                           field_sigma, range_sigma)
     for eye, sign in eyes.items():
-        img = np.full((H, eye_w, 3), backdrop, dtype=float)
-        for row in range(H):
+        img = np.full((out_h, eye_w, 3), backdrop, dtype=float)
+        for row in range(out_h):
             sr = vy[row]
             d = d_full[sr, cols_all]
             dt = d * t_c  # z key: depth tapered at the pixel CENTER
@@ -511,13 +495,15 @@ def render_eyes(src, depth_slider, hue_rotation=0.0, color_weight=1.0, eye_w=W,
             # infinity plane here. Every shape keeps its rigid silhouette in
             # both eyes: no carve eats the far surface, no fill extends it.
             # (v10 user-locked; v19 only removes intra-pixel sampling gaps.)
+        if ss_v > 1:
+            img = img.reshape(H, ss_v, eye_w, 3).mean(axis=1)
         out[eye] = img
     return out["L"], out["R"]
 
 
 # ---- warp ground truth: connected per-row mesh (stereo splat "Warp") ----
 def render_eyes_warp(src, depth_slider, hue_rotation=0.0, color_weight=1.0,
-                     eye_w=W, field_sigma=0.0):
+                     eye_w=W, field_sigma=0.0, range_sigma=0.0):
     """Connected-stretch convention: each row is a continuous piecewise-
     linear mapping from source x to destination x — disocclusions STRETCH
     the surface between near and far content instead of opening backdrop
@@ -532,7 +518,7 @@ def render_eyes_warp(src, depth_slider, hue_rotation=0.0, color_weight=1.0,
     vy = np.clip(((f0 + (np.arange(H) + 0.5) / H * (1 - 2 * f0)) * H)
                  .astype(int), 0, H - 1)
     d_full = compute_field(src, hue_rotation, color_weight, 0.0,
-                           field_sigma)
+                           field_sigma, range_sigma)
     u = np.clip((np.arange(W) + 0.5) / W, PIC_LO, PIC_HI)
     taper = edge_taper(u, f0) if f0 > 0 else np.ones_like(u)
     out = {}

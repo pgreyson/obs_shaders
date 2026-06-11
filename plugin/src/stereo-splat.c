@@ -48,9 +48,11 @@ struct stereo_splat {
 	gs_eparam_t *p_vis_lo;
 	gs_eparam_t *p_span;
 	gs_eparam_t *p_window_on;
+	gs_eparam_t *p_fill_px;
 
 	gs_texrender_t *input_rt;
 	gs_texrender_t *output_rt;
+	gs_texrender_t *fill_rt;
 	/* double-buffered: stage frame N, map frame N-1 — a same-frame map
 	   right after gs_stage_texture is a full GPU sync; two instances
 	   stalling each other measured 51ms/frame. One frame of stream
@@ -74,10 +76,13 @@ struct stereo_splat {
 	size_t splat_verts;
 	size_t warp_verts;
 	uint32_t vb_width, vb_height;
+	bool vb_ssaa;
 
 	float depth;    /* slider 0..1 (CV ch0) */
 	int mode;       /* 0 = splat, 1 = warp */
 	bool window;    /* floating window instead of edge taper */
+	int fill;       /* micro-fill width px (0 = off) */
+	bool ssaa;      /* 2x vertical supersampling of the splat */
 	bool sync;      /* true = same-frame readback (correct for
 			   on-demand/screenshot sources); false = one-frame
 			   latency, no GPU sync stall (live chains) */
@@ -96,6 +101,8 @@ static void splat_update(void *data, obs_data_t *settings)
 	s->depth = (float)obs_data_get_double(settings, "depth");
 	s->mode = (int)obs_data_get_int(settings, "mode");
 	s->window = obs_data_get_bool(settings, "window");
+	s->fill = (int)obs_data_get_int(settings, "fill");
+	s->ssaa = obs_data_get_bool(settings, "ssaa");
 	s->sync = obs_data_get_bool(settings, "sync");
 	s->debug = (int)obs_data_get_int(settings, "debug");
 }
@@ -105,6 +112,8 @@ static void splat_defaults(obs_data_t *settings)
 	obs_data_set_default_double(settings, "depth", 0.3);
 	obs_data_set_default_int(settings, "mode", 0);
 	obs_data_set_default_bool(settings, "window", false);
+	obs_data_set_default_int(settings, "fill", 3);
+	obs_data_set_default_bool(settings, "ssaa", true);
 	obs_data_set_default_bool(settings, "sync", true);
 	obs_data_set_default_int(settings, "debug", 0);
 }
@@ -123,6 +132,9 @@ static obs_properties_t *splat_properties(void *data)
 	obs_property_list_add_int(m, obs_module_text("ModeWarp"), 1);
 	obs_properties_add_bool(props, "window",
 				obs_module_text("FloatingWindow"));
+	obs_properties_add_int_slider(props, "fill",
+				      obs_module_text("MicroFill"), 0, 5, 1);
+	obs_properties_add_bool(props, "ssaa", obs_module_text("SSAA"));
 	obs_properties_add_bool(props, "sync", obs_module_text("SyncReadback"));
 	obs_properties_add_int_slider(props, "debug",
 				      obs_module_text("DebugDepth"), 0, 5, 1);
@@ -139,6 +151,8 @@ static void splat_destroy(void *data)
 		gs_texrender_destroy(s->input_rt);
 	if (s->output_rt)
 		gs_texrender_destroy(s->output_rt);
+	if (s->fill_rt)
+		gs_texrender_destroy(s->fill_rt);
 	if (s->stage[0])
 		gs_stagesurface_destroy(s->stage[0]);
 	if (s->stage[1])
@@ -161,6 +175,7 @@ static void *splat_create(obs_data_t *settings, obs_source_t *context)
 	s->effect = gs_effect_create_from_file(path, NULL);
 	s->input_rt = gs_texrender_create(GS_RGBA, GS_ZS_NONE);
 	s->output_rt = gs_texrender_create(GS_RGBA, GS_Z24_S8);
+	s->fill_rt = gs_texrender_create(GS_RGBA, GS_ZS_NONE);
 	obs_leave_graphics();
 	bfree(path);
 
@@ -179,6 +194,7 @@ static void *splat_create(obs_data_t *settings, obs_source_t *context)
 	s->p_vis_lo = gs_effect_get_param_by_name(s->effect, "vis_lo");
 	s->p_span = gs_effect_get_param_by_name(s->effect, "span");
 	s->p_window_on = gs_effect_get_param_by_name(s->effect, "window_on");
+	s->p_fill_px = gs_effect_get_param_by_name(s->effect, "fill_px");
 
 	splat_update(s, settings);
 	return s;
@@ -190,8 +206,9 @@ static void *splat_create(obs_data_t *settings, obs_source_t *context)
    Splat order is row-major, ascending x — required for the LEQUAL
    largest-x tie-break. Already in the graphics context (video_render). */
 static void rebuild_vertex_buffers(struct stereo_splat *s, uint32_t w,
-				   uint32_t h)
+				   uint32_t h, bool ssaa)
 {
+	uint32_t out_h = ssaa ? h * 2 : h;
 	if (s->splat_vb) {
 		gs_vertexbuffer_destroy(s->splat_vb);
 		s->splat_vb = NULL;
@@ -215,13 +232,13 @@ static void rebuild_vertex_buffers(struct stereo_splat *s, uint32_t w,
 	   CENTER u (PIC crop + z-key taper). GS_DYNAMIC because the colors
 	   stream every frame (positions upload once at create and are
 	   never flushed again — flush_direct sends colors only). */
-	size_t n = (size_t)w * 2 * h;
+	size_t n = (size_t)w * 2 * out_h;
 	struct gs_vb_data *vbd = gs_vbdata_create();
 	vbd->num = n;
 	vbd->points = bmalloc(n * sizeof(struct vec3));
 	vbd->colors = bzalloc(n * sizeof(uint32_t));
 	size_t k = 0;
-	for (uint32_t row = 0; row < h; row++) {
+	for (uint32_t row = 0; row < out_h; row++) {
 		for (uint32_t col = 0; col < w; col++) {
 			float uc = ((float)col + 0.5f) / (float)w;
 			vbd->points[k].x = (float)col / (float)w;
@@ -278,6 +295,7 @@ static void rebuild_vertex_buffers(struct stereo_splat *s, uint32_t w,
 
 	s->vb_width = w;
 	s->vb_height = h;
+	s->vb_ssaa = ssaa;
 	obs_log(LOG_INFO,
 		"stereo splat: rebuilt grids %ux%u (splat %zu pts, warp %zu verts)",
 		w, h, s->splat_verts, s->warp_verts);
@@ -285,16 +303,17 @@ static void rebuild_vertex_buffers(struct stereo_splat *s, uint32_t w,
 
 /* Oracle vertical crop: output row -> source row (the CPU color fill
    applies it, so the vertex shader needs no per-row source lookup). */
-static inline uint32_t vy_row(uint32_t out_row, uint32_t h, float f0)
+static inline uint32_t vy_row(uint32_t out_row, uint32_t out_h,
+			      uint32_t src_h, float f0)
 {
 	float sr = floorf((f0 +
-			   ((float)out_row + 0.5f) / (float)h *
+			   ((float)out_row + 0.5f) / (float)out_h *
 				   (1.0f - 2.0f * f0)) *
-			  (float)h);
+			  (float)src_h);
 	if (sr < 0.0f)
 		sr = 0.0f;
-	if (sr > (float)(h - 1))
-		sr = (float)(h - 1);
+	if (sr > (float)(src_h - 1))
+		sr = (float)(src_h - 1);
 	return (uint32_t)sr;
 }
 
@@ -310,12 +329,14 @@ static bool fill_colors(struct stereo_splat *s, bool warp, uint32_t w,
 		return false;
 
 	if (!warp) {
+		uint32_t out_h = s->vb_ssaa ? h * 2 : h;
 		uint32_t *dst = s->splat_colors;
-		for (uint32_t row = 0; row < h; row++) {
+		for (uint32_t row = 0; row < out_h; row++) {
 			const uint32_t *src = (const uint32_t
 						       *)(px +
 							  (size_t)vy_row(
-								  row, h, f0) *
+								  row, out_h,
+								  h, f0) *
 								  linesize);
 			for (uint32_t col = 0; col < w; col++) {
 				uint32_t c = src[col];
@@ -330,7 +351,8 @@ static bool fill_colors(struct stereo_splat *s, bool warp, uint32_t w,
 			const uint32_t *src = (const uint32_t
 						       *)(px +
 							  (size_t)vy_row(
-								  row, h, f0) *
+								  row, h, h,
+								  f0) *
 								  linesize);
 			for (uint32_t col = 0; col < w; col++) {
 				uint32_t c = src[col];
@@ -366,8 +388,9 @@ static void splat_render(void *data, gs_effect_t *unused_effect)
 		return;
 	}
 
-	if (!s->splat_vb || s->vb_width != w || s->vb_height != h)
-		rebuild_vertex_buffers(s, w, h);
+	if (!s->splat_vb || s->vb_width != w || s->vb_height != h ||
+	    s->vb_ssaa != s->ssaa)
+		rebuild_vertex_buffers(s, w, h, s->ssaa);
 
 	/* ---- pass 1: grab the filter input (bake output) ---- */
 	gs_texrender_reset(s->input_rt);
@@ -432,12 +455,15 @@ static void splat_render(void *data, gs_effect_t *unused_effect)
 	float span = (PIC_HI - f0) - vis_lo;
 	float eye_w = (float)w * 0.5f;
 
+	uint32_t out_h = warp_mode ? h : (s->ssaa ? h * 2 : h);
 	gs_texrender_reset(s->output_rt);
-	if (gs_texrender_begin(s->output_rt, w, h)) {
+	if (gs_texrender_begin(s->output_rt, w, out_h)) {
 		struct vec4 clear;
-		vec4_set(&clear, 0.0f, 0.0f, 0.0f, 1.0f);
+		/* alpha 0 = unwritten-reveal sentinel for the fill pass */
+		vec4_set(&clear, 0.0f, 0.0f, 0.0f, 0.0f);
 		gs_clear(GS_CLEAR_COLOR | GS_CLEAR_DEPTH, &clear, 1.0f, 0);
-		gs_ortho(0.0f, (float)w, 0.0f, (float)h, -100.0f, 100.0f);
+		gs_ortho(0.0f, (float)w, 0.0f, (float)out_h, -100.0f,
+			 100.0f);
 
 		gs_blend_state_push();
 		gs_enable_blending(false);
@@ -454,7 +480,7 @@ static void splat_render(void *data, gs_effect_t *unused_effect)
 			gs_effect_set_texture(s->p_image, input_tex);
 			const char *bt = s->debug == 2 ? "BlitRGB" : "BlitA";
 			while (gs_effect_loop(blit, bt))
-				gs_draw_sprite(input_tex, 0, w, h);
+				gs_draw_sprite(input_tex, 0, w, out_h);
 			gs_blend_state_pop();
 			gs_texrender_end(s->output_rt);
 			goto present;
@@ -482,7 +508,7 @@ static void splat_render(void *data, gs_effect_t *unused_effect)
 			struct gs_rect sc = {.x = eye == 0 ? 0 : (int)eye_w,
 					     .y = 0,
 					     .cx = (int)eye_w,
-					     .cy = (int)h};
+					     .cy = (int)out_h};
 			gs_set_scissor_rect(&sc);
 			/* ALL params re-set per pass: the effect upload is
 			   changed-only and resets flags after each technique
@@ -527,13 +553,15 @@ static void splat_render(void *data, gs_effect_t *unused_effect)
 				gs_matrix_push();
 				gs_matrix_identity();
 				gs_matrix_translate3f(0.0f, 0.0f, 0.0f);
-				gs_draw_sprite(NULL, 0, (uint32_t)strip_w, h);
+				gs_draw_sprite(NULL, 0, (uint32_t)strip_w,
+					       out_h);
 				gs_matrix_pop();
 				gs_matrix_push();
 				gs_matrix_identity();
 				gs_matrix_translate3f((float)w - strip_w,
 						      0.0f, 0.0f);
-				gs_draw_sprite(NULL, 0, (uint32_t)strip_w, h);
+				gs_draw_sprite(NULL, 0, (uint32_t)strip_w,
+					       out_h);
 				gs_matrix_pop();
 			}
 		}
@@ -544,16 +572,41 @@ static void splat_render(void *data, gs_effect_t *unused_effect)
 	}
 
 present:;
-	/* ---- pass 3: draw the result as the filter output ---- */
 	gs_texture_t *out_tex = gs_texrender_get_texture(s->output_rt);
 	if (!out_tex) {
 		obs_source_skip_video_filter(s->context);
 		return;
 	}
-	gs_effect_t *pass = obs_get_base_effect(OBS_EFFECT_DEFAULT);
-	gs_effect_set_texture(gs_effect_get_param_by_name(pass, "image"),
-			      out_tex);
-	while (gs_effect_loop(pass, "Draw"))
+
+	/* ---- pass 2b: micro-fill (splat mode only; reveal runs <= fill
+	   px continue the FARTHER flank, oracle micro_fill) ---- */
+	if (s->fill > 0 && !warp_mode && s->debug < 2) {
+		gs_texrender_reset(s->fill_rt);
+		gs_blend_state_push();
+		gs_blend_function(GS_BLEND_ONE, GS_BLEND_ZERO);
+		if (gs_texrender_begin(s->fill_rt, w, out_h)) {
+			gs_ortho(0.0f, (float)w, 0.0f, (float)out_h, -100.0f,
+				 100.0f);
+			struct vec2 dims;
+			vec2_set(&dims, (float)w, (float)h);
+			gs_effect_set_texture(s->p_image, out_tex);
+			gs_effect_set_vec2(s->p_dims, &dims);
+			gs_effect_set_float(s->p_fill_px, (float)s->fill);
+			while (gs_effect_loop(s->effect, "Fill"))
+				gs_draw_sprite(out_tex, 0, w, out_h);
+			gs_texrender_end(s->fill_rt);
+			gs_texture_t *ft =
+				gs_texrender_get_texture(s->fill_rt);
+			if (ft)
+				out_tex = ft;
+		}
+		gs_blend_state_pop();
+	}
+
+	/* ---- pass 3: present (downsamples 2x-tall buffers via one
+	   linear tap at the output row center; forces alpha to 1) ---- */
+	gs_effect_set_texture(s->p_image, out_tex);
+	while (gs_effect_loop(s->effect, "Present"))
 		gs_draw_sprite(out_tex, 0, w, h);
 }
 

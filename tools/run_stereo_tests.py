@@ -103,7 +103,8 @@ async def run(configs):
             "filterSettings": {"hue_rotation": rot, "color_weight": cw}}))
         await ws.call(simpleobsws.Request("SetSourceFilterSettings", {
             "sourceName": SOURCE, "filterName": FILTER,
-            "filterSettings": {"depth": depth, "mode": mode}}))
+            "filterSettings": {"depth": depth, "mode": mode,
+                               "fill": 3, "ssaa": False}}))
         # regional-depth smoothing: both separable passes get the same sigma
         for fname in ("field smooth h", "field smooth v"):
             await ws.call(simpleobsws.Request("SetSourceFilterSettings", {
@@ -116,9 +117,15 @@ async def run(configs):
         b64 = r.responseData["imageData"].split(",", 1)[1]
         cap = np.asarray(Image.open(io.BytesIO(base64.b64decode(b64)))
                          .convert("RGB")).astype(float) / 255.0
-        render = render_eyes_warp if mode == 1 else render_eyes
-        oL, oR = render(src_q, depth, hue_rotation=rot,
-                        color_weight=cw, eye_w=960, field_sigma=sigma)
+        if mode == 1:
+            oL, oR = render_eyes_warp(src_q, depth, hue_rotation=rot,
+                                      color_weight=cw, eye_w=960,
+                                      field_sigma=sigma)
+        else:
+            # convention baseline: 3px micro-fill + 2x vertical SSAA
+            oL, oR = render_eyes(src_q, depth, hue_rotation=rot,
+                                 color_weight=cw, eye_w=960,
+                                 field_sigma=sigma, micro_fill=3, ss_v=1)
         for eye, m in zip("LR", compare(cap, oL, oR)):
             ok = (m["meandiff"] < TARGET_MEANDIFF
                   and m["ghost"] < TARGET_GHOST and m["stray"] < TARGET_STRAY)
