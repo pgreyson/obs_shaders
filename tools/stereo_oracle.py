@@ -106,6 +106,23 @@ def pattern(scene, noise_amp=0.0, softness_px=2.0, seed=7, backdrop=0.0):
             d = np.sqrt((u - cx) ** 2 + ((v - cy) / (W / H) * (W / H)) ** 2)
             a = np.clip((rad - d) / (3.0 / W * rad * W / 100 + 0.01), 0, 1)
             img = img * (1 - a[..., None]) + a[..., None] * np.array([r, g, b])
+    elif scene == 6:
+        # SYNTH-LIKE GRADIENTS: multi-scale plasma — smoothly varying hue,
+        # saturation and luma with both gentle and steep gradient regions
+        # and NO hard edges. Real synth output is curved oscillating
+        # gradients everywhere; the linear ramps of scene 2 only test one
+        # constant gradient magnitude.
+        a = np.sin(2 * np.pi * (u * 1.7 + 0.35 * np.sin(2 * np.pi * v * 1.3)))
+        b = np.sin(2 * np.pi * (v * 2.3 + 0.50 * np.sin(2 * np.pi * u * 0.7)))
+        c = np.sin(2 * np.pi * (u * 0.9 + v * 1.1) +
+                   2.0 * np.sin(2 * np.pi * (u * 0.4 - v * 0.6)))
+        img = np.stack([0.5 + 0.5 * a,
+                        0.5 + 0.5 * (0.6 * b + 0.4 * c),
+                        0.5 + 0.5 * c], axis=2)
+        # push some regions toward dark so the luma^3 baseline and the
+        # lit/backdrop gates see realistic low-end content
+        env = 0.25 + 0.75 * (0.5 + 0.5 * np.sin(2 * np.pi * (u * 0.5 + v * 0.3)))
+        img = np.clip(img * env[..., None], 0, 1)
     if scene == 5 and noise_amp > 0:
         rng = np.random.default_rng(seed)
         img = np.clip(img + (rng.random((H, W, 3)) - 0.5) * 0.2 * noise_amp, 0, 1)

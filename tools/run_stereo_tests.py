@@ -37,7 +37,7 @@ import numpy as np
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).parent))
-from stereo_oracle import pattern, render_eyes  # noqa: E402
+from stereo_oracle import pattern, render_eyes, render_eyes_warp  # noqa: E402
 
 import simpleobsws  # noqa: E402
 
@@ -84,7 +84,7 @@ async def run(configs):
     failures = 0
     last_scene = None
     src_q = None
-    for scene, soft, noise, depth, rot, cw, sigma in configs:
+    for scene, soft, noise, depth, rot, cw, sigma, mode in configs:
         if (scene, soft, noise) != last_scene:
             src = pattern(scene, softness_px=soft, noise_amp=noise)
             # Quantize the oracle's source to the PNG's 8 bits: the shader
@@ -103,7 +103,7 @@ async def run(configs):
             "filterSettings": {"hue_rotation": rot, "color_weight": cw}}))
         await ws.call(simpleobsws.Request("SetSourceFilterSettings", {
             "sourceName": SOURCE, "filterName": FILTER,
-            "filterSettings": {"depth": depth}}))
+            "filterSettings": {"depth": depth, "mode": mode}}))
         # regional-depth smoothing: both separable passes get the same sigma
         for fname in ("field smooth h", "field smooth v"):
             await ws.call(simpleobsws.Request("SetSourceFilterSettings", {
@@ -116,15 +116,17 @@ async def run(configs):
         b64 = r.responseData["imageData"].split(",", 1)[1]
         cap = np.asarray(Image.open(io.BytesIO(base64.b64decode(b64)))
                          .convert("RGB")).astype(float) / 255.0
-        oL, oR = render_eyes(src_q, depth, hue_rotation=rot,
-                             color_weight=cw, eye_w=960, field_sigma=sigma)
+        render = render_eyes_warp if mode == 1 else render_eyes
+        oL, oR = render(src_q, depth, hue_rotation=rot,
+                        color_weight=cw, eye_w=960, field_sigma=sigma)
         for eye, m in zip("LR", compare(cap, oL, oR)):
             ok = (m["meandiff"] < TARGET_MEANDIFF
                   and m["ghost"] < TARGET_GHOST and m["stray"] < TARGET_STRAY)
             if not ok:
                 failures += 1
             print(f"{'PASS' if ok else 'FAIL'} scene{scene} soft{soft} "
-                  f"n{noise} d{depth} rot{rot} cw{cw} {eye}: "
+                  f"n{noise} d{depth} rot{rot} cw{cw} s{sigma} "
+                  f"{'warp' if mode else 'splat'} {eye}: "
                   f"diff {m['meandiff']:.4f} ghost {m['ghost']} "
                   f"hole {m['hole']} stray {m['stray']}")
     r = await ws.call(simpleobsws.Request("GetStats"))
@@ -151,37 +153,52 @@ def main():
         # (scene 2 — real synth is gradients everywhere), lumadepth mode
         # (cw 0, where the user's CV sits), noise, and the live sigma=4
         # regional-depth configs (config = ..., field_sigma).
-        configs = [(1, 2, 0.0, 0.5, 0.0, 1.0, 0.0),
-                   (2, 2, 0.0, 0.5, 0.0, 1.0, 0.0),
-                   (2, 2, 0.0, 0.5, 0.0, 0.0, 0.0),
-                   (5, 2, 1.0, 0.5, 0.0, 0.0, 0.0),
-                   (5, 2, 1.0, 0.84, 0.0, 1.0, 0.0),
-                   (1, 2, 0.0, 0.5, 0.0, 1.0, 4.0),
-                   (2, 2, 0.0, 0.5, 0.0, 0.0, 4.0),
-                   (5, 2, 1.0, 0.84, 0.0, 1.0, 4.0)]
+        configs = [(1, 2, 0.0, 0.5, 0.0, 1.0, 0.0, 0),
+                   (2, 2, 0.0, 0.5, 0.0, 1.0, 0.0, 0),
+                   (6, 2, 0.0, 0.5, 0.0, 1.0, 0.0, 0),
+                   (6, 2, 0.0, 0.84, 0.0, 1.0, 0.0, 0),
+                   (5, 2, 1.0, 0.84, 0.0, 1.0, 0.0, 0),
+                   (6, 2, 0.0, 0.5, 0.0, 1.0, 4.0, 0),
+                   (6, 2, 0.0, 0.5, 0.0, 1.0, 0.0, 1),
+                   (6, 2, 0.0, 0.84, 0.0, 1.0, 0.0, 1),
+                   (2, 2, 0.0, 0.5, 0.0, 1.0, 0.0, 1),
+                   (1, 2, 0.0, 0.5, 0.0, 1.0, 0.0, 1)]
     else:
         configs = []
         for scene, soft, noise in ((0, 2, 0.0), (1, 2, 0.0), (1, 0, 0.0),
                                    (2, 2, 0.0), (3, 2, 0.0), (4, 2, 0.0),
-                                   (5, 2, 1.0)):
+                                   (5, 2, 1.0), (6, 2, 0.0)):
             for depth in (0.3, 0.5, 0.84, 1.0):
-                configs.append((scene, soft, noise, depth, 0.0, 1.0, 0.0))
-        configs += [(1, 2, 0.0, 0.5, 0.3, 1.0, 0.0),
-                    (1, 2, 0.0, 0.5, 0.0, 0.0, 0.0),
-                    (1, 2, 0.0, 0.5, 0.0, 0.5, 0.0),
-                    (5, 2, 0.5, 1.0, 0.0, 1.0, 0.0),
-                    (2, 2, 0.0, 0.84, 0.0, 0.0, 0.0),
-                    (5, 2, 1.0, 0.5, 0.0, 0.0, 0.0)]
-        # sigma=4 regional-depth sweep (the live convention): every scene
-        # class once, plus depth extremes on rects and noise.
-        configs += [(0, 2, 0.0, 0.5, 0.0, 1.0, 4.0),
-                    (1, 2, 0.0, 0.5, 0.0, 1.0, 4.0),
-                    (1, 2, 0.0, 1.0, 0.0, 1.0, 4.0),
-                    (2, 2, 0.0, 0.5, 0.0, 0.0, 4.0),
-                    (3, 2, 0.0, 0.84, 0.0, 1.0, 4.0),
-                    (4, 2, 0.0, 0.84, 0.0, 1.0, 4.0),
-                    (5, 2, 1.0, 0.84, 0.0, 1.0, 4.0),
-                    (5, 2, 1.0, 1.0, 0.0, 0.0, 4.0)]
+                configs.append((scene, soft, noise, depth, 0.0, 1.0, 0.0, 0))
+        configs += [(1, 2, 0.0, 0.5, 0.3, 1.0, 0.0, 0),
+                    (1, 2, 0.0, 0.5, 0.0, 0.0, 0.0, 0),
+                    (1, 2, 0.0, 0.5, 0.0, 0.5, 0.0, 0),
+                    (5, 2, 0.5, 1.0, 0.0, 1.0, 0.0, 0),
+                    (2, 2, 0.0, 0.84, 0.0, 0.0, 0.0, 0),
+                    (6, 2, 0.0, 0.84, 0.0, 0.0, 0.0, 0),
+                    (5, 2, 1.0, 0.5, 0.0, 0.0, 0.0, 0)]
+        # sigma=4 regional-depth sweep: every scene class once, plus
+        # depth extremes on rects, gradients and noise.
+        configs += [(0, 2, 0.0, 0.5, 0.0, 1.0, 4.0, 0),
+                    (1, 2, 0.0, 0.5, 0.0, 1.0, 4.0, 0),
+                    (1, 2, 0.0, 1.0, 0.0, 1.0, 4.0, 0),
+                    (2, 2, 0.0, 0.5, 0.0, 0.0, 4.0, 0),
+                    (3, 2, 0.0, 0.84, 0.0, 1.0, 4.0, 0),
+                    (4, 2, 0.0, 0.84, 0.0, 1.0, 4.0, 0),
+                    (5, 2, 1.0, 0.84, 0.0, 1.0, 4.0, 0),
+                    (6, 2, 0.0, 0.84, 0.0, 1.0, 4.0, 0),
+                    (5, 2, 1.0, 1.0, 0.0, 0.0, 4.0, 0)]
+        # warp-mode sweep (connected stretch): gradients are its primary
+        # use case; rects/lines exercise the fold z-resolution.
+        configs += [(6, 2, 0.0, 0.5, 0.0, 1.0, 0.0, 1),
+                    (6, 2, 0.0, 0.84, 0.0, 1.0, 0.0, 1),
+                    (6, 2, 0.0, 1.0, 0.0, 1.0, 0.0, 1),
+                    (2, 2, 0.0, 0.5, 0.0, 1.0, 0.0, 1),
+                    (2, 2, 0.0, 0.84, 0.0, 0.0, 0.0, 1),
+                    (1, 2, 0.0, 0.5, 0.0, 1.0, 0.0, 1),
+                    (1, 2, 0.0, 0.84, 0.0, 1.0, 0.0, 1),
+                    (3, 2, 0.0, 0.84, 0.0, 1.0, 0.0, 1),
+                    (5, 2, 1.0, 0.84, 0.0, 1.0, 0.0, 1)]
     failures = asyncio.run(run(configs))
     print(f"\n{'ALL PASS' if failures == 0 else f'{failures} FAILURES'}")
     sys.exit(0 if failures == 0 else 1)
