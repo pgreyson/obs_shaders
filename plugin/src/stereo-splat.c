@@ -34,7 +34,6 @@ All constants mirror tools/stereo_oracle.py — change both together.
 #define PIC_LO 0.010f
 #define PIC_HI 0.985f
 #define MAX_PARALLAX 0.08f
-#define SPLAT_SS 4
 
 struct stereo_splat {
 	obs_source_t *context;
@@ -52,7 +51,13 @@ struct stereo_splat {
 
 	gs_texrender_t *input_rt;
 	gs_texrender_t *output_rt;
-	gs_stagesurf_t *stage;
+	/* double-buffered: stage frame N, map frame N-1 — a same-frame map
+	   right after gs_stage_texture is a full GPU sync; two instances
+	   stalling each other measured 51ms/frame. One frame of stream
+	   latency instead. */
+	gs_stagesurf_t *stage[2];
+	int stage_idx;
+	bool stage_primed;
 
 	/* Apple's GL-on-Metal returns constant black for ANY texture
 	   sampling in the vertex stage (measured; texture/textureLod/
@@ -73,6 +78,9 @@ struct stereo_splat {
 	float depth;    /* slider 0..1 (CV ch0) */
 	int mode;       /* 0 = splat, 1 = warp */
 	bool window;    /* floating window instead of edge taper */
+	bool sync;      /* true = same-frame readback (correct for
+			   on-demand/screenshot sources); false = one-frame
+			   latency, no GPU sync stall (live chains) */
 	int debug;      /* 0 off, 1 depth points, 2 input rgb, 3 input alpha */
 };
 
@@ -88,6 +96,7 @@ static void splat_update(void *data, obs_data_t *settings)
 	s->depth = (float)obs_data_get_double(settings, "depth");
 	s->mode = (int)obs_data_get_int(settings, "mode");
 	s->window = obs_data_get_bool(settings, "window");
+	s->sync = obs_data_get_bool(settings, "sync");
 	s->debug = (int)obs_data_get_int(settings, "debug");
 }
 
@@ -96,6 +105,7 @@ static void splat_defaults(obs_data_t *settings)
 	obs_data_set_default_double(settings, "depth", 0.3);
 	obs_data_set_default_int(settings, "mode", 0);
 	obs_data_set_default_bool(settings, "window", false);
+	obs_data_set_default_bool(settings, "sync", true);
 	obs_data_set_default_int(settings, "debug", 0);
 }
 
@@ -113,8 +123,9 @@ static obs_properties_t *splat_properties(void *data)
 	obs_property_list_add_int(m, obs_module_text("ModeWarp"), 1);
 	obs_properties_add_bool(props, "window",
 				obs_module_text("FloatingWindow"));
+	obs_properties_add_bool(props, "sync", obs_module_text("SyncReadback"));
 	obs_properties_add_int_slider(props, "debug",
-				      obs_module_text("DebugDepth"), 0, 4, 1);
+				      obs_module_text("DebugDepth"), 0, 5, 1);
 	return props;
 }
 
@@ -128,8 +139,10 @@ static void splat_destroy(void *data)
 		gs_texrender_destroy(s->input_rt);
 	if (s->output_rt)
 		gs_texrender_destroy(s->output_rt);
-	if (s->stage)
-		gs_stagesurface_destroy(s->stage);
+	if (s->stage[0])
+		gs_stagesurface_destroy(s->stage[0]);
+	if (s->stage[1])
+		gs_stagesurface_destroy(s->stage[1]);
 	if (s->splat_vb)
 		gs_vertexbuffer_destroy(s->splat_vb);
 	if (s->warp_vb)
@@ -187,28 +200,37 @@ static void rebuild_vertex_buffers(struct stereo_splat *s, uint32_t w,
 		gs_vertexbuffer_destroy(s->warp_vb);
 		s->warp_vb = NULL;
 	}
-	if (s->stage) {
-		gs_stagesurface_destroy(s->stage);
-		s->stage = NULL;
+	for (int i = 0; i < 2; i++) {
+		if (s->stage[i]) {
+			gs_stagesurface_destroy(s->stage[i]);
+			s->stage[i] = NULL;
+		}
+		s->stage[i] = gs_stagesurface_create(w, h, GS_RGBA);
 	}
-	s->stage = gs_stagesurface_create(w, h, GS_RGBA);
+	s->stage_idx = 0;
+	s->stage_primed = false;
 
-	/* splat: W*SS subsample points per row; GS_DYNAMIC because the
-	   colors stream every frame (positions upload once at create and
-	   are never flushed again — flush_direct sends colors only). */
-	size_t per_row = (size_t)w * SPLAT_SS;
-	size_t n = per_row * h;
+	/* splat (v19 pixel-footprint lines): per source pixel one GS_LINES
+	   pair spanning its dest footprint — x = pixel EDGE u, z = pixel
+	   CENTER u (PIC crop + z-key taper). GS_DYNAMIC because the colors
+	   stream every frame (positions upload once at create and are
+	   never flushed again — flush_direct sends colors only). */
+	size_t n = (size_t)w * 2 * h;
 	struct gs_vb_data *vbd = gs_vbdata_create();
 	vbd->num = n;
 	vbd->points = bmalloc(n * sizeof(struct vec3));
 	vbd->colors = bzalloc(n * sizeof(uint32_t));
 	size_t k = 0;
 	for (uint32_t row = 0; row < h; row++) {
-		for (size_t i = 0; i < per_row; i++) {
-			vbd->points[k].x =
-				((float)i + 0.5f) / (float)per_row;
+		for (uint32_t col = 0; col < w; col++) {
+			float uc = ((float)col + 0.5f) / (float)w;
+			vbd->points[k].x = (float)col / (float)w;
 			vbd->points[k].y = (float)row;
-			vbd->points[k].z = 0.0f;
+			vbd->points[k].z = uc;
+			k++;
+			vbd->points[k].x = ((float)col + 1.0f) / (float)w;
+			vbd->points[k].y = (float)row;
+			vbd->points[k].z = uc;
 			k++;
 		}
 	}
@@ -283,7 +305,8 @@ static bool fill_colors(struct stereo_splat *s, bool warp, uint32_t w,
 {
 	uint8_t *px;
 	uint32_t linesize;
-	if (!gs_stagesurface_map(s->stage, &px, &linesize))
+	/* map the surface staged LAST frame (no sync stall) */
+	if (!gs_stagesurface_map(s->stage[s->stage_idx ^ 1], &px, &linesize))
 		return false;
 
 	if (!warp) {
@@ -298,9 +321,7 @@ static bool fill_colors(struct stereo_splat *s, bool warp, uint32_t w,
 				uint32_t c = src[col];
 				dst[0] = c;
 				dst[1] = c;
-				dst[2] = c;
-				dst[3] = c;
-				dst += SPLAT_SS;
+				dst += 2;
 			}
 		}
 	} else {
@@ -323,7 +344,7 @@ static bool fill_colors(struct stereo_splat *s, bool warp, uint32_t w,
 			dst += 2;
 		}
 	}
-	gs_stagesurface_unmap(s->stage);
+	gs_stagesurface_unmap(s->stage[s->stage_idx ^ 1]);
 	return true;
 }
 
@@ -378,12 +399,26 @@ static void splat_render(void *data, gs_effect_t *unused_effect)
 	   (vertex texture fetch is broken on Apple GL — see header) ---- */
 	float f0 = s->depth * s->depth * MAX_PARALLAX;
 	bool warp_mode = (s->mode == 1 && s->debug == 0);
-	if (s->debug < 2) {
-		gs_stage_texture(s->stage, input_tex);
+	if (s->debug < 2 || s->debug == 5) {
+		gs_stage_texture(s->stage[s->stage_idx], input_tex);
+		if (s->sync) {
+			/* same-frame map (GPU sync): required for sources
+			   that render on demand (screenshots/harness) */
+			s->stage_idx ^= 1; /* fill maps idx^1 = just staged */
+			s->stage_primed = true;
+		} else if (!s->stage_primed) {
+			/* first frame: nothing staged yet to map */
+			s->stage_primed = true;
+			s->stage_idx ^= 1;
+			obs_source_skip_video_filter(s->context);
+			return;
+		}
 		if (!fill_colors(s, warp_mode, w, h, f0)) {
 			obs_source_skip_video_filter(s->context);
 			return;
 		}
+		if (!s->sync)
+			s->stage_idx ^= 1;
 		struct gs_vb_data stream = {0};
 		stream.num = warp_mode ? s->warp_verts : s->splat_verts;
 		stream.colors = warp_mode ? s->warp_colors : s->splat_colors;
@@ -434,7 +469,9 @@ static void splat_render(void *data, gs_effect_t *unused_effect)
 		}
 
 		const char *tech_name;
-		if (s->debug == 1)
+		if (s->debug == 5)
+			tech_name = "DebugQ";
+		else if (s->debug == 1)
 			tech_name = "Debug";
 		else if (warp_mode)
 			tech_name = "Warp";
@@ -445,9 +482,16 @@ static void splat_render(void *data, gs_effect_t *unused_effect)
 
 		gs_vertbuffer_t *vb = warp_mode ? s->warp_vb : s->splat_vb;
 		size_t nverts = warp_mode ? s->warp_verts : s->splat_verts;
-		enum gs_draw_mode dm = warp_mode ? GS_TRISTRIP : GS_POINTS;
+		enum gs_draw_mode dm = warp_mode ? GS_TRISTRIP : GS_LINES;
 
 		for (int eye = 0; eye < 2; eye++) {
+			/* per-eye scissor: clipped/folded lines must never
+			   spill into the sibling eye's half */
+			struct gs_rect sc = {.x = eye == 0 ? 0 : (int)eye_w,
+					     .y = 0,
+					     .cx = (int)eye_w,
+					     .cy = (int)h};
+			gs_set_scissor_rect(&sc);
 			gs_effect_set_float(s->p_eye_sign,
 					    eye == 0 ? 1.0f : -1.0f);
 			gs_effect_set_float(s->p_eye_base,
@@ -459,6 +503,7 @@ static void splat_render(void *data, gs_effect_t *unused_effect)
 			gs_draw(dm, 0, (uint32_t)nverts);
 			gs_technique_end_pass(tech);
 			gs_technique_end(tech);
+			gs_set_scissor_rect(NULL);
 		}
 
 		/* floating window: black strips, L eye left edge / R eye

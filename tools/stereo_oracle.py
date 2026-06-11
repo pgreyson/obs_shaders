@@ -383,38 +383,118 @@ def render_eyes(src, depth_slider, hue_rotation=0.0, color_weight=1.0, eye_w=W,
     f0 = depth_slider * depth_slider * MAX_PARALLAX
     vis_lo, vis_hi = PIC_LO + f0, PIC_HI - f0
     span = vis_hi - vis_lo
-    SS = 4  # subpixel splat density
-    xs = (np.arange(int(W * SS)) + 0.5) / (W * SS)          # source x in [0,1]
-    keep = (xs >= PIC_LO) & (xs <= PIC_HI)
-    xs = xs[keep]
-    src_cols = np.clip((xs * W).astype(int), 0, W - 1)
+    # PIXEL-FOOTPRINT SPLAT (v19): each source pixel fills its complete
+    # destination footprint [dest(left edge), dest(right edge)] at its own
+    # depth — the continuous limit of the old 4-subsample splat. Shapes
+    # stay exactly as rigid and reveals exactly as black (v10), but steep
+    # disparity ramps no longer leave sub-pixel black micro-holes between
+    # discrete subsamples (and the GPU can draw it as one line per pixel
+    # instead of 4 points — required for dual-instance 30fps).
+    u_lo = np.arange(W) / W            # pixel left edges
+    u_hi = (np.arange(W) + 1) / W      # pixel right edges
+    u_c = (np.arange(W) + 0.5) / W     # pixel centers (PIC crop + z taper)
+    keep = (u_c >= PIC_LO) & (u_c <= PIC_HI)
+    cols_all = np.arange(W)[keep]
+    u_lo, u_hi, u_c = u_lo[keep], u_hi[keep], u_c[keep]
+    t_lo = edge_taper(u_lo, f0) if f0 > 0 else np.ones_like(u_lo)
+    t_hi = edge_taper(u_hi, f0) if f0 > 0 else np.ones_like(u_hi)
+    t_c = edge_taper(u_c, f0) if f0 > 0 else np.ones_like(u_c)
     out = {}
     eyes = {"L": +1.0, "R": -1.0}  # dest = x + sign * D (crossed)
     # vertical crop mapping: output row -> source row
     vy = np.clip(((f0 + (np.arange(H) + 0.5) / H * (1 - 2 * f0)) * H).astype(int), 0, H - 1)
     d_full = compute_field(src, hue_rotation, color_weight, backdrop,
                            field_sigma)
-    taper = edge_taper(xs, f0) if f0 > 0 else np.ones_like(xs)
     for eye, sign in eyes.items():
         img = np.full((H, eye_w, 3), backdrop, dtype=float)
         for row in range(H):
             sr = vy[row]
-            cols = src_cols
-            d = d_full[sr, cols] * taper
-            order = np.argsort(d, kind="stable")          # nearest written last
-            dest = xs + sign * d * f0
-            q = (dest - vis_lo) / span
-            px = np.floor(q * eye_w).astype(int)
-            ok = (px >= 0) & (px < eye_w)
-            o = order[ok[order]]
-            img[row, px[o]] = src[sr, cols[o]]
+            d = d_full[sr, cols_all]
+            dt = d * t_c  # z key: depth tapered at the pixel CENTER
+            # +5e-4 px epsilon: shared bin-boundary convention with the
+            # GPU splat (stereo-splat.effect VSSplat); change both
+            # together.
+            b_lo = np.floor(((u_lo + sign * d * t_lo * f0) - vis_lo) /
+                            span * eye_w + 5.0e-4).astype(int)
+            b_hi = np.floor(((u_hi + sign * d * t_hi * f0) - vis_lo) /
+                            span * eye_w + 5.0e-4).astype(int)
+            lo = np.minimum(b_lo, b_hi)
+            hi = np.maximum(b_lo, b_hi)
+            vis = (hi >= 0) & (lo <= eye_w - 1)
+            lo = np.clip(lo[vis], 0, eye_w - 1)
+            hi = np.clip(hi[vis], 0, eye_w - 1)
+            dt_v = dt[vis]
+            cols_v = cols_all[vis]
+            # paint far -> near (stable: equal tapered depth resolves to
+            # the later = larger source x, the GPU's LEQUAL + draw order)
+            order = np.argsort(dt_v, kind="stable")
+            k = hi[order] - lo[order] + 1
+            idx = np.repeat(np.arange(len(order)), k)
+            ends = np.cumsum(k)
+            offs = np.arange(ends[-1]) - np.repeat(ends - k, k)
+            px = lo[order][idx] + offs
+            img[row, px] = src[sr, cols_v[order][idx]]
             # Splat holes (disocclusions) stay backdrop black — black IS the
             # infinity plane here. Every shape keeps its rigid silhouette in
             # both eyes: no carve eats the far surface, no fill extends it.
-            # The strip between a near edge and the flat far edge in the
-            # reveal eye is the backdrop seen through the gap (user-locked
-            # 2026-06-10 after carve v8 and da Vinci fill v9 both rejected
-            # as deformations of the far shape's edge).
+            # (v10 user-locked; v19 only removes intra-pixel sampling gaps.)
+        out[eye] = img
+    return out["L"], out["R"]
+
+
+# ---- warp ground truth: connected per-row mesh (stereo splat "Warp") ----
+def render_eyes_warp(src, depth_slider, hue_rotation=0.0, color_weight=1.0,
+                     eye_w=W, field_sigma=0.0):
+    """Connected-stretch convention: each row is a continuous piecewise-
+    linear mapping from source x to destination x — disocclusions STRETCH
+    the surface between near and far content instead of opening backdrop
+    gaps, folds resolve by z (near wins, tie -> larger source x, matching
+    the GPU's LEQUAL + ascending-x draw order). Colors are linearly
+    resampled along the stretch (the plugin's fragment stage samples the
+    source bilinearly at the interpolated u). Mirrors stereo-splat.effect
+    VSWarp/PSWarp — change both together."""
+    f0 = depth_slider * depth_slider * MAX_PARALLAX
+    vis_lo, vis_hi = PIC_LO + f0, PIC_HI - f0
+    span = vis_hi - vis_lo
+    vy = np.clip(((f0 + (np.arange(H) + 0.5) / H * (1 - 2 * f0)) * H)
+                 .astype(int), 0, H - 1)
+    d_full = compute_field(src, hue_rotation, color_weight, 0.0,
+                           field_sigma)
+    u = np.clip((np.arange(W) + 0.5) / W, PIC_LO, PIC_HI)
+    taper = edge_taper(u, f0) if f0 > 0 else np.ones_like(u)
+    out = {}
+    for eye, sign in (("L", +1.0), ("R", -1.0)):
+        img = np.zeros((H, eye_w, 3))
+        for row in range(H):
+            sr = vy[row]
+            d = d_full[sr]
+            dest = u + sign * d * taper * f0
+            x = np.clip((dest - vis_lo) / span, 0.0, 1.0) * eye_w
+            # adaptive per-segment sampling: enough samples that every
+            # crossed destination pixel receives one
+            x0, x1 = x[:-1], x[1:]
+            k = np.maximum(np.ceil(np.abs(x1 - x0)).astype(int) + 1, 2)
+            seg = np.repeat(np.arange(W - 1), k)
+            # intra-segment parameter 0..1
+            ends = np.cumsum(k)
+            starts = ends - k
+            t = (np.arange(ends[-1]) - np.repeat(starts, k)) / \
+                np.repeat(k - 1, k)
+            xs_e = x[seg] * (1 - t) + x[seg + 1] * t
+            z_e = d[seg] * (1 - t) + d[seg + 1] * t
+            u_e = u[seg] * (1 - t) + u[seg + 1] * t
+            px = np.clip(xs_e.astype(int), 0, eye_w - 1)
+            # paint far -> near (last write wins = nearest); equal depth
+            # resolves to the later emission = larger source x, matching
+            # the GPU's LEQUAL + ascending-x draw order
+            order = np.lexsort((np.arange(len(px)), z_e))
+            # linear color resample from the source row
+            uf = u_e * W - 0.5
+            i0 = np.clip(np.floor(uf).astype(int), 0, W - 1)
+            i1 = np.clip(i0 + 1, 0, W - 1)
+            ft = np.clip(uf - i0, 0.0, 1.0)[:, None]
+            cols = src[sr, i0] * (1 - ft) + src[sr, i1] * ft
+            img[row, px[order]] = cols[order]
         out[eye] = img
     return out["L"], out["R"]
 

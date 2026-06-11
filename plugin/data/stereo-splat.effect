@@ -86,21 +86,33 @@ float src_row(float out_row)
 	return clamp(sr, 0.0, dims.y - 1.0);
 }
 
+// v19 pixel-footprint line splat: each vertex is one END of a source
+// pixel's footprint line (pos.x = pixel EDGE u, pos.z = pixel CENTER u).
+// The endpoint is snapped to its dest bin and extended half-open
+// ([b_left, b_right+1)) so GL line rasterization covers exactly the
+// oracle's inclusive bin range. Whole-pixel validity (PIC crop) tests
+// the CENTER; per-eye scissor (C side) clips off-eye/folded spans.
 SplatOut VSSplat(VertIn v_in)
 {
 	SplatOut v_out;
-	float u_sub = v_in.pos.x;
+	float u_edge = v_in.pos.x;
+	float u_c = v_in.pos.z;
 	float d = clamp(2.0 * (v_in.col.a - 0.5), 0.0, 1.0);
-	float dt = d * edge_taper(u_sub);
-	float dest = u_sub + eye_sign * dt * f0;
+	float dt_e = d * edge_taper(u_edge);
+	float dest = u_edge + eye_sign * dt_e * f0;
 	float q = (dest - vis_lo) / span;
-	float dest_px = floor(q * eye_w);
-	bool ok = (u_sub >= PIC_LO) && (u_sub <= PIC_HI) &&
-		  (dest_px >= 0.0) && (dest_px < eye_w);
-
-	float out_x = eye_base + dest_px + 0.5;
+	// +5e-4 px epsilon inside the floor: shared bin-boundary
+	// convention with the oracle (f32-vs-f64 lattice dust); change
+	// both together.
+	float b = floor(q * eye_w + 5.0e-4);
+	bool right_end = (u_edge > u_c);
+	float out_x = eye_base + b + (right_end ? 1.0 : 0.0);
 	float out_y = v_in.pos.y + 0.5;
-	float zw = ok ? (-100.0 + d * 200.0) : 10000.0;
+	bool ok = (u_c >= PIC_LO) && (u_c <= PIC_HI);
+	// z-buffer key = depth tapered at the pixel CENTER (constant along
+	// the line, matching the oracle's scalar per-pixel sort key).
+	float dt_c = d * edge_taper(u_c);
+	float zw = ok ? (-100.0 + dt_c * 200.0) : 10000.0;
 	v_out.pos = mul(float4(out_x, out_y, zw, 1.0), ViewProj);
 	v_out.col = float4(v_in.col.rgb, 1.0);
 	return v_out;
@@ -108,20 +120,8 @@ SplatOut VSSplat(VertIn v_in)
 
 SplatOut VSDebug(VertIn v_in)
 {
-	SplatOut v_out;
-	float u_sub = v_in.pos.x;
+	SplatOut v_out = VSSplat(v_in);
 	float d = clamp(2.0 * (v_in.col.a - 0.5), 0.0, 1.0);
-	float dt = d * edge_taper(u_sub);
-	float dest = u_sub + eye_sign * dt * f0;
-	float q = (dest - vis_lo) / span;
-	float dest_px = floor(q * eye_w);
-	bool ok = (u_sub >= PIC_LO) && (u_sub <= PIC_HI) &&
-		  (dest_px >= 0.0) && (dest_px < eye_w);
-
-	float out_x = eye_base + dest_px + 0.5;
-	float out_y = v_in.pos.y + 0.5;
-	float zw = ok ? (-100.0 + d * 200.0) : 10000.0;
-	v_out.pos = mul(float4(out_x, out_y, zw, 1.0), ViewProj);
 	v_out.col = float4(d, d, d, 1.0);
 	return v_out;
 }
@@ -144,6 +144,36 @@ WarpOut VSWarp(VertIn v_in)
 	float zw = -100.0 + d * 200.0;
 	v_out.pos = mul(float4(out_x, out_y, zw, 1.0), ViewProj);
 	v_out.uv = float2(u, (src_row(out_row) + 0.5) / dims.y);
+	return v_out;
+}
+
+// DebugQ: paint each source pixel's q*eye_w (the continuous dest bin
+// coordinate, before floor) as 24-bit fixed point AT THE SOURCE COLUMN,
+// subsample 0 only — lets the harness read the GPU's own arithmetic.
+SplatOut VSDebugQ(VertIn v_in)
+{
+	SplatOut v_out;
+	float u_sub = v_in.pos.x;
+	float d = clamp(2.0 * (v_in.col.a - 0.5), 0.0, 1.0);
+	float dt = d * edge_taper(u_sub);
+	float dest = u_sub + eye_sign * dt * f0;
+	float q = (dest - vis_lo) / span;
+	float v = q * eye_w; // the value under test
+
+	float src_px = floor(u_sub * eye_w);
+	// keep only subsample 0 of each source pixel pair (2 src px per
+	// eye px at half-SBS — keep the first)
+	float idx = u_sub * dims.x * 4.0; // global subsample index
+	bool keep = frac(floor(idx) / 8.0) < 0.01; // every 8th subsample
+	float out_x = eye_base + src_px + 0.5;
+	float out_y = v_in.pos.y + 0.5;
+	float zw = keep ? 0.0 : 10000.0;
+	v_out.pos = mul(float4(out_x, out_y, zw, 1.0), ViewProj);
+	float k = clamp(v / 1024.0, 0.0, 0.999999);
+	float r = floor(k * 256.0);
+	float g = floor(k * 65536.0) - r * 256.0;
+	float b = floor(k * 16777216.0) - floor(k * 65536.0) * 256.0;
+	v_out.col = float4(r / 255.0, g / 255.0, b / 255.0, 1.0);
 	return v_out;
 }
 
@@ -228,5 +258,14 @@ technique BlitA
 	{
 		vertex_shader = VSSprite(v_in);
 		pixel_shader  = PSBlitA(v_in);
+	}
+}
+
+technique DebugQ
+{
+	pass
+	{
+		vertex_shader = VSDebugQ(v_in);
+		pixel_shader  = PSSplat(v_in);
 	}
 }
