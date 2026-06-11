@@ -93,10 +93,14 @@ async def run(configs):
                 "inputName": SOURCE, "inputSettings": {"file": MONO_PNG}}))
             last_scene = (scene, soft, noise)
             await asyncio.sleep(0.6)
+        # depth drives the march filter; hue_rotation/color_weight drive
+        # the bake filter (the field owns them).
+        await ws.call(simpleobsws.Request("SetSourceFilterSettings", {
+            "sourceName": SOURCE, "filterName": "depth bake",
+            "filterSettings": {"hue_rotation": rot, "color_weight": cw}}))
         await ws.call(simpleobsws.Request("SetSourceFilterSettings", {
             "sourceName": SOURCE, "filterName": FILTER,
-            "filterSettings": {"depth": depth, "hue_rotation": rot,
-                               "color_weight": cw}}))
+            "filterSettings": {"depth": depth}}))
         await asyncio.sleep(0.8)
         r = await ws.call(simpleobsws.Request("GetSourceScreenshot", {
             "sourceName": SOURCE, "imageFormat": "png",

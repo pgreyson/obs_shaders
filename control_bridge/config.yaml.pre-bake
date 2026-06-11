@@ -1,0 +1,78 @@
+# control_bridge/config.yaml — live bridge config (gitignored).
+
+obs_instances:
+  viture:
+    host: localhost
+    port: 4455
+    password: "fcXnj9dDSRctKq8N"
+  projector:
+    host: localhost
+    port: 4456
+    password: "fcXnj9dDSRctKq8N"
+
+# The Rebel Technology OWL-ACDC USB interface (4 DC-coupled in @ 48 kHz).
+# Confirmed scaling: ±5V CV ↔ ±1.0 in the bridge's float sample range.
+cv:
+  device_name_match: "OWL-ACDC"
+  sample_rate: 48000
+  channels: 4
+  poll_hz: 60               # 60Hz audio polling → ~16.7ms averaging window
+  write_hz: 60              # match poll_hz for tightest response
+  change_threshold: 0.01    # logging threshold only
+  write_threshold: 0.001    # smaller → more responsive to fine fader movement
+
+# Mappings for lumadepth.shader. Each mapping pushes one CV channel into one
+# filter property on both OBS instances. cv_range / out_range remap from the
+# bridge's float sample range into the 0..1 shader-property range:
+#   cv_range:  [-1.0, 1.0]  =  -5V .. +5V CV input
+#   out_range: [ 0.0, 1.0]  =  shader property range
+# Result: -5V → 0.0, 0V → 0.5, +5V → 1.0. The crow's current 0-5V outputs
+# will only fill the upper half (0.5..1.0); for full sweep, drive the input
+# bipolar (±5V).
+mappings:
+  - cv_channel: 0
+    name: depth
+    cv_range:  [-1.0, 1.0]
+    out_range: [ 0.0, 1.0]
+    targets:
+      - instance: viture
+        source: "Video Capture Device"
+        filter: "stereo displace"
+        property: depth
+      - instance: projector
+        source: "Video Capture Device"
+        filter: "stereo displace"
+        property: depth
+
+  - cv_channel: 1
+    name: hue_rotation
+    cv_range:  [-1.0, 1.0]
+    out_range: [ 0.0, 1.0]
+    targets:
+      - instance: viture
+        source: "Video Capture Device"
+        filter: "stereo displace"
+        property: hue_rotation
+      - instance: projector
+        source: "Video Capture Device"
+        filter: "stereo displace"
+        property: hue_rotation
+
+  - cv_channel: 2
+    name: color_weight
+    cv_range:  [-1.0, 1.0]
+    out_range: [ 0.0, 1.0]
+    targets:
+      - instance: viture
+        source: "Video Capture Device"
+        filter: "stereo displace"
+        property: color_weight
+      - instance: projector
+        source: "Video Capture Device"
+        filter: "stereo displace"
+        property: color_weight
+
+  # ch3 reserved for future shader / experiment.
+
+mirror:
+  enabled: false
