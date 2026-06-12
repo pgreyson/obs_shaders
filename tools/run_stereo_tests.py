@@ -101,10 +101,15 @@ async def run(configs):
         await ws.call(simpleobsws.Request("SetSourceFilterSettings", {
             "sourceName": SOURCE, "filterName": "depth bake",
             "filterSettings": {"hue_rotation": rot, "color_weight": cw}}))
+        # set EVERY splat setting explicitly: stale leftovers from ad-hoc
+        # probe scripts on the Test Pattern filter have now caused THREE
+        # long false debugging hunts (cw=0, sigma=4, convergence=0.3)
         await ws.call(simpleobsws.Request("SetSourceFilterSettings", {
             "sourceName": SOURCE, "filterName": FILTER,
             "filterSettings": {"depth": depth, "mode": mode,
-                               "fill": 3, "ssaa": False}}))
+                               "fill": 3, "ssaa": False, "mlaa": True,
+                               "convergence": 0.0, "window": False,
+                               "sync": True, "debug": 0}}))
         # regional-depth smoothing: both separable passes get the same sigma
         for fname in ("field smooth h", "field smooth v"):
             await ws.call(simpleobsws.Request("SetSourceFilterSettings", {
@@ -125,7 +130,8 @@ async def run(configs):
             # convention baseline: 3px micro-fill + 2x vertical SSAA
             oL, oR = render_eyes(src_q, depth, hue_rotation=rot,
                                  color_weight=cw, eye_w=960,
-                                 field_sigma=sigma, micro_fill=3, ss_v=1)
+                                 field_sigma=sigma, micro_fill=3, ss_v=1,
+                                 mlaa=True)
         for eye, m in zip("LR", compare(cap, oL, oR)):
             ok = (m["meandiff"] < TARGET_MEANDIFF
                   and m["ghost"] < TARGET_GHOST and m["stray"] < TARGET_STRAY)

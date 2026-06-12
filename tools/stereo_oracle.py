@@ -339,6 +339,42 @@ def compute_field(src, hue_rotation=0.0, color_weight=1.0, backdrop=0.0,
         hd = np.abs(hue - sh2(hue, dy, dx))
         hd = np.minimum(hd, 1.0 - hd)
         unstable |= (sh2(delta, dy, dx) > 0.06) & (delta > 0.06) & (hd > 0.06)
+    # EDGE GATE (v20): the donor machinery below (lift + reassignment)
+    # exists to rescue AA/contact-mix pixels AT CONTACTS; its gates are
+    # deliberately binary ("must snap, not blend" — v13). On SMOOTH
+    # gradients those same binary gates manufacture depth cliffs out of
+    # ramps (measured: adjacent-px depth jump 0.10 on a 0.002/px luma
+    # ramp), which the splat then honestly reveals as black arcs in
+    # luma wells at depth (user repro). Gate the machinery on local
+    # contrast: max color distance from the center within the 5x5 — at
+    # real contacts this is large (>=0.3 for any signed-off pattern
+    # pair); on synth gradients it is ~50x smaller.
+    # positions = exactly the bake shader's 12 donor taps (axis ±1/±2 +
+    # inner diagonals) so GPU and oracle gate identically; a contact
+    # within the AA-rescue band always shows contrast at these. The gate
+    # is SOFT (smoothstep over local contrast): a hard threshold would
+    # just manufacture new cliffs along its own contour and flip on
+    # f32-vs-f64 dust (measured as broad GPU/oracle divergence bands).
+    TAP_SHIFTS = [(0, -2), (0, -1), (0, 1), (0, 2),
+                  (-2, 0), (-1, 0), (1, 0), (2, 0),
+                  (-1, -1), (-1, 1), (1, -1), (1, 1)]
+    # Neighbor access matching the GPU's sampler EXACTLY: vertical taps
+    # WRAP (the sampler wraps at uv 0/1, as does np.roll), horizontal
+    # taps clamp at the PIC bounds (safe_uv clamps x to [0.010, 0.985] =
+    # cols 19..1891) — frame-edge or wrap semantics flip the gate along
+    # entire near-border columns (measured 12.3k px in two ~20px bands
+    # at the PIC boundaries).
+    Hh, Ww = hue.shape
+    pic_lo_px = int(np.ceil(PIC_LO * Ww))
+    pic_hi_px = int(np.floor(PIC_HI * Ww))
+    edge_max = np.zeros(hue.shape)
+    for dy, dx in TAP_SHIFTS:
+        cols = np.clip(np.arange(Ww) + dx, pic_lo_px, pic_hi_px)
+        nb = np.roll(src_f, -dy, axis=0)[:, cols]
+        cd = np.abs(src_f - nb).max(axis=2)
+        edge_max = np.maximum(edge_max, cd)
+    ew = np.clip((edge_max - 0.10) / (0.25 - 0.10), 0.0, 1.0)
+    ew = ew * ew * (3.0 - 2.0 * ew)
     solid = ((conf >= 0.5) | (luma > 0.8)) & ~unstable
     donor_d = np.where(solid, d_full, 0.0)
 
@@ -347,6 +383,7 @@ def compute_field(src, hue_rotation=0.0, color_weight=1.0, backdrop=0.0,
     # donor (replace, not max: its own wheel depth is meaningless). Hue
     # distances within one 0.02 bucket tie-break to the NEARER donor
     # (foreground assignment, as everywhere else).
+    d_raw = d_full.copy()  # pre-machinery depth (soft-gate blend base)
     reassign = unstable & (delta > 0.06) & (bdist > 0.04)
     best_score = np.full(hue.shape, np.inf)
     best_d = d_full.copy()
@@ -386,6 +423,9 @@ def compute_field(src, hue_rotation=0.0, color_weight=1.0, backdrop=0.0,
             # weight is 0.114) and must still ride with its body.
             ok = (bdist > 0.04) & (same_surface | (delta < 0.06))
             cand = np.maximum(cand, np.where(ok, dn, 0.0))
+    # soft edge gate: machinery result only where local contrast says
+    # CONTACT; raw smooth depth elsewhere; continuous blend between
+    cand = d_raw + ew * (cand - d_raw)
     # The deployed chain carries the field as 8-bit encoded alpha
     # (a = 0.5 + d/2, chromadepth_bake.shader) — model that quantization
     # ALWAYS, same fairness rationale as quantizing the oracle source to

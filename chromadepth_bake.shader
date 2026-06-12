@@ -146,6 +146,9 @@ float3 blur3(float x, float y) {
         U = 1.0;                                                             \
         unstable = true;                                                     \
     }                                                                        \
+    edge_max = max(edge_max,                                                 \
+                   max(abs(cn.r - c.r),                                      \
+                       max(abs(cn.g - c.g), abs(cn.b - c.b))));              \
 }
 
 // Mutual instability witness between two taps (each within the other's 5x5
@@ -210,6 +213,7 @@ float field_depth(float x, float y) {
     float lift = 0.0;
     float best_score = 1e9;
     float best_d = d;
+    float edge_max = 0.0;
 
     // Tap layout: 0(-2,0) 1(-1,0) 2(1,0) 3(2,0)  4(0,-2) 5(0,-1) 6(0,1)
     //             7(0,2)  8(-1,-1) 9(1,-1) 10(-1,1) 11(1,1)
@@ -272,6 +276,19 @@ float field_depth(float x, float y) {
     WP(dl9, h9, u9, dl11, h11, u11)
     WP(dl10, h10, u10, dl11, h11, u11)
 
+    // SOFT EDGE GATE (v20, mirrors stereo_oracle compute_field): the
+    // donor machinery exists for CONTACTS; its binary gates manufacture
+    // depth cliffs out of SMOOTH gradients (black reveal arcs in luma
+    // wells at depth — user repro). Blend machinery-vs-raw by a
+    // smoothstep over local contrast: raw on smooth content, full
+    // machinery at contacts, continuous between (a HARD threshold just
+    // creates new cliffs along its own contour). Early-out below the
+    // smoothstep floor also skips the witness/gate work.
+    float d_raw = d;
+    if (edge_max <= 0.10)
+        return d;
+    float ew = smoothstep(0.10, 0.25, edge_max);
+
     // Out-of-window witnesses for the ±2 axis donors.
     XWIT(u0, h0, dl0, -3.0,  0.0)
     XWIT(u3, h3, dl3,  3.0,  0.0)
@@ -292,7 +309,7 @@ float field_depth(float x, float y) {
     // Donor-restricted lift (dim same-hue fades, achromatic AA).
     d = max(d, lift);
 
-    return d;
+    return lerp(d_raw, d, ew);
 }
 
 float4 mainImage(VertData v_in) : TARGET
