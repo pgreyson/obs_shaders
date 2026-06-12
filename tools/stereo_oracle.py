@@ -444,6 +444,7 @@ def render_eyes(src, depth_slider, hue_rotation=0.0, color_weight=1.0, eye_w=W,
     for eye, sign in eyes.items():
         img = np.full((out_h, eye_w, 3), backdrop, dtype=float)
         wmask = np.zeros((out_h, eye_w), dtype=bool)
+        zbuf = np.zeros((out_h, eye_w))
         for row in range(out_h):
             sr = vy[row]
             d = d_full[sr, cols_all]
@@ -476,6 +477,7 @@ def render_eyes(src, depth_slider, hue_rotation=0.0, color_weight=1.0, eye_w=W,
             px = lo[order][idx] + offs
             img[row, px] = src[sr, cols_v[order][idx]]
             wmask[row, px] = True
+            zbuf[row, px] = dt_v[order][idx]
             # MICRO-FILL (candidate convention): reveal gaps no wider than
             # micro_fill px are texture-scale disocclusions — fill them by
             # continuing the FARTHER flank (da Vinci at texture scale
@@ -498,10 +500,47 @@ def render_eyes(src, depth_slider, hue_rotation=0.0, color_weight=1.0, eye_w=W,
                         donor = a - 1 if zrow[a - 1] <= zrow[b] else b
                         img[row, a:b] = img[row, donor]
                         wmask[row, a:b] = True
+                        zbuf[row, a:b] = zrow[donor]
             # Splat holes (disocclusions) stay backdrop black — black IS the
             # infinity plane here. Every shape keeps its rigid silhouette in
             # both eyes: no carve eats the far surface, no fill extends it.
             # (v10 user-locked; v19 only removes intra-pixel sampling gaps.)
+        if micro_fill > 0:
+            # VERTICAL micro-fill: displacement is horizontal-only, so a
+            # thin unwritten run bounded by written rows can never be a
+            # legitimate reveal — it is row-to-row displacement SHEAR on
+            # fine horizontal texture (analog scanlines: measured as long
+            # 1-2px-tall black dashes on live content at depth). Fill from
+            # the FARTHER vertical flank; dark CONTENT rows are written
+            # pixels and are provably never touched.
+            up_d = np.zeros((out_h, eye_w), dtype=int)
+            dn_d = np.zeros((out_h, eye_w), dtype=int)
+            up_c = np.zeros((out_h, eye_w, 3))
+            dn_c = np.zeros((out_h, eye_w, 3))
+            up_z = np.zeros((out_h, eye_w))
+            dn_z = np.zeros((out_h, eye_w))
+            for k in range(1, micro_fill + 1):
+                wu = np.vstack([np.zeros((k, eye_w), dtype=bool),
+                                wmask[:-k]])
+                hit = (up_d == 0) & wu
+                up_d[hit] = k
+                up_c[hit] = np.vstack([np.zeros((k, eye_w, 3)),
+                                       img[:-k]])[hit]
+                up_z[hit] = np.vstack([np.zeros((k, eye_w)),
+                                       zbuf[:-k]])[hit]
+                wd = np.vstack([wmask[k:],
+                                np.zeros((k, eye_w), dtype=bool)])
+                hit = (dn_d == 0) & wd
+                dn_d[hit] = k
+                dn_c[hit] = np.vstack([img[k:],
+                                       np.zeros((k, eye_w, 3))])[hit]
+                dn_z[hit] = np.vstack([zbuf[k:],
+                                       np.zeros((k, eye_w))])[hit]
+            fillable = (~wmask) & (up_d > 0) & (dn_d > 0) &                        (up_d + dn_d - 1 <= micro_fill)
+            use_up = up_z <= dn_z
+            img[fillable & use_up] = up_c[fillable & use_up]
+            img[fillable & ~use_up] = dn_c[fillable & ~use_up]
+            wmask[fillable] = True
         if mlaa:
             # REVEAL-EDGE MLAA (cheap alternative to SSAA for the zipper):
             # vertical [1,2,1]/4 blend ONLY where the written mask changes

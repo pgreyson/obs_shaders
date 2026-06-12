@@ -55,6 +55,7 @@ struct stereo_splat {
 	gs_texrender_t *input_rt;
 	gs_texrender_t *output_rt;
 	gs_texrender_t *fill_rt;
+	gs_texrender_t *fillv_rt;
 	/* double-buffered: stage frame N, map frame N-1 — a same-frame map
 	   right after gs_stage_texture is a full GPU sync; two instances
 	   stalling each other measured 51ms/frame. One frame of stream
@@ -165,6 +166,8 @@ static void splat_destroy(void *data)
 		gs_texrender_destroy(s->output_rt);
 	if (s->fill_rt)
 		gs_texrender_destroy(s->fill_rt);
+	if (s->fillv_rt)
+		gs_texrender_destroy(s->fillv_rt);
 	if (s->stage[0])
 		gs_stagesurface_destroy(s->stage[0]);
 	if (s->stage[1])
@@ -188,6 +191,7 @@ static void *splat_create(obs_data_t *settings, obs_source_t *context)
 	s->input_rt = gs_texrender_create(GS_RGBA, GS_ZS_NONE);
 	s->output_rt = gs_texrender_create(GS_RGBA, GS_Z24_S8);
 	s->fill_rt = gs_texrender_create(GS_RGBA, GS_ZS_NONE);
+	s->fillv_rt = gs_texrender_create(GS_RGBA, GS_ZS_NONE);
 	obs_leave_graphics();
 	bfree(path);
 
@@ -598,14 +602,15 @@ present:;
 	/* ---- pass 2b: micro-fill (splat mode only; reveal runs <= fill
 	   px continue the FARTHER flank, oracle micro_fill) ---- */
 	if (s->fill > 0 && !warp_mode && s->debug < 2) {
-		gs_texrender_reset(s->fill_rt);
+		struct vec2 dims;
+		vec2_set(&dims, (float)w, (float)out_h);
 		gs_blend_state_push();
 		gs_blend_function(GS_BLEND_ONE, GS_BLEND_ZERO);
+		/* horizontal pass */
+		gs_texrender_reset(s->fill_rt);
 		if (gs_texrender_begin(s->fill_rt, w, out_h)) {
 			gs_ortho(0.0f, (float)w, 0.0f, (float)out_h, -100.0f,
 				 100.0f);
-			struct vec2 dims;
-			vec2_set(&dims, (float)w, (float)h);
 			gs_effect_set_texture(s->p_image, out_tex);
 			gs_effect_set_vec2(s->p_dims, &dims);
 			gs_effect_set_float(s->p_fill_px, (float)s->fill);
@@ -616,6 +621,22 @@ present:;
 				gs_texrender_get_texture(s->fill_rt);
 			if (ft)
 				out_tex = ft;
+		}
+		/* vertical pass (row-shear slits on fine texture) */
+		gs_texrender_reset(s->fillv_rt);
+		if (gs_texrender_begin(s->fillv_rt, w, out_h)) {
+			gs_ortho(0.0f, (float)w, 0.0f, (float)out_h, -100.0f,
+				 100.0f);
+			gs_effect_set_texture(s->p_image, out_tex);
+			gs_effect_set_vec2(s->p_dims, &dims);
+			gs_effect_set_float(s->p_fill_px, (float)s->fill);
+			while (gs_effect_loop(s->effect, "FillV"))
+				gs_draw_sprite(out_tex, 0, w, out_h);
+			gs_texrender_end(s->fillv_rt);
+			gs_texture_t *fv =
+				gs_texrender_get_texture(s->fillv_rt);
+			if (fv)
+				out_tex = fv;
 		}
 		gs_blend_state_pop();
 	}

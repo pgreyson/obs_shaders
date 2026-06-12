@@ -276,6 +276,62 @@ float4 PSFill(WarpOut v_in) : TARGET
 	return c;
 }
 
+// vertical micro-fill: displacement is horizontal-only, so a thin
+// unwritten run bounded by written rows is never a legitimate reveal —
+// it is row-to-row displacement SHEAR on fine horizontal texture. Same
+// farther-flank donor rule as PSFill, vertical taps, frame-clamped.
+// Mirrors the oracle's vertical pass — change together. dims here =
+// (texture width, texture HEIGHT incl. supersampling).
+float4 PSFillV(WarpOut v_in) : TARGET
+{
+	float4 c = image.SampleLevel(pointSampler, v_in.uv, 0.0);
+	if (fill_px < 0.5 || c.a >= 0.25)
+		return c;
+	float th = 1.0 / dims.y;
+	float lo = 0.5 * th;
+	float hi = 1.0 - 0.5 * th;
+	float du = 0.0;
+	float dd = 0.0;
+	float4 cu = c;
+	float4 cd = c;
+	for (int k = 1; k <= 5; k++) {
+		float fk = float(k);
+		float yu = v_in.uv.y - fk * th;
+		if (du < 0.5 && yu > lo) {
+			float4 su = image.SampleLevel(pointSampler,
+						      float2(v_in.uv.x, yu),
+						      0.0);
+			if (su.a >= 0.25) {
+				du = fk;
+				cu = su;
+			}
+		}
+		float yd = v_in.uv.y + fk * th;
+		if (dd < 0.5 && yd < hi) {
+			float4 sd = image.SampleLevel(pointSampler,
+						      float2(v_in.uv.x, yd),
+						      0.0);
+			if (sd.a >= 0.25) {
+				dd = fk;
+				cd = sd;
+			}
+		}
+	}
+	if (du > 0.5 && dd > 0.5 && (du + dd - 1.0) <= fill_px) {
+		return (cu.a <= cd.a) ? cu : cd; // farther flank; tie -> up
+	}
+	return c;
+}
+
+technique FillV
+{
+	pass
+	{
+		vertex_shader = VSSprite(v_in);
+		pixel_shader  = PSFillV(v_in);
+	}
+}
+
 // present: downsample the (possibly 2x-tall) buffer to output height —
 // one LINEAR tap at the output row center lands exactly between the two
 // sub-rows = box filter — and force alpha to 1 (z rode in alpha).
