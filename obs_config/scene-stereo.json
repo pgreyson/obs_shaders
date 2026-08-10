@@ -7,7 +7,7 @@
         "id": "coreaudio_input_capture",
         "versioned_id": "coreaudio_input_capture",
         "settings": {
-            "device_id": "default"
+            "device_id": "AppleUSBAudioEngine:Elgato:Elgato 4K S:AC8KB5261GAXOZ:3"
         },
         "mixers": 255,
         "sync": 0,
