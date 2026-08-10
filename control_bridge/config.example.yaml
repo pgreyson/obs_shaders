@@ -25,50 +25,70 @@ cv:
 # CV channel → shader filter property mappings. Each mapping pushes one CV
 # channel's value to one or more (instance, source, filter, property) targets
 # in OBS, so both OBS instances stay locked together for that property.
+# cv_range/out_range remap the bridge's float sample range (±1.0 = ±5V CV)
+# into the target property range.
 #
-# Defaults below match chromadepth.shader (single-purpose chromadepth variant):
-#   ch0 → depth            (parallax amount)
-#   ch1 → hue_rotation     (which hue is the "near" plane)
-#   ch2 → chroma_threshold (gate dark/gray regions so they anchor at screen)
-#   ch3 → reserved
-#
-# The OBS filter is named "stereo displace" in both scene collections.
+# Defaults below match the live bake + splat + palette chain:
+#   ch0 → stereo splat / depth   (parallax amount — hands-on instrument)
+#   ch1 → depth bake / hue_rotation (which hue is near — hands-on instrument)
+#   ch2 → palette / rotation (peak phase around the hue wheel)
+#   ch3 → palette / size     (number of hue likelihood peaks N, 1..16)
 mappings:
   - cv_channel: 0
     name: depth
+    cv_range:  [-1.0, 1.0]
+    out_range: [ 0.0, 1.0]
     targets:
       - instance: viture
         source: "Video Capture Device"
-        filter: "stereo displace"
+        filter: "stereo splat"
         property: depth
       - instance: projector
         source: "Video Capture Device"
-        filter: "stereo displace"
+        filter: "stereo splat"
         property: depth
 
   - cv_channel: 1
     name: hue_rotation
+    cv_range:  [-1.0, 1.0]
+    out_range: [ 0.0, 1.0]
     targets:
       - instance: viture
         source: "Video Capture Device"
-        filter: "stereo displace"
+        filter: "depth bake"
         property: hue_rotation
       - instance: projector
         source: "Video Capture Device"
-        filter: "stereo displace"
+        filter: "depth bake"
         property: hue_rotation
 
   - cv_channel: 2
-    name: chroma_threshold
+    name: palette_rotation
+    cv_range:  [-1.0, 1.0]
+    out_range: [ 0.0, 1.0]
     targets:
       - instance: viture
         source: "Video Capture Device"
-        filter: "stereo displace"
-        property: chroma_threshold
+        filter: "palette"
+        property: rotation
       - instance: projector
         source: "Video Capture Device"
-        filter: "stereo displace"
-        property: chroma_threshold
+        filter: "palette"
+        property: rotation
+
+  - cv_channel: 3
+    name: palette_size
+    cv_range:  [-1.0, 1.0]
+    out_range: [ 1.0, 16.0]
+    targets:
+      - instance: viture
+        source: "Video Capture Device"
+        filter: "palette"
+        property: size
+      - instance: projector
+        source: "Video Capture Device"
+        filter: "palette"
+        property: size
 
 # Bidirectional mirroring (planned v2.5): when a property changes in one
 # instance, apply the same value to the other. Not yet implemented.

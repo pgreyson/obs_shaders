@@ -31,6 +31,7 @@ All shaders are obs-shaderfilter `.shader` files. Add them as a **User-defined s
 
 | Shader | Input | Output | Purpose |
 |--------|-------|--------|---------|
+| `palette_quantize.shader` | mono | mono | **Continuous probabilistic palette.** A smooth hue likelihood (von Mises comb / circular softmax) with N peaks that colors flow toward — no quantization. Runs BETWEEN `synth color` and `depth bake`, so because color is depth here, the N hue peaks become N soft depth strata. Knobs: `size` (peak count N, continuous), `rotation` (peak phase), `hue_pull` (softmax temperature), `skew` (peak asymmetry), plus a matching `luma_pull`/`chroma_pull`. Defaults = passthrough. See [`SHADERS.md`](SHADERS.md). |
 | `chromadepth.shader` | mono | half-SBS | Stereo from hue + luma×saturation weighting. Low-confidence (dim or achromatic) pixels collapse to far; bright vivid colors get wide depth spread. Three knobs: `depth`, `hue_rotation`, `color_weight`. See [`SHADERS.md`](SHADERS.md). |
 | `lumadepth.shader` | mono | half-SBS | Stereo from luma. Robust on grayscale or low-color content but flattens distinctions in vivid scenes. Three knobs: `depth`, `luma_anchor`, `falloff`. See [`SHADERS.md`](SHADERS.md). |
 | `stereo_displace.shader` | mono | half-SBS | Color-based parallax (luma or chromadepth). Mono→stereo. |

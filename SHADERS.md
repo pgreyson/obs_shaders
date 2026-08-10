@@ -129,8 +129,54 @@ If a setting feels too aggressive on the eyes, lower `depth`. If it feels
 flat, raise `depth` first and then consider whether `color_weight`
 (chromadepth) or `falloff` (lumadepth) wants tuning.
 
+## palette_quantize — continuous probabilistic palette (color = depth structure)
+
+Sits BETWEEN `synth color` and `depth bake`. It defines a smooth probability
+density over the hue wheel with N peaks and lets colors flow CONTINUOUSLY
+toward it — no quantization, no buckets. Because the bake turns hue into
+depth (`wheel_depth(hue)`), concentrating hue upstream concentrates the depth
+field, so **the N hue peaks become N soft depth strata** — a depth-structure
+instrument, not just a color look.
+
+**Model — von Mises comb / circular softmax.** The likelihood is
+`L(h) ∝ exp(κ·cos(2π·N·(h−rotation)))`, the circular analog of a Gaussian
+mixture (literally softmax of a cosine logit). Each pixel's hue flows up the
+log-likelihood gradient — one sine, closed form, no arrays:
+
+```
+h_out = h − hue_pull · ( sin θ + skew·0.5·sin 2θ ) / (2π·N),   θ = 2π·N·(h − rotation)
+```
+
+For `hue_pull < 1` this is a smooth, monotonic diffeomorphism: it never
+snaps, colors just concentrate on the peaks and thin between them, growing N
+soft peaks in the output hue distribution. So:
+- `size` = peak count N — **continuous and unbounded** (fractional N fades a
+  peak in/out); not limited to any anchor budget.
+- `hue_pull` = the softmax temperature: 0 = flat likelihood = passthrough,
+  →1 = sharp peaks = strong concentration (hard collapse only in the limit).
+- `rotation` = peak phase (which hues the peaks land on — and through the
+  bake, which hues sit forward).
+- `skew` = second-harmonic asymmetry: 0 = symmetric (Gaussian-ish) peaks, up
+  = skewed (lognormal-ish) basins. Sweeping `hue_pull`/`skew` morphs the
+  family continuously (uniform ↔ Gaussian ↔ skewed) — no discrete selector.
+
+The same sine-attractor shapes luma into `luma_peaks` continuous tonal strata
+(`luma_pull`), with `black_floor` crushing the field downward (the old
+black-point gesture — darkest content → far plane); chroma is pulled
+continuously toward `chroma_target` (`chroma_pull`, gated by the pixel's own
+chroma so grays stay gray). All `*_pull` at 0 (defaults) = exact passthrough.
+
+**Performance coupling.** `rotation` (CV ch2) sweeps the whole palette;
+`size` (CV ch3) breathes the peak/stratum count. Both stay overridable in the
+OBS filter UI. Long-form use: drive them from slow autonomous CV (crow slow
+LFO / sieve on a slow clock) for palettes that evolve over tens of minutes.
+
 ## Future work
 
 - The depth-modulating-by-color-weight idea could be parameterized on a
   curve (e.g. `pow(confidence, gamma)`) for finer control over how
   aggressively low-confidence pixels collapse.
+- `palette_quantize` peaks are currently equal-weight and evenly spaced; an
+  envelope term (some peaks taller/rarer than others) or unequal spacing
+  would give a Xenakis-style weighted distribution over the wheel. Heavy-
+  tailed families (Cauchy) would let occasional colors jump between peaks.
