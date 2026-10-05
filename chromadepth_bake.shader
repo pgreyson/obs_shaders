@@ -70,6 +70,24 @@ uniform float wheel_shape<
     float step = 0.01;
 > = 0.0;
 
+// ---- ROOM DEPTH (camera path) ----
+// Live depth map of the physical room from the depth sidecar (bind the
+// "StereoPi Depth" source here). room_mix blends the baked field between
+// the synth's own chromadepth (0) and the room's measured depth (1):
+// at 1 the splat renders the SYNTH'S COLORS at the ROOM'S geometry —
+// the synth field drapes over physical space. 0 = exact legacy behavior.
+uniform texture2d room_depth<
+    string label = "Room depth source (StereoPi Depth)";
+>;
+
+uniform float room_mix<
+    string label = "Room mix (0 = chromadepth, 1 = room depth)";
+    string widget_type = "slider";
+    float minimum = 0.0;
+    float maximum = 1.0;
+    float step = 0.01;
+> = 0.0;
+
 // 1 = render the baked field as grayscale (diff GPU field vs oracle).
 uniform float debug_mode<
     string label = "Debug (0 = off, 1 = field probe)";
@@ -343,6 +361,15 @@ float4 mainImage(VertData v_in) : TARGET
                * uv_pixel_interval.y;
 
     float d = field_depth(xq, yq);
+
+    // Blend toward the room's measured depth (near = bright in the map).
+    // Plain uv: the depth map has no analog borders to dodge. With no
+    // source bound the sample is 0 (far) and room_mix 0 keeps legacy
+    // behavior bit-exact.
+    if (room_mix > 0.001) {
+        float rd = room_depth.Sample(textureSampler, v_in.uv).r;
+        d = lerp(d, rd, room_mix);
+    }
 
     if (debug_mode > 0.5)
         return float4(d, d, d, 1.0);
