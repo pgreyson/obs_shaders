@@ -208,12 +208,23 @@ class FusedEngine:
     disp ~ a*mono + b over stereo-confident pixels, applied to the dense
     mono map. Stereo contributes metric truth, mono contributes coverage."""
 
-    def __init__(self, mono, stereo):
+    def __init__(self, mono, stereo, disp_far=None, disp_near=None):
         self.mono, self.stereo = mono, stereo
         self.a = self.b = None      # smoothed fit coefficients
-        self.lo = self.hi = None    # smoothed normalization bounds
         self.res_ema = None         # smoothed diffused stereo residual
-        print("fused engine: mono structure x stereo anchors + local residual")
+        # FIXED disparity->depth mapping (calibrated scale): derived from
+        # the calibration features once, not re-normalized per frame — a
+        # person approaching gets NEARER instead of rescaling the field.
+        if disp_far is None and os.path.exists(RECT_FILE):
+            z = np.load(RECT_FILE)
+            if 'dxs' in z:
+                p5, p95 = np.percentile(z['dxs'], 5), np.percentile(z['dxs'], 95)
+                disp_far = float(p5)                     # scene far bound
+                disp_near = float(p95 + (p95 - p5) * 2)  # headroom for closer
+        self.disp_far = disp_far if disp_far is not None else 0.0
+        self.disp_near = disp_near if disp_near is not None else 32.0
+        print(f"fused engine: fixed depth scale disp[{self.disp_far:.1f}.."
+              f"{self.disp_near:.1f}]px -> [0..1]")
 
     def _smooth(self, attr, val, k=0.9):
         old = getattr(self, attr)
@@ -238,7 +249,7 @@ class FusedEngine:
             if a > 1e-3:  # accept only a sane positive relation
                 a = self._smooth('a', float(a))
                 b = self._smooth('b', float(b))
-                d = a * m_full + b
+                d = a * m_full + b    # d is now in rectified-disparity px
                 # local residual: where stereo confidently disagrees with the
                 # fitted mono map, diffuse that correction along image edges
                 guide = cv2.cvtColor(frame[:, :frame.shape[1] // 2], cv2.COLOR_BGR2GRAY)
@@ -256,12 +267,14 @@ class FusedEngine:
                 self.res_ema = res_d if self.res_ema is None else \
                     0.95 * self.res_ema + 0.05 * res_d
                 d = d + 0.7 * self.res_ema
-                lo = self._smooth('lo', float(np.percentile(d, 2)))
-                hi = self._smooth('hi', float(np.percentile(d, 98)))
-                return np.clip((d - lo) / max(hi - lo, 1e-6), 0, 1).astype(np.float32)
+                return np.clip((d - self.disp_far) /
+                               max(self.disp_near - self.disp_far, 1e-6),
+                               0, 1).astype(np.float32)
         if self.a is not None:  # reuse last good fit rather than jumping to raw mono
             d = self.a * m_full + self.b
-            return np.clip((d - self.lo) / max(self.hi - self.lo, 1e-6), 0, 1).astype(np.float32)
+            return np.clip((d - self.disp_far) /
+                           max(self.disp_near - self.disp_far, 1e-6),
+                           0, 1).astype(np.float32)
         return m_full
 
 

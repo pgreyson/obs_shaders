@@ -81,12 +81,37 @@ uniform texture2d room_depth<
 >;
 
 uniform float room_mix<
-    string label = "Room mix (0 = chromadepth, 1 = room depth)";
+    string label = "Room mix (0 = chromadepth, 1 = full room coupling)";
     string widget_type = "slider";
     float minimum = 0.0;
     float maximum = 1.0;
     float step = 0.01;
 > = 0.0;
+
+// How the room field couples into the synth field at room_mix = 1:
+//   0 crossfade — d = room (synth depth replaced wholesale)
+//   1 sculpt    — d = chroma * room (room GATES synth depth: synth forms
+//                 pop only on near surfaces; empty room = flat far field)
+//   2 relief    — d = max(chroma, room) (near surfaces bulge out of the
+//                 synth field; synth depth elsewhere untouched)
+// Fractional values blend adjacent modes.
+uniform float room_mode<
+    string label = "Room coupling (0 = crossfade, 1 = sculpt, 2 = relief)";
+    string widget_type = "slider";
+    float minimum = 0.0;
+    float maximum = 2.0;
+    float step = 0.01;
+> = 0.0;
+
+// By-eye scale match of the room map against the chroma field (the two
+// are not born on the same scale); >1 exaggerates room relief.
+uniform float room_gain<
+    string label = "Room gain";
+    string widget_type = "slider";
+    float minimum = 0.0;
+    float maximum = 2.0;
+    float step = 0.01;
+> = 1.0;
 
 // 1 = render the baked field as grayscale (diff GPU field vs oracle).
 uniform float debug_mode<
@@ -367,8 +392,13 @@ float4 mainImage(VertData v_in) : TARGET
     // source bound the sample is 0 (far) and room_mix 0 keeps legacy
     // behavior bit-exact.
     if (room_mix > 0.001) {
-        float rd = room_depth.Sample(textureSampler, v_in.uv).r;
-        d = lerp(d, rd, room_mix);
+        float rd = saturate(room_depth.Sample(textureSampler, v_in.uv).r * room_gain);
+        float d_cross  = rd;
+        float d_sculpt = d * rd;
+        float d_relief = max(d, rd);
+        float coupled = lerp(lerp(d_cross, d_sculpt, saturate(room_mode)),
+                             d_relief, saturate(room_mode - 1.0));
+        d = lerp(d, coupled, room_mix);
     }
 
     if (debug_mode > 0.5)
