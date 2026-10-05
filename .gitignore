@@ -1,1 +1,3 @@
 tools/.sbs_mode_state.json
+depth_sidecar/.venv/
+depth_sidecar/rectify.npz
