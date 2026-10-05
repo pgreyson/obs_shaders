@@ -54,6 +54,22 @@ uniform float color_weight<
     float step = 0.01;
 > = 1.0;
 
+// Wheel shape. The cosine wheel (0) is smooth and seamless but 2-to-1:
+// hues symmetric about the near pole SHARE a depth plane, and which hues
+// pair up changes as hue_rotation sweeps — so the depth DISTRIBUTION (and
+// perceived separation intensity) lurches with rotation, coupling it to
+// the palette. The sawtooth wheel (1) is bijective: rotation is a rigid
+// cyclic shift, the depth distribution is invariant, N palette bands stay
+// N distinct evenly-spread planes at every rotation — at the cost of one
+// seam where adjacent hues span near->far. Blend to taste.
+uniform float wheel_shape<
+    string label = "Wheel shape (0 = smooth cosine, 1 = distribution-preserving saw)";
+    string widget_type = "slider";
+    float minimum = 0.0;
+    float maximum = 1.0;
+    float step = 0.01;
+> = 0.0;
+
 // 1 = render the baked field as grayscale (diff GPU field vs oracle).
 uniform float debug_mode<
     string label = "Debug (0 = off, 1 = field probe)";
@@ -90,9 +106,13 @@ float hue_dist(float a, float b) {
 }
 
 float wheel_depth(float h) {
-    // Floor-lifted cosine wheel: no hue ever lands exactly ON the black
-    // infinity plane.
-    return 0.12 + 0.88 * (0.5 + 0.5 * cos(6.2831853 * (h + hue_rotation)));
+    // Floor-lifted wheel: no hue ever lands exactly ON the black infinity
+    // plane. Shape blends cosine (smooth, 2:1) with sawtooth (bijective,
+    // rotation-invariant depth distribution, one seam) — see wheel_shape.
+    float ph = frac(h + hue_rotation);
+    float cosw = 0.5 + 0.5 * cos(6.2831853 * ph);
+    float saww = 1.0 - ph;
+    return 0.12 + 0.88 * lerp(cosw, saww, wheel_shape);
 }
 
 // Oracle depth — UNCAPPED (the march caps at read for its h-test).

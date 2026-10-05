@@ -141,8 +141,12 @@ float4 mainImage(VertData v_in) : TARGET
     float2 uv = v_in.uv;
     float3 c = image.Sample(textureSampler, uv).rgb;
 
-    // All pulls off -> exact passthrough, no HSV round trip.
-    if (hue_pull < 0.001 && luma_pull < 0.001 && chroma_pull < 0.001)
+    // All pulls off AND no rotation -> exact passthrough, no HSV round trip.
+    // rotation is an always-on global hue spin (below), so it counts as
+    // active even when nothing is being concentrated. (rotation near 0 or 1
+    // is the neutral no-spin case — the wheel is cyclic.)
+    bool rot_active = (rotation > 0.001 && rotation < 0.999);
+    if (hue_pull < 0.001 && luma_pull < 0.001 && chroma_pull < 0.001 && !rot_active)
         return float4(c, 1.0);
 
     // ---- decompose
@@ -153,21 +157,41 @@ float4 mainImage(VertData v_in) : TARGET
     float s = delta / max(cmax, 1e-5);
     float v = cmax;
 
-    // ---- hue: continuous flow up the von Mises comb log-likelihood, THEN
-    // a rigid rotation of the whole palette. Concentrating toward FIXED
-    // peaks (phase 0) and rotating afterwards means `rotation` sweeps every
-    // color a full turn around the wheel (0..1 = 360°), instead of only
-    // phasing the peaks (which just wobbles each color in its own basin).
-    //   h' = h - pull * (sin θ + skew*0.5*sin 2θ) / (2π N),  θ = 2π N h
-    //   h_out = frac(h' + rotation)
-    // Monotonic for pull < 1 (never snaps); colors concentrate on the N
-    // peaks. skew's second harmonic tilts the basins (lognormal-ish).
+    // ---- hue: ITERATED flow up the von Mises comb log-likelihood, THEN a
+    // rigid rotation of the whole palette. One gradient step barely moves a
+    // color (max displacement 1/(2πN)); three unrolled steps let hue_pull
+    // actually COLLAPSE colors onto the peaks (≈80-90% gather at high pull),
+    // so hue_pull reads as "how limited": 0 = full color, 1 = severely
+    // reduced to N hues (N=1 → near-monochrome, N=2 → a complementary pair).
+    // Composition of diffeomorphisms stays continuous — sharper, never snaps.
+    // skew's second harmonic tilts the basins (lognormal-ish).
+    #define HUE_STEP { float th_ = TAU * n * h; \
+        h = h - hue_pull * (sin(th_) + skew * 0.5 * sin(2.0 * th_)) / (TAU * n); }
     if (hue_pull > 0.001) {
         float n = max(size, 1e-3);
-        float theta = TAU * n * h;
-        float grad = sin(theta) + skew * 0.5 * sin(2.0 * theta);
-        h = frac(h - hue_pull * grad / (TAU * n) + rotation);
+        HUE_STEP
+        HUE_STEP
+        HUE_STEP
+        // The iterated flow concentrates but never fully converges, so the
+        // top of the pull range (0.75..1.0) blends in a hard nearest-peak
+        // snap with a narrow smoothstep band at the basin boundary — at
+        // hue_pull = 1 the output is truly DISCRETE colors with only that
+        // band acting as antialiasing at the edges.
+        float snap_amt = smoothstep(0.75, 1.0, hue_pull);
+        if (snap_amt > 0.001) {
+            float hn = h * n;
+            float cell = floor(hn);
+            float u = hn - cell;
+            float aa = 0.04;                    // AA half-band, fraction of a cell
+            float hs = (cell + smoothstep(0.5 - aa, 0.5 + aa, u)) / n;
+            h = lerp(h, hs, snap_amt);
+        }
     }
+    // rotation is applied UNCONDITIONALLY (outside the hue_pull gate) so it
+    // spins the palette a full turn (0..1 = 360°) at every collapse amount —
+    // including the smooth end where hue_pull is ~0. Concentration happens
+    // toward fixed peaks (phase 0), then the whole result rotates.
+    h = frac(h + rotation);
 
     // ---- luma: same sine-attractor toward luma_peaks tonal strata, then
     // crush the field downward by black_floor. Continuous, no banding.

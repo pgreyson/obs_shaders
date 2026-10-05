@@ -171,6 +171,40 @@ chroma so grays stay gray). All `*_pull` at 0 (defaults) = exact passthrough.
 OBS filter UI. Long-form use: drive them from slow autonomous CV (crow slow
 LFO / sieve on a slow clock) for palettes that evolve over tens of minutes.
 
+## Bake vs splat: where depth comes from vs how it's rendered
+
+Two filters share the stereo controls, deliberately:
+
+- **`depth bake`** decides *where things live in depth*, from color:
+  `hue_rotation` = which hue is near (remaps depth, leaves colors alone);
+  `color_weight` = how much depth comes from hue vs luma;
+  `wheel_shape` = see below.
+- **`stereo splat`** decides *how strongly that depth is rendered*:
+  `depth` = maximum parallax (separation intensity);
+  `convergence` = which depth sits at the screen plane.
+
+**The hue_rotation ↔ intensity coupling (and the `wheel_shape` fix).**
+There is no code coupling between the two filters — the coupling is
+statistical. The default cosine depth wheel is 2-to-1: hues symmetric about
+the near pole share a depth plane, and which hues pair up changes as
+`hue_rotation` sweeps. Since the image's hue histogram is concentrated (a
+few dominant hues; more so with the palette collapsing hues to N peaks),
+the DEPTH distribution — and with it perceived separation intensity and
+eye strain — lurches as rotation moves peaks across the wheel's poles and
+pairings. `wheel_shape` blends toward a sawtooth wheel (1.0) that is
+bijective: rotation becomes a rigid cyclic shift, the depth distribution is
+exactly invariant, and N palette bands occupy N distinct evenly-spread
+planes at every rotation. Cost: one seam where hue-adjacent content spans
+near→far (the reason the cosine was the original choice) — and the seam is
+paid for in DISOCCLUSION BLACK: measured on live material (2026-08-23,
+monocular-black metric), the saw raises splat crack artifacts ~25% vs the
+cosine (2.7% → 3.4%), which also compresses the usable range of the splat
+`depth` knob. Splat `convergence` does NOT offset this (measured: no
+effect on monocular black). The two goals are in direct tension — a
+bijective wheel on a circle must have a seam — so `wheel_shape` is a
+trade-off dial, not a fix: 0 = plane-lurching under rotation, 1 = standing
+seam; ~0.3–0.4 buys partial stabilization for a smaller black tax.
+
 ## Future work
 
 - The depth-modulating-by-color-weight idea could be parameterized on a

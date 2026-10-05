@@ -29,6 +29,12 @@ uniform bool half_sbs<
     string label = "Half SBS (compensate for 2x downstream stretch)";
 > = true;
 
+// Right-eye routing cue — redundant when the display driver shows its own
+// 3D indicator, so off by default.
+uniform bool sync_indicator<
+    string label = "Sync indicator (right-eye corner square)";
+> = false;
+
 float4 mainImage(VertData v_in) : TARGET
 {
     float2 uv = v_in.uv;
@@ -38,7 +44,7 @@ float4 mainImage(VertData v_in) : TARGET
     // be barely noticeable — viewer-facing cue that 3D glasses are routed
     // correctly. Source pixels: 10 tall always; 5 wide when half_sbs (2x
     // downstream stretch → 10 display px), 10 wide otherwise.
-    {
+    if (sync_indicator) {
         float size_y_uv = 10.0 / 1080.0;
         float size_x_uv = (half_sbs ? 5.0 : 10.0) / 1920.0;
         if (uv.x >= 1.0 - size_x_uv && uv.y <= size_y_uv) {
