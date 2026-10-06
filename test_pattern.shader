@@ -11,6 +11,30 @@
 //       [2/3..5/6)  saturation ramp 0->1 (tests the palette's chroma gate)
 //       [5/6..1.0]  grayscale ramp (must pass every stage un-tinted)
 
+// Random-dot mode: the canonical stereo stimulus (Julesz). Periodic or
+// smooth patterns are ambiguous/featureless for binocular matching — a
+// depth bulge can be imperceptible on them while random dots make ANY
+// disparity field unambiguously visible.
+uniform float noise_mode<
+    string label = "Random-dot mode (0 = color bands, 1 = dots)";
+    string widget_type = "slider";
+    float minimum = 0.0;
+    float maximum = 1.0;
+    float step = 1.0;
+> = 0.0;
+
+uniform float dot_size<
+    string label = "Dot size (px)";
+    string widget_type = "slider";
+    float minimum = 1.0;
+    float maximum = 8.0;
+    float step = 1.0;
+> = 3.0;
+
+float hash12(float2 p) {
+    return frac(sin(dot(p, float2(127.1, 311.7))) * 43758.5453);
+}
+
 float3 hsv2rgb3(float h, float s, float v) {
     float r = clamp(abs(h * 6.0 - 3.0) - 1.0, 0.0, 1.0);
     float g = clamp(2.0 - abs(h * 6.0 - 2.0), 0.0, 1.0);
@@ -21,6 +45,16 @@ float3 hsv2rgb3(float h, float s, float v) {
 float4 mainImage(VertData v_in) : TARGET
 {
     float2 uv = v_in.uv;
+    if (noise_mode > 0.5) {
+        float2 cell = floor(uv / (dot_size * uv_pixel_interval));
+        float n = step(0.5, hash12(cell));
+        // mostly binary luma dots with mild hue variety so the chain's
+        // color stages still have something to chew on
+        float hue = hash12(cell + 7.31);
+        float3 cn = lerp(float3(0.08, 0.08, 0.08),
+                         hsv2rgb3(hue, 0.35, 1.0), n);
+        return float4(cn, 1.0);
+    }
     float h = uv.x;
     float3 c;
     if (uv.y < 0.5) {

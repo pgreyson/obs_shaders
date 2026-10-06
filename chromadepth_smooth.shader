@@ -25,11 +25,14 @@
 // chain blacks out rgb where a ≈ 0). The encoding is affine, so blurring
 // in encoded space IS blurring the depth — no decode/re-encode needed.
 
+// Above σ≈4.5 the 21 taps STRIDE (spacing σ/3) so the kernel keeps
+// covering ±3σ: room-depth sculpting wants σ 12-24 so the statue-edge
+// macro-cliff becomes a ramp wider than the splat's disocclusion gap.
 uniform float smoothing<
     string label = "Field smoothing sigma (px, 0 = off)";
     string widget_type = "slider";
     float minimum = 0.0;
-    float maximum = 4.5;
+    float maximum = 24.0;
     float step = 0.05;
 > = 0.0;
 
@@ -69,10 +72,11 @@ float4 mainImage(VertData v_in) : TARGET
     float x_lo = 0.5 * uv_pixel_interval.x;
     float y_lo = 0.5 * uv_pixel_interval.y;
 
+    float spacing = max(1.0, smoothing / 3.0);   // taps cover ±3σ
     float acc = 0.0;
     float wsum = 0.0;
     for (int i = -10; i <= 10; i++) {
-        float fi = float(i);
+        float fi = float(i) * spacing;
         float w = exp(-(fi * fi) / (2.0 * sig2));
         float tx = clamp(xq + fi * sx, x_lo, 1.0 - x_lo);
         float ty = clamp(yq + fi * sy, y_lo, 1.0 - y_lo);
