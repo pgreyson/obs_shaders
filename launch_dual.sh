@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # launch_dual.sh — start two OBS instances, each pinned to one display target.
 #
-# Instance 1: Viture full-SBS pipeline.
-#   profile = structure->elegato->viture_half_to_full_sbs  (canvas 3840×1080)
-#   scene   = structure-elegato-viture
+# Instance 1: main pipeline — Elgato in, full-SBS out (shaders live here).
+#   profile = elegato->full_sbs       (canvas 3840×1080)
+#   scene   = elegato->full_sbs
 #   obs-websocket port = 4455
-# Instance 2: 3D projector half-SBS pipeline.
-#   profile = structure->elegato->projector_halfsbs        (canvas 1920×1080)
-#   scene   = structure-elegato-stereo
+#   Also runs the virtual camera (its program feed), which instance 2 consumes.
+# Instance 2: stream relay — instance 1's program in, squash/letterbox out.
+#   profile = full_sbs->stream        (canvas 1920×1080)
+#   scene   = full_sbs->stream        (scenes: half_sbs squash, full_sbs letterbox)
 #   obs-websocket port = 4456
 #
 # The control_bridge daemon talks to both via the two websocket ports.
@@ -16,12 +17,12 @@ set -euo pipefail
 
 OBS_APP="/Applications/OBS.app"
 
-VITURE_PROFILE='structure->elegato->viture_half_to_full_sbs'
-VITURE_COLLECTION='structure-elegato-viture'
+VITURE_PROFILE='elegato->full_sbs'
+VITURE_COLLECTION='elegato->full_sbs'
 VITURE_WS_PORT=4455
 
-PROJECTOR_PROFILE='structure->elegato->projector_halfsbs'
-PROJECTOR_COLLECTION='structure-elegato-stereo'
+PROJECTOR_PROFILE='full_sbs->stream'
+PROJECTOR_COLLECTION='full_sbs->stream'
 PROJECTOR_WS_PORT=4456
 
 echo "Stopping any existing OBS instances..."
@@ -51,7 +52,8 @@ open -n "$OBS_APP" --args \
     --multi \
     --profile "$VITURE_PROFILE" \
     --collection "$VITURE_COLLECTION" \
-    --websocket_port "$VITURE_WS_PORT"
+    --websocket_port "$VITURE_WS_PORT" \
+    --startvirtualcam
 
 # Give OBS time to come up before launching the sibling so they don't race
 # on shared config files (user.ini etc.).
