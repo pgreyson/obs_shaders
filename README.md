@@ -59,6 +59,8 @@ Sanitized copies of the OBS profiles and scene collections (Twitch/auth sections
 | `obs_config/scene-viture.json` | `…/scenes/structure-elegato-viture.json` | Paired with Viture profile. Elgato source uses **Stretch to bounds 3840×1080** so each half-SBS eye fills 1920px on the 3840 canvas. Filter stack: `halfsbs_pillarbox` + `stereo_displace_bw` (chromadepth). |
 | `obs_config/profile-projector.ini` | `…/profiles/structure-elegato-projector-halfsbs/basic.ini` | Projector display profile. Base **1920×1080**, Output 1920×1080. |
 | `obs_config/scene-stereo.json` | `…/scenes/structure-elegato-stereo.json` | Paired with projector profile. Elgato source at natural 1920×1080 (no bounds). Filter stack: `halfsbs_pillarbox` + `stereo_displace_b` (luma displace). |
+| `obs_config/profile-youtube.ini` | `…/profiles/full_sbs-youtube/basic.ini` | YouTube relay profile (ws :4457). Base **1920×1080**, VideoToolbox h264 CBR 8000. Service must stay `rtmp_custom` → YouTube RTMPS ingest (see `youtube_live/README.md`). Auth/token lines stripped. |
+| `obs_config/scene-youtube.json` | `…/scenes/full_sbs-youtube.json` | Clone of the Twitch relay collection: `full_sbs` (letterbox, program) / `half_sbs` (squash) over the main instance's virtual camera. |
 
 Pairings:
 
