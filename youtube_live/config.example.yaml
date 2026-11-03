@@ -1,0 +1,42 @@
+# youtube_live/config.example.yaml — copy to config.yaml (gitignored) and edit.
+
+# The OBS instance that streams to YouTube (full_sbs->youtube relay, letterboxed 1920x1080).
+obs:
+  host: localhost
+  port: 4457
+  password: "CHANGE_ME"
+
+# Where client_secret.json (from Google Cloud) and youtube_token.json (written by `auth`) live.
+credentials_dir: ~/.config/obs_shaders
+
+# The reusable YouTube liveStream this tool owns. Its key is pushed into OBS
+# automatically if OBS is not already pushing to a stream YouTube recognises.
+stream:
+  title: "obs_shaders persistent"
+
+# One liveBroadcast per session; `restart` ends the current one and creates a new one.
+broadcast:
+  title: "Modular video synthesis — live {date}"   # {date} → local YYYY-MM-DD
+  description: ""
+  privacy: public            # public | unlisted | private
+  latency: normal            # normal | low | ultraLow  (normal = best quality, fine for ambient)
+  dvr: true                  # viewers can scrub back
+  record_from_start: true    # keep the VOD
+  made_for_kids: false
+  projection: null           # null | rectangular | 360
+  stereo_layout: null        # null | mono | left_right | top_bottom
+                             # left_right tells YouTube the full-SBS frame is 3D; viewers then
+                             # get YouTube's 3D/anaglyph modes and the default player shows ONE eye.
+                             # Leave null to show the raw SBS frame to everyone.
+
+# Thumbnail is grabbed from OBS's program output (3840x1080 full SBS).
+thumbnail:
+  source: left               # left | right | full   (which part of the SBS frame)
+  width: 1280                # output width; height keeps aspect (1280x720 recommended by YouTube)
+  quality: 90
+
+# `watch` daemon behaviour.
+watch:
+  interval_s: 60
+  refresh_thumbnail_hours: 0 # 0 = only on go-live/restart; e.g. 6 = re-grab every 6h
+  start_obs: false           # true = press Start Streaming in OBS if it isn't streaming

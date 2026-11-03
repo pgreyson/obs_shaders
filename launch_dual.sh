@@ -11,7 +11,13 @@
 #   scene   = full_sbs->stream        (scenes: half_sbs squash, full_sbs letterbox)
 #   obs-websocket port = 4456
 #
-# The control_bridge daemon talks to both via the two websocket ports.
+# Instance 3: YouTube relay — same as instance 2 but letterboxed to YouTube.
+#   profile = full_sbs->youtube       (canvas 1920×1080, VideoToolbox h264)
+#   scene   = full_sbs->youtube       (clone of full_sbs->stream; program = full_sbs)
+#   obs-websocket port = 4457
+#   youtube_live/yt_live.py manages its broadcast + thumbnail.
+#
+# The control_bridge daemon talks to instances 1+2 via their websocket ports.
 
 set -euo pipefail
 
@@ -24,6 +30,10 @@ VITURE_WS_PORT=4455
 PROJECTOR_PROFILE='full_sbs->stream'
 PROJECTOR_COLLECTION='full_sbs->stream'
 PROJECTOR_WS_PORT=4456
+
+YOUTUBE_PROFILE='full_sbs->youtube'
+YOUTUBE_COLLECTION='full_sbs->youtube'
+YOUTUBE_WS_PORT=4457
 
 echo "Stopping any existing OBS instances..."
 # OBS sometimes hangs on a hidden "save changes?" dialog and ignores both
@@ -66,10 +76,20 @@ open -n "$OBS_APP" --args \
     --collection "$PROJECTOR_COLLECTION" \
     --websocket_port "$PROJECTOR_WS_PORT"
 
+sleep 3
+
+echo "Launching YouTube instance (ws :$YOUTUBE_WS_PORT)..."
+open -n "$OBS_APP" --args \
+    --multi \
+    --profile "$YOUTUBE_PROFILE" \
+    --collection "$YOUTUBE_COLLECTION" \
+    --websocket_port "$YOUTUBE_WS_PORT"
+
 echo
-echo "Both OBS instances launched."
+echo "All three OBS instances launched."
 echo "Viture instance  : profile=$VITURE_PROFILE, collection=$VITURE_COLLECTION, ws=:$VITURE_WS_PORT"
 echo "Projector instance: profile=$PROJECTOR_PROFILE, collection=$PROJECTOR_COLLECTION, ws=:$PROJECTOR_WS_PORT"
+echo "YouTube instance  : profile=$YOUTUBE_PROFILE, collection=$YOUTUBE_COLLECTION, ws=:$YOUTUBE_WS_PORT"
 echo
 echo "Next: start the control bridge with"
 echo "  cd $(dirname "$0")/control_bridge && python3 bridge.py"
