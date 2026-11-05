@@ -49,6 +49,7 @@ warnings.filterwarnings("ignore", message=".*OpenSSL.*")
 
 import simpleobsws  # noqa: E402
 import yaml
+from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -229,6 +230,13 @@ def make_thumbnail(img: Image.Image, cfg: dict) -> bytes:
 # ----------------------------------------------------------------------------
 
 
+AUTH_EXPIRED_MSG = (
+    "YouTube token at {path} can no longer be refreshed ({err}). "
+    "Google expires refresh tokens after 7 days while the OAuth app is in 'Testing'; "
+    "re-run `yt_live.py auth` (and click 'Publish app' on the Audience page to stop this recurring)."
+)
+
+
 class YouTube:
     def __init__(self, cfg: dict):
         self.cfg = cfg
@@ -243,8 +251,11 @@ class YouTube:
         if self.token_path.exists():
             creds = Credentials.from_authorized_user_file(str(self.token_path), SCOPES)
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-            self._save(creds)
+            try:
+                creds.refresh(Request())
+                self._save(creds)
+            except RefreshError as e:
+                raise SystemExit(AUTH_EXPIRED_MSG.format(path=self.token_path, err=e))
         if not creds or not creds.valid:
             if not interactive:
                 raise SystemExit(
@@ -614,6 +625,9 @@ def cmd_watch(cfg: dict, yt: YouTube) -> None:
                     last_thumb = time.time()
                 else:
                     log.info(f"live ok: https://youtu.be/{b['id']}")
+        except RefreshError as e:
+            log.error(AUTH_EXPIRED_MSG.format(path=yt.token_path, err=e))
+            return
         except Exception as e:
             log.error(f"watch iteration failed: {e}")
         for _ in range(interval):
