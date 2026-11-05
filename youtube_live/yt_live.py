@@ -192,17 +192,18 @@ class OBS:
 def make_thumbnail(img: Image.Image, cfg: dict) -> bytes:
     """Crop one eye out of a full-SBS frame and encode as JPEG (<2MB for YouTube).
 
-    The YouTube instance letterboxes the 32:9 SBS frame inside 16:9, so first trim
-    pure-black bars (only if what remains is full-width and a sane height, so a
-    momentarily dark patch doesn't produce a sliver).
+    The YouTube instance letterboxes the 32:9 SBS frame inside its 16:9 canvas, so
+    first cut the bars away. The bar geometry follows from the aspect ratios alone
+    (thumbnail.source_aspect, default 32:9), so it never depends on how dark the
+    picture's own edges happen to be.
     """
     w, h = img.size
-    bbox = img.convert("L").point(lambda v: 255 if v > 4 else 0).getbbox()
-    if bbox:
-        x0, y0, x1, y1 = bbox
-        if x0 <= 2 and x1 >= w - 2 and (y1 - y0) >= 0.4 * h:
-            img = img.crop((0, y0, w, y1))
-            w, h = img.size
+    src_aspect = float(cfg["thumbnail"].get("source_aspect", 3840 / 1080))
+    if w / h < src_aspect - 0.01:  # canvas is squarer than the source → letterboxed
+        ch = round(w / src_aspect)
+        y0 = (h - ch) // 2
+        img = img.crop((0, y0, w, y0 + ch))
+        w, h = img.size
     src = cfg["thumbnail"]["source"]
     if src == "left":
         img = img.crop((0, 0, w // 2, h))
@@ -647,6 +648,7 @@ def main(argv=None) -> int:
     sp.add_argument("--no-thumbnail", action="store_true")
     sp = sub.add_parser("thumbnail")
     sp.add_argument("--save", metavar="PATH", help="also write the JPEG here")
+    sp.add_argument("--no-upload", action="store_true", help="only grab + save; no YouTube auth needed")
     sp = sub.add_parser("end")
     sp.add_argument("--stop-obs", action="store_true", help="also stop OBS streaming")
     sub.add_parser("watch")
@@ -666,6 +668,13 @@ def main(argv=None) -> int:
         yt.authorize(interactive=True)
         ch = yt.api.channels().list(part="snippet", mine=True).execute()["items"][0]
         print(f"authorized as channel '{ch['snippet']['title']}' ({ch['id']}); token saved to {yt.token_path}")
+        return 0
+
+    if a.cmd == "thumbnail" and a.no_upload:
+        if not a.save:
+            p.error("--no-upload needs --save PATH")
+        Path(a.save).write_bytes(asyncio.run(grab_thumbnail(cfg)))
+        log.info(f"wrote {a.save}")
         return 0
 
     yt.authorize()

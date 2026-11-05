@@ -24,7 +24,8 @@ the Twitch relay: it captures the main instance's virtual camera and letterboxes
 `launch_dual.sh` starts it alongside the other two. The main instance no longer streams
 anywhere; YouTube rejected its raw 32:9 frame (Studio sat on "preparing stream").
 
-Thumbnails auto-trim the letterbox bars before cropping an eye, so they come out 16:9.
+Thumbnails trim the letterbox bars geometrically (`thumbnail.source_aspect`, 32:9) before
+cropping an eye, so they come out 16:9 regardless of how dark the picture's edges are.
 
 ## One-time setup (≈10 minutes, needs a browser)
 
@@ -61,6 +62,7 @@ $Y yt_live.py status            # OBS output, YouTube stream health, live/upcomi
 $Y yt_live.py go-live           # make sure something is live on the stream OBS is pushing
 $Y yt_live.py restart           # after an edit day: end broadcast, new one + fresh thumbnail
 $Y yt_live.py thumbnail         # just re-grab the thumbnail (add --save x.jpg to inspect)
+$Y yt_live.py thumbnail --no-upload --save ~/Desktop/yt_thumbnail.jpg   # no Google auth; upload by hand in Studio
 $Y yt_live.py end --stop-obs    # end broadcast and stop OBS streaming
 ```
 

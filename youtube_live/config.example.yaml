@@ -32,6 +32,7 @@ broadcast:
 # Thumbnail is grabbed from OBS's program output (3840x1080 full SBS).
 thumbnail:
   source: left               # left | right | full   (which part of the SBS frame)
+  source_aspect: 3.5556      # aspect of the SBS frame (3840/1080); letterbox bars are trimmed from this
   width: 1280                # output width; height keeps aspect (1280x720 recommended by YouTube)
   quality: 90
 
