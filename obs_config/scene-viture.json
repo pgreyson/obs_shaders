@@ -29,7 +29,62 @@
         "deinterlace_mode": 0,
         "deinterlace_field_order": 0,
         "monitoring_type": 2,
-        "private_settings": {}
+        "private_settings": {},
+        "filters": [
+            {
+                "prev_ver": 536870912,
+                "name": "Monitor Gain",
+                "uuid": "a4c1d0a0-1f3e-4e2b-9c5d-0b7e6f8a1001",
+                "id": "gain_filter",
+                "versioned_id": "gain_filter",
+                "settings": {
+                    "db": 15.0
+                },
+                "mixers": 0,
+                "sync": 0,
+                "flags": 0,
+                "volume": 1.0,
+                "balance": 0.5,
+                "enabled": true,
+                "muted": false,
+                "push-to-mute": false,
+                "push-to-mute-delay": 0,
+                "push-to-talk": false,
+                "push-to-talk-delay": 0,
+                "hotkeys": {},
+                "deinterlace_mode": 0,
+                "deinterlace_field_order": 0,
+                "monitoring_type": 0,
+                "private_settings": {}
+            },
+            {
+                "prev_ver": 536870912,
+                "name": "Monitor Limiter",
+                "uuid": "a4c1d0a0-1f3e-4e2b-9c5d-0b7e6f8a1002",
+                "id": "limiter_filter",
+                "versioned_id": "limiter_filter",
+                "settings": {
+                    "threshold": -3.0,
+                    "release_time": 60
+                },
+                "mixers": 0,
+                "sync": 0,
+                "flags": 0,
+                "volume": 1.0,
+                "balance": 0.5,
+                "enabled": true,
+                "muted": false,
+                "push-to-mute": false,
+                "push-to-mute-delay": 0,
+                "push-to-talk": false,
+                "push-to-talk-delay": 0,
+                "hotkeys": {},
+                "deinterlace_mode": 0,
+                "deinterlace_field_order": 0,
+                "monitoring_type": 0,
+                "private_settings": {}
+            }
+        ]
     },
     "sources": [
         {
