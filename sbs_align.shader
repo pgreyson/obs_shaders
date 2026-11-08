@@ -50,6 +50,14 @@ uniform float right_y<
     float step = 0.25;
 > = 0.0;
 
+// Stereo window: after shifting, each eye has content the other eye lacks
+// (the strip that slid in from off-frame on one side, and the black revealed
+// on the other). Those pixels have no counterpart and fight fusion, so mask
+// them in BOTH eyes: only the region visible to both survives.
+uniform bool mask_common<
+    string label = "Mask to the region both eyes can see";
+> = true;
+
 float4 mainImage(VertData v_in) : TARGET
 {
     float2 uv = v_in.uv;
@@ -57,6 +65,20 @@ float4 mainImage(VertData v_in) : TARGET
     float is_left = step(uv.x, 0.5);
     float2 off = float2(lerp(right_x, left_x, is_left),
                         lerp(right_y, left_y, is_left));
+
+    if (mask_common) {
+        // position within this eye, in px of the eye (half the surface wide)
+        float2 eye_px = float2(uv_size.x * 0.5, uv_size.y);
+        float2 p = float2((uv.x - (1.0 - is_left) * 0.5) * 2.0, uv.y) * eye_px;
+        // after a shift of +d, an eye shows content on [max(0,d), W+min(0,d)];
+        // the common window is the intersection over both eyes
+        float x0 = max(max(0.0, left_x), max(0.0, right_x));
+        float x1 = eye_px.x + min(min(0.0, left_x), min(0.0, right_x));
+        float y0 = max(max(0.0, left_y), max(0.0, right_y));
+        float y1 = eye_px.y + min(min(0.0, left_y), min(0.0, right_y));
+        if (p.x < x0 || p.x > x1 || p.y < y0 || p.y > y1)
+            return float4(0.0, 0.0, 0.0, 1.0);
+    }
 
     // shift content by +off pixels = sample -off pixels upstream
     float2 suv = uv - off / uv_size;

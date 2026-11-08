@@ -42,7 +42,8 @@ Virtual Camera for the relays. Scene `Scene`, bottom to top:
    Output: full-SBS stereo, one eye per 1920 px half.
 2. **Camera layer** — nested scene **`camera_chain`** (raw `StereoPi AV` stretched to
    3840×1080 inside it). Scene filters: `sbs align` (convergence/trim, **canvas px = 2× camera px**;
-   slider ±400) → `synth color` (soften 0) → `palette` → `pillar box` (aspect 1.0) →
+   slider ±400; **`mask_common`** on: after the shift, each eye is cropped to the
+   region BOTH eyes can see — the stereo window — so no pixel is visible to one eye only) → `synth color` (soften 0) → `palette` → `pillar box` (aspect 1.0) →
    `mix opacity` → **`camera key`** ([`camera_key.shader`](camera_key.shader): luma key
    `luma_min` 0.07 / ramp 0.012 — the grading lifts true black to luma 0.063 — plus a
    morphological hole fill: a keyed-out pixel is kept when foreground is found within
@@ -100,6 +101,16 @@ relay and pushed the 8 GB M2 into swap.
 - `stereopi->full_sbs` (ws :4459, `launch_stereopi.sh`): the camera alone through the
   chain. Stopped — starting it steals the Blackmagic from main.
 - In main: scene `camera_test`, the `Oracle Preview` and `Test Pattern` layers (off).
+
+## Known failure: fullscreen projectors on a display that goes away
+
+If a display carrying a fullscreen projector (VITURE, LTV) is turned off or unplugged,
+the OBS instance owning that projector logs `obs_display_init: Failed to create swap
+chain` repeatedly and **leaks memory without bound** (2026-11-08: the projector
+instance reached 19 GB, swap 21 GB, and main could no longer create GL surfaces —
+the Filters dialog preview went blank). Fix: restart that instance
+(`projector/projector.py` relaunch or `launch_dual.sh`); swap drains immediately.
+Check with `ps -o rss= -p <pid>` when the machine feels wrong.
 
 ## Machine
 

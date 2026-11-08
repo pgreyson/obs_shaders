@@ -1403,9 +1403,10 @@
                         "from_file": true,
                         "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/sbs_align.shader",
                         "left_x": -143.0,
-                        "left_y": -50.0,
+                        "left_y": -13.25,
                         "right_x": 143.0,
-                        "right_y": 48.0
+                        "right_y": 48.0,
+                        "mask_common": true
                     },
                     "mixers": 0,
                     "sync": 0,
