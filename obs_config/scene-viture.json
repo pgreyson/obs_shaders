@@ -2237,10 +2237,10 @@
                     "settings": {
                         "from_file": true,
                         "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/sbs_align.shader",
-                        "left_x": 0.0,
-                        "left_y": 0.0,
-                        "right_x": 0.0,
-                        "right_y": 0.0,
+                        "left_x": -82.7,
+                        "left_y": 65.24,
+                        "right_x": 82.7,
+                        "right_y": -65.24,
                         "mask_common": true
                     },
                     "mixers": 0,
@@ -2416,7 +2416,7 @@
                     "flags": 0,
                     "volume": 1.0,
                     "balance": 0.5,
-                    "enabled": true,
+                    "enabled": false,
                     "muted": false,
                     "push-to-mute": false,
                     "push-to-mute-delay": 0,

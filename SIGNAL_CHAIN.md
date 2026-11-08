@@ -43,7 +43,7 @@ Virtual Camera for the relays. Scene `Scene`, bottom to top:
 2. **Camera layers** — nested scenes **`stage`** (raw `StereoPi stage`) and
    **`room`** (raw `StereoPi room`), each with the camera stretched to
    3840×1080 inside it; room sits below stage in `Scene`. Each scene carries the same
-   filter set (room's sbs align starts at 0 — trim it for that camera). The room rig is
+   filter set (room's sbs align was auto-measured 2026-11-08 with SIFT on the raw pair: vertical 130 canvas px, convergence 165 canvas px → left_y +65.2 / right_y −65.2, left_x −82.7 / right_x +82.7; `camera key` is OFF on room — a lit room has no black background to key). The room rig is
    mounted upside down: its item inside `room` is scaled −1/−1 (a 180° turn of the
    whole SBS frame, which rights each eye AND swaps the eye halves — a vertical flip
    alone would leave it mirrored with the eyes crossed). Scene filters: `sbs align` (convergence/trim, **canvas px = 2× camera px**;
