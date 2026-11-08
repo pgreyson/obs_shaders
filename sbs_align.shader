@@ -57,14 +57,23 @@ uniform float right_y<
 uniform bool mask_common<
     string label = "Mask to the region both eyes can see";
 > = true;
-// The shift mask only covers the convergence offset itself. Objects off the
-// convergence plane carry extra disparity, so near the frame edges one eye
-// still sees a strip the other cannot (nearer-than-screen content at the left
-// edge of the left eye, etc.). window_margin masks that much more on every
-// horizontal edge of both eyes: set it to the largest |displayed disparity|
-// in the scene (px of this surface).
-uniform float window_margin<
-    string label = "Extra stereo-window margin (px)";
+// The shift mask only covers the convergence offset itself. Content OFF the
+// convergence plane still spills out of one eye: objects NEARER than the plane
+// (crossed disparity) are missing from the other eye at the OUTER edges — the
+// left edge of the left eye and the right edge of the right eye; objects
+// FARTHER than the plane are missing at the INNER edges (right edge of the
+// left eye, left edge of the right eye). Set margin_outer to the largest near
+// disparity in the scene and margin_inner to the largest far one (px of this
+// surface). Applied only where it belongs — never to all four edges.
+uniform float margin_outer<
+    string label = "Stereo margin, OUTER edges (near content, px)";
+    string widget_type = "slider";
+    float minimum = 0.0;
+    float maximum = 400.0;
+    float step = 1.0;
+> = 0.0;
+uniform float margin_inner<
+    string label = "Stereo margin, INNER edges (far content, px)";
     string widget_type = "slider";
     float minimum = 0.0;
     float maximum = 400.0;
@@ -85,8 +94,11 @@ float4 mainImage(VertData v_in) : TARGET
         float2 p = float2((uv.x - (1.0 - is_left) * 0.5) * 2.0, uv.y) * eye_px;
         // after a shift of +d, an eye shows content on [max(0,d), W+min(0,d)];
         // the common window is the intersection over both eyes
-        float x0 = max(max(0.0, left_x), max(0.0, right_x)) + window_margin;
-        float x1 = eye_px.x + min(min(0.0, left_x), min(0.0, right_x)) - window_margin;
+        float x0 = max(max(0.0, left_x), max(0.0, right_x));
+        float x1 = eye_px.x + min(min(0.0, left_x), min(0.0, right_x));
+        // outer edge = left side of the LEFT eye / right side of the RIGHT eye
+        x0 += lerp(margin_inner, margin_outer, is_left);
+        x1 -= lerp(margin_outer, margin_inner, is_left);
         float y0 = max(max(0.0, left_y), max(0.0, right_y));
         float y1 = eye_px.y + min(min(0.0, left_y), min(0.0, right_y));
         if (p.x < x0 || p.x > x1 || p.y < y0 || p.y > y1)
