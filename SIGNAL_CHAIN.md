@@ -43,7 +43,10 @@ Virtual Camera for the relays. Scene `Scene`, bottom to top:
 2. **Camera layers** — nested scenes **`stage`** (raw `StereoPi stage`) and
    **`room`** (raw `StereoPi room`), each with the camera stretched to
    3840×1080 inside it; room sits below stage in `Scene`. Each scene carries the same
-   filter set (room's sbs align starts at 0 — trim it for that camera). Scene filters: `sbs align` (convergence/trim, **canvas px = 2× camera px**;
+   filter set (room's sbs align starts at 0 — trim it for that camera). The room rig is
+   mounted upside down: its item inside `room` is scaled −1/−1 (a 180° turn of the
+   whole SBS frame, which rights each eye AND swaps the eye halves — a vertical flip
+   alone would leave it mirrored with the eyes crossed). Scene filters: `sbs align` (convergence/trim, **canvas px = 2× camera px**;
    slider ±400; **`mask_common`** on: after the shift, each eye is cropped to the
    region BOTH eyes can see — the stereo window — so no pixel is visible to one eye only) → `synth color` (soften 0) → `palette` → `pillar box` (aspect 1.0) →
    `mix opacity` → **`camera key`** ([`camera_key.shader`](camera_key.shader): luma key
