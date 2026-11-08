@@ -9,6 +9,8 @@
   audio NAME_SUBSTRING   set the profile's monitoring device to that output, then
                          restart the instance so it takes effect
   close                  close all projector windows of this instance
+  show                   bring this instance's CONTROL window to the front (all four
+                         instances are called "OBS"; System Events must be matched by pid)
 
 Run with: control_bridge/.venv/bin/python3 projector/projector.py <cmd>
 """
@@ -140,6 +142,30 @@ async def cmd_audio(a):
         await cmd_open(a)
 
 
+async def cmd_show(_):
+    out = subprocess.run(["pgrep", "-f", f"websocket_port {PORT}"], capture_output=True, text=True).stdout.split()
+    if not out:
+        raise SystemExit(f"no OBS instance on ws :{PORT}")
+    script = f'''
+tell application "System Events"
+  repeat with p in (every process whose name is "OBS")
+    if (unix id of p) is {out[0]} then
+      set visible of p to true
+      set frontmost of p to true
+      repeat with w in windows of p
+        try
+          set value of attribute "AXMinimized" of w to false
+        end try
+        if name of w starts with "OBS" then perform action "AXRaise" of w
+      end repeat
+      return name of first window of p
+    end if
+  end repeat
+end tell'''
+    r = subprocess.run(["osascript", "-e", script], capture_output=True, text=True)
+    print("front window:", r.stdout.strip() or r.stderr.strip())
+
+
 async def cmd_close(_):
     async with WS() as o:
         # obs-websocket has no CloseProjector; toggling the projector monitor to -1 is not supported either.
@@ -155,6 +181,7 @@ def main():
     sp = sub.add_parser("audio"); sp.add_argument("name"); sp.add_argument("--monitor"); sp.add_argument("--open", action="store_true")
     sp.set_defaults(fn=cmd_audio)
     sub.add_parser("close").set_defaults(fn=cmd_close)
+    sub.add_parser("show").set_defaults(fn=cmd_show)
     a = p.parse_args()
     asyncio.run(a.fn(a))
 
