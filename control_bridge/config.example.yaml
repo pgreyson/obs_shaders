@@ -43,10 +43,10 @@ mappings:
     # depth range spans the SAME screen disparity as the camera (convergence set
     # where the camera scene crosses the screen plane), and this knob becomes the
     # fraction of that range (0 flat .. 1 exact match). Zooming the camera changes
-    # its disparities -> the splat follows. Stats stale (>3 s) -> knob = depth, as before.
+    # its disparities -> the splat follows. Stats stale (>6 s) -> knob = depth, as before.
     camera_align:
       stats_file: /tmp/stereopi_depth_stats.json
-      max_age_s: 3.0
+      max_age_s: 6.0
       canvas_scale: 2.0        # camera source 1920 px stretched to the 3840 canvas
       eye_px: 1920             # canvas px per eye
       max_parallax: 0.08       # MAX_PARALLAX in plugin/src/stereo-splat.c
