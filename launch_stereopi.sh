@@ -18,3 +18,9 @@ if pgrep -f "websocket_port $PORT" >/dev/null; then
 fi
 echo "Launching stereopi->full_sbs (ws :$PORT)..."
 open -n "$OBS_APP" --args --multi --profile 'stereopi->full_sbs' --collection 'stereopi->full_sbs' --websocket_port "$PORT"
+
+# The Blackmagic camera extension feeds ONE client at a time: take it from main.
+HERE="$(cd "$(dirname "$0")" && pwd)"
+sleep 12
+"$HERE/control_bridge/.venv/bin/python3" "$HERE/tools/bmd_handoff.py" to-stereopi
+echo "Give it back with:  control_bridge/.venv/bin/python3 tools/bmd_handoff.py to-main"
