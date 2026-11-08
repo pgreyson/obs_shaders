@@ -78,6 +78,15 @@ uniform float window_offset<
     string widget_type = "slider";
     float minimum = -400.0; float maximum = 400.0; float step = 1.0;
 > = 0.0;
+// Feather the window edges (and the shift mask edges) over this many px so a
+// layer with a narrower field of view fades into the layer beneath instead of
+// ending in a hard line. The fade goes to TRANSPARENT, so downstream filters
+// must preserve alpha (synth_color / palette_quantize do; the camera key keeps it).
+uniform float vignette<
+    string label = "Edge feather / vignette (px, 0 = hard edge)";
+    string widget_type = "slider";
+    float minimum = 0.0; float maximum = 400.0; float step = 1.0;
+> = 0.0;
 uniform float mask_top<
     string label = "Both eyes: extra crop at the TOP (px)";
     string widget_type = "slider";
@@ -97,6 +106,7 @@ float4 mainImage(VertData v_in) : TARGET
     float2 off = float2(lerp(right_x, left_x, is_left),
                         lerp(right_y, left_y, is_left));
 
+    float fade = 1.0;
     if (mask_common) {
         // position within this eye, in px of the eye (half the surface wide)
         float2 eye_px = float2(uv_size.x * 0.5, uv_size.y);
@@ -113,7 +123,13 @@ float4 mainImage(VertData v_in) : TARGET
         float y0 = max(max(0.0, left_y), max(0.0, right_y)) + mask_top;
         float y1 = eye_px.y + min(min(0.0, left_y), min(0.0, right_y)) - mask_bottom;
         if (p.x < x0 || p.x > x1 || p.y < y0 || p.y > y1)
-            return float4(0.0, 0.0, 0.0, 1.0);
+            return float4(0.0, 0.0, 0.0, 0.0);   // outside the window: transparent
+        if (vignette > 0.5) {
+            float v = vignette;
+            fade = clamp((p.x - x0) / v, 0.0, 1.0) * clamp((x1 - p.x) / v, 0.0, 1.0)
+                 * clamp((p.y - y0) / v, 0.0, 1.0) * clamp((y1 - p.y) / v, 0.0, 1.0);
+            fade = fade * fade * (3.0 - 2.0 * fade);   // smoothstep
+        }
     }
 
     // shift content by +off pixels = sample -off pixels upstream
@@ -123,14 +139,15 @@ float4 mainImage(VertData v_in) : TARGET
     float xmin = lerp(0.5, 0.0, is_left);
     float xmax = lerp(1.0, 0.5, is_left);
 
-    // revealed area (no source content for this eye) → black
+    // revealed area (no source content for this eye) → transparent
     if (suv.x < xmin || suv.x > xmax || suv.y < 0.0 || suv.y > 1.0)
-        return float4(0.0, 0.0, 0.0, 1.0);
+        return float4(0.0, 0.0, 0.0, 0.0);
 
     // keep samples half a texel inside the eye half: no wrap, no bleed
     float2 half_px = 0.5 / uv_size;
     suv.x = clamp(suv.x, xmin + half_px.x, xmax - half_px.x);
     suv.y = clamp(suv.y, half_px.y, 1.0 - half_px.y);
 
-    return image.Sample(textureSampler, suv);
+    float4 c = image.Sample(textureSampler, suv);
+    return float4(c.rgb, c.a * fade);
 }

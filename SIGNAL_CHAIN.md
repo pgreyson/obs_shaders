@@ -51,8 +51,12 @@ Virtual Camera for the relays. Scene `Scene`, bottom to top:
    region BOTH eyes can see — the stereo window — so no pixel is visible to one eye only;
    a stereo WINDOW on top: `window_width` (same in both eyes), `window_shift`
    (both eyes together), `window_offset` (left window minus right window — the floating-window
-   depth, + = in front of the screen), plus `mask_top` / `mask_bottom`. The user trims these by
-   eye; room is currently width 1339, shift −10, offset +28) → `synth color` (soften 0) → `palette` → `pillar box` (aspect 1.0) →
+   depth, + = in front of the screen), plus `mask_top` / `mask_bottom`, and **`vignette`** (px): the window and shift-mask
+   edges feather to TRANSPARENT over that distance so a narrower field of view blends into
+   the layer beneath instead of ending in a hard line. `synth_color` and `palette_quantize`
+   now preserve alpha so the feather survives the chain (`pillar box` always did; `camera
+   key` multiplies it). The user trims these by eye; room is currently width 1339, shift −10,
+   offset +28, vignette 60) → `synth color` (soften 0) → `palette` → `pillar box` (aspect 1.0) →
    `mix opacity` → **`camera key`** ([`camera_key.shader`](camera_key.shader): luma key
    `luma_min` 0.07 / ramp 0.012 — the grading lifts true black to luma 0.063 — plus a
    morphological hole fill: a keyed-out pixel is kept when foreground is found within

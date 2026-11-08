@@ -90,7 +90,8 @@ float3 blur4(float2 uv, float r) {
 float4 mainImage(VertData v_in) : TARGET
 {
     float2 uv = v_in.uv;
-    float3 c = image.Sample(textureSampler, uv).rgb;
+    float4 src = image.Sample(textureSampler, uv);   // alpha preserved (feathered stereo windows upstream)
+    float3 c = src.rgb;
 
     // ---- soften: blend toward a small full blur (sub-pixel to ~2px)
     if (soften > 0.001) {
@@ -149,5 +150,5 @@ float4 mainImage(VertData v_in) : TARGET
         c = clamp(c, 0.0, 1.0);
     }
 
-    return float4(c, 1.0);
+    return float4(c, src.a);
 }

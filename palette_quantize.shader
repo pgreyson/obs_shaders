@@ -139,7 +139,8 @@ float3 hsv2rgb3(float h, float s, float v) {
 float4 mainImage(VertData v_in) : TARGET
 {
     float2 uv = v_in.uv;
-    float3 c = image.Sample(textureSampler, uv).rgb;
+    float4 src = image.Sample(textureSampler, uv);   // alpha preserved
+    float3 c = src.rgb;
 
     // All pulls off AND no rotation -> exact passthrough, no HSV round trip.
     // rotation is an always-on global hue spin (below), so it counts as
@@ -147,7 +148,7 @@ float4 mainImage(VertData v_in) : TARGET
     // is the neutral no-spin case — the wheel is cyclic.)
     bool rot_active = (rotation > 0.001 && rotation < 0.999);
     if (hue_pull < 0.001 && luma_pull < 0.001 && chroma_pull < 0.001 && !rot_active)
-        return float4(c, 1.0);
+        return float4(c, src.a);
 
     // ---- decompose
     float cmax = max(c.r, max(c.g, c.b));
@@ -210,5 +211,5 @@ float4 mainImage(VertData v_in) : TARGET
                     chroma_pull * smoothstep(0.02, 0.10, s));
 
     float3 outc = hsv2rgb3(h, s2, v);
-    return float4(clamp(outc, 0.0, 1.0), 1.0);
+    return float4(clamp(outc, 0.0, 1.0), src.a);
 }

@@ -1989,7 +1989,8 @@
                         "mask_bottom": 0.0,
                         "window_width": 0.0,
                         "window_shift": 0.0,
-                        "window_offset": 0.0
+                        "window_offset": 0.0,
+                        "vignette": 0.0
                     },
                     "mixers": 0,
                     "sync": 0,
@@ -2286,7 +2287,8 @@
                         "mask_bottom": 0.0,
                         "window_width": 1339.0,
                         "window_shift": -10.0,
-                        "window_offset": 28.0
+                        "window_offset": 28.0,
+                        "vignette": 60.0
                     },
                     "mixers": 0,
                     "sync": 0,
