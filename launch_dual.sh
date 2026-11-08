@@ -7,8 +7,8 @@
 #   obs-websocket port = 4455
 #   Also runs the virtual camera (its program feed), which instance 2 consumes.
 # Instance 2: stream relay — instance 1's program in, squash/letterbox out.
-#   profile = full_sbs->stream        (canvas 1920×1080)
-#   scene   = full_sbs->stream        (scenes: half_sbs squash, full_sbs letterbox)
+#   profile = full_sbs->twitch        (canvas 1920×1080, VideoToolbox)
+#   scene   = full_sbs->twitch        (scenes: half_sbs squash, full_sbs letterbox)
 #   obs-websocket port = 4456
 #
 # Instance 3: YouTube relay — same as instance 2 but letterboxed to YouTube.
@@ -34,8 +34,8 @@ VITURE_PROFILE='elegato->full_sbs'
 VITURE_COLLECTION='elegato->full_sbs'
 VITURE_WS_PORT=4455
 
-PROJECTOR_PROFILE='full_sbs->stream'
-PROJECTOR_COLLECTION='full_sbs->stream'
+PROJECTOR_PROFILE='full_sbs->twitch'
+PROJECTOR_COLLECTION='full_sbs->twitch'
 PROJECTOR_WS_PORT=4456
 
 YOUTUBE_PROFILE='full_sbs->youtube'
@@ -80,7 +80,7 @@ open -n "$OBS_APP" --args \
 # on shared config files (user.ini etc.).
 sleep 3
 
-echo "Launching projector instance (ws :$PROJECTOR_WS_PORT)..."
+echo "Launching Twitch relay instance (ws :$PROJECTOR_WS_PORT)..."
 open -n "$OBS_APP" --args \
     --multi \
     --profile "$PROJECTOR_PROFILE" \
