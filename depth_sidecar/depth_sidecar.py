@@ -316,7 +316,7 @@ class FusedEngine:
 
 async def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--source", default="StereoPi AV", help="OBS source holding the SBS camera")
+    ap.add_argument("--source", default="StereoPi stage", help="OBS source holding the SBS camera (raw input)")
     ap.add_argument("--instance", default="viture", help="obs_instances key in bridge config")
     ap.add_argument("--fps", type=float, default=12.0)
     ap.add_argument("--ema", type=float, default=0.75,

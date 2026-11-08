@@ -8,15 +8,21 @@ be released in one instance and (re)selected in the other.
   python3 tools/bmd_handoff.py to-stereopi   # main releases, stereopi->full_sbs (:4459) takes it
   python3 tools/bmd_handoff.py to-main       # the reverse (for the depth sidecar / camera_test)
   python3 tools/bmd_handoff.py status
+
+Only the STAGE box is handed around; the room camera ("StereoPi room", second box)
+lives in main only.
 """
 import asyncio, os, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, '..', 'control_bridge'))
 import yaml, simpleobsws
 
-BMD = {"device": "94:14e3c000:00000000:Video", "device_name": "Blackmagic UltraStudio Recorder 3G"}
+# Two UltraStudio boxes (2026-11-08): "stage" (first box) and "room" (second box). Both are
+# named identically by macOS; only the id differs.
+BMD = {"device": "94:14e3c000:00000000:Video", "device_name": "Blackmagic UltraStudio Recorder 3G"}   # stage
+BMD_ROOM = {"device": "94:7892aa70:00000000:Video", "device_name": "Blackmagic UltraStudio Recorder 3G"}
 NONE = {"device": "", "device_name": ""}
-SRC = "StereoPi AV"
+SRC = "StereoPi stage"   # was "StereoPi AV" before the stage/room split
 PW = yaml.safe_load(open(os.path.join(HERE, '..', 'control_bridge', 'config.yaml')))['obs_instances']['viture']['password']
 PORTS = {"main": 4455, "stereopi": 4459}
 

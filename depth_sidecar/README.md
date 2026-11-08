@@ -8,7 +8,7 @@ setting if it ever goes stale).
 ```
 .venv/bin/python3 depth_sidecar.py                     # fused engine, defaults
 nohup .venv/bin/python3 depth_sidecar.py --engine sgbm --fps 1.5 --cv-threads 2 \
-      --grab-width 1920 --align-source camera_chain --align-source-width 3840 \
+      --grab-width 1920 --align-source 'camera_chain stage' --align-source-width 3840 \
       > /tmp/depth_sidecar.log 2>&1 &                  # detached; stats-only duty (cheap)
 # fused engine (full depth map for room_depth) costs far more CPU: add --engine fused --fps 3
 .venv/bin/python3 depth_sidecar.py --calibrate --grab-width 1920
@@ -22,7 +22,7 @@ percentiles (p5/p50/p95, source px on the 960-per-eye basis, EMA ≈1 s) to
 `/tmp/stereopi_depth_stats.json`. "Displayed" = what the viewer sees: rectified
 SGBM disparities mapped back through the inverse homographies to the raw frames,
 minus the live `sbs align` shift (re-read every second from `--align-source`,
-default `--source`; in main that is the `camera_chain` scene, whose filter units are
+default `--source`; in main that is the `camera_chain stage` scene, whose filter units are
 canvas px — pass `--align-source-width 3840`). `control_bridge`'s
 `camera_align` mapping option turns these into splat depth/convergence so the
 synth occupies the same screen-disparity range as the camera — zoom the camera
