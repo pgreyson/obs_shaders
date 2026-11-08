@@ -1166,7 +1166,7 @@
                     "settings": {
                         "from_file": true,
                         "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/stereo_window.shader",
-                        "margin_x": 173.0,
+                        "margin_x": 176.0,
                         "margin_y": 77.0
                     },
                     "mixers": 0,
@@ -2274,7 +2274,7 @@
                         "right_x": 75.66,
                         "right_y": -76.71,
                         "mask_common": true,
-                        "window_margin": 60.0
+                        "window_margin": 100.0
                     },
                     "mixers": 0,
                     "sync": 0,
