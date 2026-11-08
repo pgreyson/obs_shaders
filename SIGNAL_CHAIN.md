@@ -130,6 +130,18 @@ the Filters dialog preview went blank). Fix: restart that instance
 (`projector/projector.py` relaunch or `launch_dual.sh`); swap drains immediately.
 Check with `ps -o rss= -p <pid>` when the machine feels wrong.
 
+## Which OBS is which (Dock / app switcher)
+
+Each instance runs from its own renamed clone of `OBS.app`: **OBS Main**, **OBS Twitch**,
+**OBS YouTube**, **OBS Projector** (`/Applications/*.app`). They are APFS clones
+(`cp -cR`, no extra disk) with `CFBundleName`/`CFBundleDisplayName` changed and the bundle
+ad-hoc re-signed (`codesign --force --deep --sign -`); the bundle id stays
+`com.obsproject.obs-studio`, so camera/mic permissions carry over. `launch_dual.sh` picks
+the right bundle per instance and falls back to `OBS.app` if a clone is missing.
+**Plugin updates (obs-shaderfilter, stereo-splat) must go into every clone**, or delete
+the clones and re-run the three-line recipe above. System Events still names every
+process "OBS" (that is the executable name); match by pid as `projector/projector.py` does.
+
 ## Machine
 
 Mac mini **M2, 8 cores, 8 GB RAM**. Four OBS instances + daemons are near the memory

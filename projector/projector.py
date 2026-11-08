@@ -36,7 +36,7 @@ def _password() -> str:
 PASSWORD = _password()
 PROFILE_INI = Path.home() / "Library/Application Support/obs-studio/basic/profiles/full_sbs-projector/basic.ini"
 PROFILE, COLLECTION = "full_sbs->projector", "full_sbs->projector"
-OBS_APP = "/Applications/OBS.app"
+OBS_APP = "/Applications/OBS Projector.app" if os.path.isdir("/Applications/OBS Projector.app") else "/Applications/OBS.app"
 NOT_PROJECTOR = re.compile(r"viture|sidecar|virtual|built-in|color lcd|mac mini", re.I)
 
 
@@ -110,7 +110,7 @@ async def cmd_devices(_):
 
 
 def _obs_pids():
-    out = subprocess.run(["pgrep", "-fl", "OBS.app/Contents/MacOS/OBS"], capture_output=True, text=True).stdout
+    out = subprocess.run(["pgrep", "-fl", "OBS[ A-Za-z]*.app/Contents/MacOS/OBS"], capture_output=True, text=True).stdout
     return [int(l.split()[0]) for l in out.splitlines() if "--websocket_port 4458" in l or f"full_sbs->projector" in l]
 
 

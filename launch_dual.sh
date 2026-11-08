@@ -28,7 +28,15 @@
 
 set -euo pipefail
 
-OBS_APP="/Applications/OBS.app"
+# One renamed clone of OBS.app per instance so the Dock / app switcher show which is
+# which (APFS clones: near-zero disk; Info.plist CFBundleName/DisplayName changed and the
+# bundle ad-hoc re-signed — see SIGNAL_CHAIN.md). Plugin updates must be applied to each.
+OBS_APP="/Applications/OBS.app"               # fallback
+OBS_APP_MAIN="/Applications/OBS Main.app"
+OBS_APP_TWITCH="/Applications/OBS Twitch.app"
+OBS_APP_YOUTUBE="/Applications/OBS YouTube.app"
+OBS_APP_PROJECTOR="/Applications/OBS Projector.app"
+for a in "$OBS_APP_MAIN" "$OBS_APP_TWITCH" "$OBS_APP_YOUTUBE" "$OBS_APP_PROJECTOR"; do [ -d "$a" ] || { echo "missing $a — falling back to $OBS_APP"; OBS_APP_MAIN=$OBS_APP; OBS_APP_TWITCH=$OBS_APP; OBS_APP_YOUTUBE=$OBS_APP; OBS_APP_PROJECTOR=$OBS_APP; break; }; done
 
 VITURE_PROFILE='elegato->full_sbs'
 VITURE_COLLECTION='elegato->full_sbs'
@@ -53,23 +61,23 @@ echo "Stopping any existing OBS instances..."
 # preserving since OBS auto-saves scene collections every minute.
 osascript -e 'tell application "OBS" to quit' >/dev/null 2>&1 || true
 sleep 1
-for pid in $(pgrep -f "OBS.app/Contents/MacOS/OBS" 2>/dev/null); do
+for pid in $(pgrep -f "OBS[ A-Za-z]*.app/Contents/MacOS/OBS" 2>/dev/null); do
     kill -TERM "$pid" 2>/dev/null || true
 done
 sleep 2
-for pid in $(pgrep -f "OBS.app/Contents/MacOS/OBS" 2>/dev/null); do
+for pid in $(pgrep -f "OBS[ A-Za-z]*.app/Contents/MacOS/OBS" 2>/dev/null); do
     echo "  PID $pid did not exit on TERM, sending KILL"
     kill -KILL "$pid" 2>/dev/null || true
 done
 # Final guard: wait until they're truly gone before launching new ones,
 # else the new `open -n` calls can race with the dying processes.
 for _ in 1 2 3 4 5; do
-    pgrep -f "OBS.app/Contents/MacOS/OBS" >/dev/null 2>&1 || break
+    pgrep -f "OBS[ A-Za-z]*.app/Contents/MacOS/OBS" >/dev/null 2>&1 || break
     sleep 1
 done
 
 echo "Launching Viture instance (ws :$VITURE_WS_PORT)..."
-open -n "$OBS_APP" --args \
+open -n "$OBS_APP_MAIN" --args \
     --multi \
     --profile "$VITURE_PROFILE" \
     --collection "$VITURE_COLLECTION" \
@@ -81,7 +89,7 @@ open -n "$OBS_APP" --args \
 sleep 3
 
 echo "Launching Twitch relay instance (ws :$PROJECTOR_WS_PORT)..."
-open -n "$OBS_APP" --args \
+open -n "$OBS_APP_TWITCH" --args \
     --multi \
     --profile "$PROJECTOR_PROFILE" \
     --collection "$PROJECTOR_COLLECTION" \
@@ -90,7 +98,7 @@ open -n "$OBS_APP" --args \
 sleep 3
 
 echo "Launching YouTube instance (ws :$YOUTUBE_WS_PORT)..."
-open -n "$OBS_APP" --args \
+open -n "$OBS_APP_YOUTUBE" --args \
     --multi \
     --profile "$YOUTUBE_PROFILE" \
     --collection "$YOUTUBE_COLLECTION" \
@@ -99,7 +107,7 @@ open -n "$OBS_APP" --args \
 sleep 3
 
 echo "Launching half-SBS projector instance (ws :$HALFSBS_WS_PORT)..."
-open -n "$OBS_APP" --args \
+open -n "$OBS_APP_PROJECTOR" --args \
     --multi \
     --profile "$HALFSBS_PROFILE" \
     --collection "$HALFSBS_COLLECTION" \
