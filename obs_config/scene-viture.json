@@ -2243,7 +2243,7 @@
                         "right_x": 75.66,
                         "right_y": -76.71,
                         "mask_common": true,
-                        "window_margin": 40.0
+                        "window_margin": 60.0
                     },
                     "mixers": 0,
                     "sync": 0,
