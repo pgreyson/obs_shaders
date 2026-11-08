@@ -6,7 +6,9 @@
 // resolve). This filter shifts each eye's image independently within
 // its own half of the SBS frame.
 //
-// Units are SOURCE pixels. Positive x moves that eye's image right,
+// Units are SOURCE pixels of whatever the filter sits on — on a nested
+// SCENE (main's camera_chain) that is CANVAS px, i.e. 2x camera px. Range
+// ±400 so a near object (hundreds of px raw disparity) can be converged. Positive x moves that eye's image right,
 // positive y moves it down ("left frame is higher" → raise left_y, or
 // lower right_y, until rows match). Revealed area at the trailing
 // edges renders black; samples are clamped inside the eye's half so
@@ -19,32 +21,32 @@
 uniform float left_x<
     string label = "Left eye X offset (px)";
     string widget_type = "slider";
-    float minimum = -100.0;
-    float maximum = 100.0;
+    float minimum = -400.0;
+    float maximum = 400.0;
     float step = 0.25;
 > = 0.0;
 
 uniform float left_y<
     string label = "Left eye Y offset (px)";
     string widget_type = "slider";
-    float minimum = -100.0;
-    float maximum = 100.0;
+    float minimum = -400.0;
+    float maximum = 400.0;
     float step = 0.25;
 > = 0.0;
 
 uniform float right_x<
     string label = "Right eye X offset (px)";
     string widget_type = "slider";
-    float minimum = -100.0;
-    float maximum = 100.0;
+    float minimum = -400.0;
+    float maximum = 400.0;
     float step = 0.25;
 > = 0.0;
 
 uniform float right_y<
     string label = "Right eye Y offset (px)";
     string widget_type = "slider";
-    float minimum = -100.0;
-    float maximum = 100.0;
+    float minimum = -400.0;
+    float maximum = 400.0;
     float step = 0.25;
 > = 0.0;
 

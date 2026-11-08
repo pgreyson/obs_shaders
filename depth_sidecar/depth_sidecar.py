@@ -331,6 +331,9 @@ async def main():
                          "(source px, 960/eye basis) for control_bridge camera_align; '' disables")
     ap.add_argument("--align-source", default=None,
                     help="OBS source whose 'sbs align' filter the viewer sees (default: --source)")
+    ap.add_argument("--align-source-width", type=int, default=1920,
+                    help="width in px of --align-source (the filter's px units); a nested SCENE "
+                         "is canvas-sized, e.g. 3840 for main's camera_chain")
     ap.add_argument("--calibrate", action="store_true",
                     help="grab one frame, compute self-rectification, save, exit")
     args = ap.parse_args()
@@ -369,7 +372,7 @@ async def main():
             {'sourceName': args.align_source or args.source, 'filterName': 'sbs align'}))
         if r.responseData:
             s = r.responseData['filterSettings']
-            scale = args.grab_width / 1920.0
+            scale = args.grab_width / float(args.align_source_width)
             dx = (s.get('right_x', 0.0) - s.get('left_x', 0.0)) * scale
             dy = (s.get('right_y', 0.0) - s.get('left_y', 0.0)) * scale
         engine = SgbmEngine(dx=dx, dy=dy,
@@ -393,7 +396,7 @@ async def main():
             {'sourceName': align_src, 'filterName': 'sbs align'}))
         if r.responseData and hasattr(engine, 'stereo'):
             a = r.responseData['filterSettings']
-            scale = args.grab_width / 1920.0
+            scale = args.grab_width / float(args.align_source_width)
             engine.stereo.dx = (a.get('right_x', 0.0) - a.get('left_x', 0.0)) * scale
             engine.stereo.dy = (a.get('right_y', 0.0) - a.get('left_y', 0.0)) * scale
     ema = None
