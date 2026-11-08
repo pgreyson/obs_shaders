@@ -83,6 +83,14 @@ Audio: `Mic/Aux` unmuted, *monitor and output*, monitoring device = system defau
 - `tools/sbs_mode.py on|off` switches main's synth chain for SBS *input* (camera on the
   Elgato) — not used in the current topology; harmless.
 
+### Common stereo window (program-wide)
+`Scene` itself carries one last filter, **`stereo window`** ([`stereo_window.shader`](stereo_window.shader)):
+the same black bands in both eyes for every layer, so synth, stage and room share one
+field of view. `tools/stereo_window.py auto` sizes it from the layers (synth pillar box
+→ (1−aspect)/2 of the eye; each camera layer → |shift| + window_margin, |vertical shift|)
+and takes the max; currently 173 px per eye edge, 77 px top/bottom → 1574×926 visible per
+eye. Re-run `auto` after changing any layer's alignment or the synth aspect.
+
 ## Relays (each 1920×1080, source = main's virtual camera, **no shaders**)
 
 | instance | ws | program | output | audio |
