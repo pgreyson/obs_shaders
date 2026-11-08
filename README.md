@@ -61,6 +61,8 @@ Sanitized copies of the OBS profiles and scene collections (Twitch/auth sections
 | `obs_config/scene-stereo.json` | `…/scenes/structure-elegato-stereo.json` | Paired with projector profile. Elgato source at natural 1920×1080 (no bounds). Filter stack: `halfsbs_pillarbox` + `stereo_displace_b` (luma displace). |
 | `obs_config/profile-youtube.ini` | `…/profiles/full_sbs-youtube/basic.ini` | YouTube relay profile (ws :4457). Base **1920×1080**, VideoToolbox h264 CBR 8000. Service must stay `rtmp_custom` → YouTube RTMPS ingest (see `youtube_live/README.md`). Auth/token lines stripped. |
 | `obs_config/scene-youtube.json` | `…/scenes/full_sbs-youtube.json` | Clone of the Twitch relay collection: `full_sbs` (letterbox, program) / `half_sbs` (squash) over the main instance's virtual camera. |
+| `obs_config/profile-halfsbs-projector.ini` | `…/profiles/full_sbs-projector/basic.ini` | 4th instance (ws :4458) for the 3D projector. Base **1920×1080**, no streaming. `[Audio] MonitoringDeviceId` = the projector's HDMI audio (set with `projector/projector.py audio <name>`). |
+| `obs_config/scene-halfsbs-projector.json` | `…/scenes/full_sbs-projector.json` | Clone of the relay collection with program = `half_sbs` (squash) and Mic/Aux unmuted, *monitor only* → sound goes to the projector, nowhere else. `projector/projector.py open` fullscreens the program on the projector display. |
 
 Pairings:
 
@@ -125,7 +127,7 @@ To launch both pinned to the right profile/scene + obs-websocket port:
 ./launch_dual.sh
 ```
 
-That brings up two OBS processes — `viture` instance on ws port 4455, `projector` instance on ws port 4456.
+That brings up four OBS processes: main `elegato->full_sbs` on ws :4455, Twitch relay `full_sbs->stream` on :4456, YouTube relay `full_sbs->youtube` on :4457, and the half-SBS projector relay `full_sbs->projector` on :4458 (see [`projector/`](projector/)).
 
 **One-time setup** before running the script for the first time: enable obs-websocket in OBS (Tools → WebSocket Server Settings → "Enable WebSocket server"). This flips `server_enabled` to `true` in `~/Library/Application Support/obs-studio/plugin_config/obs-websocket/config.json` — the config is shared by both instances, but each binds its own port via the `--websocket_port` launch flag. Note the auto-generated password there; the control bridge needs it.
 
