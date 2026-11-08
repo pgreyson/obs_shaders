@@ -40,8 +40,8 @@ Virtual Camera for the relays. Scene `Scene`, bottom to top:
    `depth bake` → `field smooth h` → `field smooth v` → `stereo splat` (native
    plugin) → `stereo soften`[off] → `stereo displace`[off] → `pillar box`.
    Output: full-SBS stereo, one eye per 1920 px half.
-2. **Camera layers** — nested scenes **`camera_chain stage`** (raw `StereoPi stage`) and
-   **`camera_chain room`** (raw `StereoPi room`), each with the camera stretched to
+2. **Camera layers** — nested scenes **`stage`** (raw `StereoPi stage`) and
+   **`room`** (raw `StereoPi room`), each with the camera stretched to
    3840×1080 inside it; room sits below stage in `Scene`. Each scene carries the same
    filter set (room's sbs align starts at 0 — trim it for that camera). Scene filters: `sbs align` (convergence/trim, **canvas px = 2× camera px**;
    slider ±400; **`mask_common`** on: after the shift, each eye is cropped to the
@@ -55,7 +55,7 @@ Virtual Camera for the relays. Scene `Scene`, bottom to top:
    on this machine. Blend **normal**, so the keyed statue occludes the synth (was
    *screen* before the key). Depth synthesis is
    off here: the camera already carries real stereo. **Trim sbs align on
-   `camera_chain stage` / `camera_chain room`, not on the inputs** — the depth sidecar screenshots the raw stage input.
+   `stage` / `room`, not on the inputs** — the depth sidecar screenshots the raw stage input.
 
 Audio: `Mic/Aux` unmuted, *monitor and output*, monitoring device = system default
 (VITURE DisplayPort audio) via filters `Monitor Gain` +15 dB → `Monitor Limiter` −3 dB
@@ -95,7 +95,7 @@ relay and pushed the 8 GB M2 into swap.
 | daemon | launch | log |
 |---|---|---|
 | control bridge | `control_bridge/.venv/bin/python3 control_bridge/bridge.py` | `/tmp/owl_bridge.log` (`camera_align:` lines) |
-| depth sidecar (stats-only, stage camera) | `depth_sidecar/.venv/bin/python3 depth_sidecar/depth_sidecar.py --engine sgbm --fps 1.5 --cv-threads 2 --grab-width 1920 --align-source 'camera_chain stage' --align-source-width 3840` | `/tmp/depth_sidecar.log` |
+| depth sidecar (stats-only, stage camera) | `depth_sidecar/.venv/bin/python3 depth_sidecar/depth_sidecar.py --engine sgbm --fps 1.5 --cv-threads 2 --grab-width 1920 --align-source stage --align-source-width 3840` | `/tmp/depth_sidecar.log` |
 | YouTube watchdog | `youtube_live/.venv/bin/python3 youtube_live/yt_live.py watch` | `/tmp/yt_live.log` |
 
 ## Dormant

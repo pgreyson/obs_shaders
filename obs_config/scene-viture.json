@@ -357,7 +357,7 @@
                     "versioned_id": "stereo_splat_filter",
                     "settings": {
                         "depth": 0.43037594109773636,
-                        "convergence": 1.8267756065544094,
+                        "convergence": 1.7585765840233236,
                         "mode": 0,
                         "window": true,
                         "fill": 0,
@@ -787,7 +787,7 @@
             "id": "syphon-input",
             "versioned_id": "syphon-input",
             "settings": {
-                "uuid": "info.v002.Syphon.F47574D9-A2DF-4696-AFB3-A94AACD9A396",
+                "uuid": "info.v002.Syphon.89D2AE55-2EEE-4806-9100-3C5A45689CC9",
                 "app_name": "Python",
                 "name": "stereopi-depth"
             },
@@ -1016,7 +1016,7 @@
                         "private_settings": {}
                     },
                     {
-                        "name": "camera_chain room",
+                        "name": "room",
                         "source_uuid": "217aa652-c049-4862-9dc0-980e39069c55",
                         "visible": true,
                         "locked": false,
@@ -1071,7 +1071,7 @@
                         "private_settings": {}
                     },
                     {
-                        "name": "camera_chain stage",
+                        "name": "stage",
                         "source_uuid": "3dfa2df3-c1a3-48df-8b5a-69db9a9f202b",
                         "visible": false,
                         "locked": false,
@@ -1850,7 +1850,7 @@
         },
         {
             "prev_ver": 536936450,
-            "name": "camera_chain stage",
+            "name": "stage",
             "uuid": "3dfa2df3-c1a3-48df-8b5a-69db9a9f202b",
             "id": "scene",
             "versioned_id": "scene",
@@ -2141,7 +2141,7 @@
         },
         {
             "prev_ver": 536936450,
-            "name": "camera_chain room",
+            "name": "room",
             "uuid": "217aa652-c049-4862-9dc0-980e39069c55",
             "id": "scene",
             "versioned_id": "scene",
@@ -2437,10 +2437,10 @@
             "name": "Scene"
         },
         {
-            "name": "camera_chain room"
+            "name": "room"
         },
         {
-            "name": "camera_chain stage"
+            "name": "stage"
         },
         {
             "name": "yt_inset"
@@ -2480,7 +2480,7 @@
     ],
     "saved_projectors": [
         {
-            "name": "camera_chain stage",
+            "name": "stage",
             "monitor": -1,
             "type": 0,
             "geometry": "AdnQywADAAAAAAEQAAAA3QAAAu8AAAIGAAABEAAAAPkAAALvAAACBgAAAAAAAAAABAAAAAEQAAAA+QAAAu8AAAIG",
