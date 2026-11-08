@@ -1950,7 +1950,8 @@
                         "left_y": -13.25,
                         "right_x": 143.0,
                         "right_y": 48.0,
-                        "mask_common": true
+                        "mask_common": true,
+                        "window_margin": 0.0
                     },
                     "mixers": 0,
                     "sync": 0,
@@ -2237,11 +2238,12 @@
                     "settings": {
                         "from_file": true,
                         "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/sbs_align.shader",
-                        "left_x": -82.7,
-                        "left_y": 65.24,
-                        "right_x": 82.7,
-                        "right_y": -65.24,
-                        "mask_common": true
+                        "left_x": -75.66,
+                        "left_y": 76.71,
+                        "right_x": 75.66,
+                        "right_y": -76.71,
+                        "mask_common": true,
+                        "window_margin": 40.0
                     },
                     "mixers": 0,
                     "sync": 0,

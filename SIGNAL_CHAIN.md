@@ -43,12 +43,14 @@ Virtual Camera for the relays. Scene `Scene`, bottom to top:
 2. **Camera layers** — nested scenes **`stage`** (raw `StereoPi stage`) and
    **`room`** (raw `StereoPi room`), each with the camera stretched to
    3840×1080 inside it; room sits below stage in `Scene`. Each scene carries the same
-   filter set (room's sbs align was auto-measured 2026-11-08 with SIFT on the raw pair: vertical 130 canvas px, convergence 165 canvas px → left_y +65.2 / right_y −65.2, left_x −82.7 / right_x +82.7; `camera key` is OFF on room — a lit room has no black background to key). The room rig is
+   filter set (room's sbs align is auto-measured with SIFT on the raw pair — re-run after any refocus, it moved the vertical by 23 px: currently left_y +76.7 / right_y −76.7, left_x −75.7 / right_x +75.7, margin 40; `camera key` is OFF on room — a lit room has no black background to key). The room rig is
    mounted upside down: its item inside `room` is scaled −1/−1 (a 180° turn of the
    whole SBS frame, which rights each eye AND swaps the eye halves — a vertical flip
    alone would leave it mirrored with the eyes crossed). Scene filters: `sbs align` (convergence/trim, **canvas px = 2× camera px**;
    slider ±400; **`mask_common`** on: after the shift, each eye is cropped to the
-   region BOTH eyes can see — the stereo window — so no pixel is visible to one eye only) → `synth color` (soften 0) → `palette` → `pillar box` (aspect 1.0) →
+   region BOTH eyes can see — the stereo window — so no pixel is visible to one eye only;
+   **`window_margin`** adds the scene's largest off-plane disparity on every horizontal edge,
+   because near/far objects still spill out of one eye's frame — room uses 40 px) → `synth color` (soften 0) → `palette` → `pillar box` (aspect 1.0) →
    `mix opacity` → **`camera key`** ([`camera_key.shader`](camera_key.shader): luma key
    `luma_min` 0.07 / ramp 0.012 — the grading lifts true black to luma 0.063 — plus a
    morphological hole fill: a keyed-out pixel is kept when foreground is found within
