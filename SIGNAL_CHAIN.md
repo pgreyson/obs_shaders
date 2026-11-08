@@ -43,16 +43,16 @@ Virtual Camera for the relays. Scene `Scene`, bottom to top:
 2. **Camera layers** — nested scenes **`stage`** (raw `StereoPi stage`) and
    **`room`** (raw `StereoPi room`), each with the camera stretched to
    3840×1080 inside it; room sits below stage in `Scene`. Each scene carries the same
-   filter set (room's sbs align is auto-measured with SIFT on the raw pair — re-run after any refocus, it moved the vertical by 23 px: currently left_y +76.7 / right_y −76.7, left_x −75.7 / right_x +75.7, outer 100 / inner 35; `camera key` is OFF on room — a lit room has no black background to key). The room rig is
+   filter set (room's sbs align is auto-measured with SIFT on the raw pair — re-run after any refocus, it moved the vertical by 23 px: currently left_y +76.7 / right_y −76.7, left_x −75.7 / right_x +75.7, per-edge masks user-trimmed; `camera key` is OFF on room — a lit room has no black background to key). The room rig is
    mounted upside down: its item inside `room` is scaled −1/−1 (a 180° turn of the
    whole SBS frame, which rights each eye AND swaps the eye halves — a vertical flip
    alone would leave it mirrored with the eyes crossed). Scene filters: `sbs align` (convergence/trim, **canvas px = 2× camera px**;
    slider ±400; **`mask_common`** on: after the shift, each eye is cropped to the
    region BOTH eyes can see — the stereo window — so no pixel is visible to one eye only;
-   **`margin_outer`** / **`margin_inner`** add the scene's largest near / far off-plane
-   disparity where it actually spills: near content at the OUTER edges (left of the left eye,
-   right of the right eye), far content at the INNER edges — room uses outer 100 / inner 35;
-   template matching at the window edge found near content ~70 px in front of the plane) → `synth color` (soften 0) → `palette` → `pillar box` (aspect 1.0) →
+   six manual crop sliders on top: `mask_left_eye_left/right`,
+   `mask_right_eye_left/right`, `mask_top`, `mask_bottom` (px of the surface) — the user trims
+   these by eye until nothing is visible to one eye only; near content spills at the OUTER
+   edges (left of L, right of R), far content at the INNER edges) → `synth color` (soften 0) → `palette` → `pillar box` (aspect 1.0) →
    `mix opacity` → **`camera key`** ([`camera_key.shader`](camera_key.shader): luma key
    `luma_min` 0.07 / ramp 0.012 — the grading lifts true black to luma 0.063 — plus a
    morphological hole fill: a keyed-out pixel is kept when foreground is found within
@@ -87,13 +87,12 @@ Audio: `Mic/Aux` unmuted, *monitor and output*, monitoring device = system defau
 
 ### Common stereo window (program-wide)
 `Scene` itself carries one last filter, **`stereo window`** ([`stereo_window.shader`](stereo_window.shader)):
-mirror-symmetric bands for every layer, so synth, stage and room share one field of
-view: `margin_outer` on the outer edges (left of L / right of R), `margin_inner` on the
-inner edges, `margin_y` top/bottom. `tools/stereo_window.py auto` sizes it from the
-ENABLED layers (synth pillar box → (1−aspect)/2 of the eye on both sides; each camera
-layer → |shift| + its outer/inner margin, |vertical shift|) and takes the max; with only
-room on that is outer 176 / inner 111 / y 77 (1633×926 visible per eye); with synth on,
-inner rises to 173. Re-run `auto` after toggling layers or changing alignment/aspect.
+one value per edge of each eye (`left_eye_left`, `left_eye_right`, `right_eye_left`,
+`right_eye_right`) plus `margin_top` / `margin_bottom`, so synth, stage and room share one
+field of view. `tools/stereo_window.py auto` sizes it from the ENABLED layers (synth pillar
+box → (1−aspect)/2 of the eye on every edge; each camera layer → its shift + its per-edge
+mask sliders) and takes the max per edge; `set LL LR RL RR TOP BOTTOM` forces values.
+Re-run `auto` after toggling layers or trimming any layer's masks.
 
 ## Relays (each 1920×1080, source = main's virtual camera, **no shaders**)
 

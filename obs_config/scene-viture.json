@@ -1166,9 +1166,12 @@
                     "settings": {
                         "from_file": true,
                         "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/stereo_window.shader",
-                        "margin_y": 77.0,
-                        "margin_outer": 176.0,
-                        "margin_inner": 111.0
+                        "left_eye_left": 276.0,
+                        "left_eye_right": 228.0,
+                        "right_eye_left": 228.0,
+                        "right_eye_right": 276.0,
+                        "margin_top": 77.0,
+                        "margin_bottom": 77.0
                     },
                     "mixers": 0,
                     "sync": 0,
@@ -1983,8 +1986,12 @@
                         "right_x": 143.0,
                         "right_y": 48.0,
                         "mask_common": true,
-                        "margin_outer": 0.0,
-                        "margin_inner": 0.0
+                        "mask_left_eye_left": 0.0,
+                        "mask_right_eye_right": 0.0,
+                        "mask_left_eye_right": 0.0,
+                        "mask_right_eye_left": 0.0,
+                        "mask_top": 0.0,
+                        "mask_bottom": 0.0
                     },
                     "mixers": 0,
                     "sync": 0,
@@ -2276,8 +2283,12 @@
                         "right_x": 75.66,
                         "right_y": -76.71,
                         "mask_common": true,
-                        "margin_outer": 100.0,
-                        "margin_inner": 35.0
+                        "mask_left_eye_left": 200.0,
+                        "mask_right_eye_right": 200.0,
+                        "mask_left_eye_right": 152.0,
+                        "mask_right_eye_left": 152.0,
+                        "mask_top": 0.0,
+                        "mask_bottom": 0.0
                     },
                     "mixers": 0,
                     "sync": 0,

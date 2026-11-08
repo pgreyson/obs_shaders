@@ -57,27 +57,38 @@ uniform float right_y<
 uniform bool mask_common<
     string label = "Mask to the region both eyes can see";
 > = true;
-// The shift mask only covers the convergence offset itself. Content OFF the
-// convergence plane still spills out of one eye: objects NEARER than the plane
-// (crossed disparity) are missing from the other eye at the OUTER edges — the
-// left edge of the left eye and the right edge of the right eye; objects
-// FARTHER than the plane are missing at the INNER edges (right edge of the
-// left eye, left edge of the right eye). Set margin_outer to the largest near
-// disparity in the scene and margin_inner to the largest far one (px of this
-// surface). Applied only where it belongs — never to all four edges.
-uniform float margin_outer<
-    string label = "Stereo margin, OUTER edges (near content, px)";
+// The shift mask only covers the convergence offset itself. Extra crop per edge
+// is manual: one slider for each edge of each eye (px of this surface), plus
+// top/bottom applied to both eyes. Trim until nothing is visible to one eye only.
+uniform float mask_left_eye_left<
+    string label = "Left eye: extra crop on its LEFT edge (px)";
     string widget_type = "slider";
-    float minimum = 0.0;
-    float maximum = 400.0;
-    float step = 1.0;
+    float minimum = 0.0; float maximum = 600.0; float step = 1.0;
 > = 0.0;
-uniform float margin_inner<
-    string label = "Stereo margin, INNER edges (far content, px)";
+uniform float mask_left_eye_right<
+    string label = "Left eye: extra crop on its RIGHT edge (px)";
     string widget_type = "slider";
-    float minimum = 0.0;
-    float maximum = 400.0;
-    float step = 1.0;
+    float minimum = 0.0; float maximum = 600.0; float step = 1.0;
+> = 0.0;
+uniform float mask_right_eye_left<
+    string label = "Right eye: extra crop on its LEFT edge (px)";
+    string widget_type = "slider";
+    float minimum = 0.0; float maximum = 600.0; float step = 1.0;
+> = 0.0;
+uniform float mask_right_eye_right<
+    string label = "Right eye: extra crop on its RIGHT edge (px)";
+    string widget_type = "slider";
+    float minimum = 0.0; float maximum = 600.0; float step = 1.0;
+> = 0.0;
+uniform float mask_top<
+    string label = "Both eyes: extra crop at the TOP (px)";
+    string widget_type = "slider";
+    float minimum = 0.0; float maximum = 400.0; float step = 1.0;
+> = 0.0;
+uniform float mask_bottom<
+    string label = "Both eyes: extra crop at the BOTTOM (px)";
+    string widget_type = "slider";
+    float minimum = 0.0; float maximum = 400.0; float step = 1.0;
 > = 0.0;
 
 float4 mainImage(VertData v_in) : TARGET
@@ -96,11 +107,10 @@ float4 mainImage(VertData v_in) : TARGET
         // the common window is the intersection over both eyes
         float x0 = max(max(0.0, left_x), max(0.0, right_x));
         float x1 = eye_px.x + min(min(0.0, left_x), min(0.0, right_x));
-        // outer edge = left side of the LEFT eye / right side of the RIGHT eye
-        x0 += lerp(margin_inner, margin_outer, is_left);
-        x1 -= lerp(margin_outer, margin_inner, is_left);
-        float y0 = max(max(0.0, left_y), max(0.0, right_y));
-        float y1 = eye_px.y + min(min(0.0, left_y), min(0.0, right_y));
+        x0 += lerp(mask_right_eye_left, mask_left_eye_left, is_left);
+        x1 -= lerp(mask_right_eye_right, mask_left_eye_right, is_left);
+        float y0 = max(max(0.0, left_y), max(0.0, right_y)) + mask_top;
+        float y1 = eye_px.y + min(min(0.0, left_y), min(0.0, right_y)) - mask_bottom;
         if (p.x < x0 || p.x > x1 || p.y < y0 || p.y > y1)
             return float4(0.0, 0.0, 0.0, 1.0);
     }

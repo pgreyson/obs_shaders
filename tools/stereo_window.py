@@ -2,10 +2,10 @@
 """stereo_window: one common stereo window on main's program scene.
 
   stereo_window.py auto            derive margins from the layers: synth pillar box
-                                   ((1-aspect)/2 of the eye, both sides), each camera layer's
-                                   |shift| + margin_outer / margin_inner and |vertical shift|; take the max
-  stereo_window.py set OUTER INNER Y   explicit margins (canvas px): outer = left of L / right of R
-                                   (near content), inner = right of L / left of R (far), y = top+bottom
+                                   ((1-aspect)/2 of the eye on every edge), each camera layer's
+                                   shift + its per-edge mask_* sliders; take the max per edge
+  stereo_window.py set LL LR RL RR TOP BOTTOM   explicit margins (canvas px) per edge:
+                                   left-eye-left, left-eye-right, right-eye-left, right-eye-right, top, bottom
   stereo_window.py status
 
 Installs/updates the 'stereo window' shader filter (stereo_window.shader) as the LAST
@@ -40,43 +40,46 @@ async def main():
         return r.responseData["filterSettings"] if r.ok() else None
 
     enabled = {i["sourceName"]: i["sceneItemEnabled"] for i in (await call("GetSceneItemList", {"sceneName": SCENE}))["sceneItems"]}
-    needs = []
+    KEYS = ("left_eye_left", "left_eye_right", "right_eye_left", "right_eye_right", "margin_top", "margin_bottom")
+    needs = []   # (layer, dict(edge->px), enabled)
     pb = await filt(SYNTH, "pillar box")
     if pb is not None:
-        a = float(pb.get("aspect_correction", 0.75))
-        pbm = (1.0 - a) / 2.0 * EYE_W
-        needs.append((SYNTH, pbm, pbm, 0.0, enabled.get(SYNTH)))
+        pbm = (1.0 - float(pb.get("aspect_correction", 0.75))) / 2.0 * EYE_W
+        needs.append((SYNTH, dict(left_eye_left=pbm, left_eye_right=pbm, right_eye_left=pbm, right_eye_right=pbm, margin_top=0.0, margin_bottom=0.0), enabled.get(SYNTH)))
     for lay in CAMERA_LAYERS:
         al = await filt(lay, "sbs align")
         if al is None:
             continue
-        sh = max(abs(al.get("left_x", 0.0)), abs(al.get("right_x", 0.0)))
-        my = max(abs(al.get("left_y", 0.0)), abs(al.get("right_y", 0.0)))
-        needs.append((lay, sh + float(al.get("margin_outer", 0.0)), sh + float(al.get("margin_inner", 0.0)), my, enabled.get(lay)))
-    for n, mo, mi, my, en in needs:
-        print(f"  {n:22s} needs outer {mo:6.1f}  inner {mi:6.1f}  y {my:6.1f}  {'(on)' if en else '(off)'}")
+        lx, rx, ly, ry = (float(al.get(k, 0.0)) for k in ("left_x", "right_x", "left_y", "right_y"))
+        x0 = max(0.0, lx, rx); x1 = -min(0.0, lx, rx); y0 = max(0.0, ly, ry); y1 = -min(0.0, ly, ry)
+        g = lambda k: float(al.get(k, 0.0))
+        needs.append((lay, dict(left_eye_left=x0 + g("mask_left_eye_left"), left_eye_right=x1 + g("mask_left_eye_right"),
+                                right_eye_left=x0 + g("mask_right_eye_left"), right_eye_right=x1 + g("mask_right_eye_right"),
+                                margin_top=y0 + g("mask_top"), margin_bottom=y1 + g("mask_bottom")), enabled.get(lay)))
+    for n, d, en in needs:
+        print(f"  {n:22s} " + " ".join(f"{k.replace('_eye_','.').replace('margin_','')}={v:5.0f}" for k, v in d.items()) + f"  {'(on)' if en else '(off)'}")
 
     if cmd == "auto":
-        on = [t for t in needs if t[4]] or needs
-        mo = round(max(t[1] for t in on)); mi = round(max(t[2] for t in on)); my = round(max(t[3] for t in on))
+        on = [t for t in needs if t[2]] or needs
+        vals = {k: round(max(t[1][k] for t in on)) for k in KEYS}
     elif cmd == "set":
-        mo, mi, my = float(sys.argv[2]), float(sys.argv[3]), float(sys.argv[4])
+        vals = dict(zip(KEYS, (float(v) for v in sys.argv[2:8])))
     else:
         cur = await filt(SCENE, NAME)
-        print("stereo window:", {k: cur.get(k) for k in ("margin_outer", "margin_inner", "margin_y")} if cur else "(not installed)")
+        print("stereo window:", {k: cur.get(k) for k in KEYS} if cur else "(not installed)")
         await ws.disconnect(); return
 
     have = [f["filterName"] for f in (await call("GetSourceFilterList", {"sourceName": SCENE}))["filters"]]
     if NAME not in have:
         await call("CreateSourceFilter", {"sourceName": SCENE, "filterName": NAME, "filterKind": "shader_filter",
-                                          "filterSettings": {"from_file": True, "shader_file_name": SHADER, "margin_outer": mo, "margin_inner": mi, "margin_y": my}})
+                                          "filterSettings": dict(from_file=True, shader_file_name=SHADER, **vals)})
     else:
-        await call("SetSourceFilterSettings", {"sourceName": SCENE, "filterName": NAME, "filterSettings": {"margin_outer": mo, "margin_inner": mi, "margin_y": my}, "overlay": True})
+        await call("SetSourceFilterSettings", {"sourceName": SCENE, "filterName": NAME, "filterSettings": vals, "overlay": True})
     n = len((await call("GetSourceFilterList", {"sourceName": SCENE}))["filters"])
     await call("SetSourceFilterIndex", {"sourceName": SCENE, "filterName": NAME, "filterIndex": n - 1})
     await asyncio.sleep(1.5)
     cur = await filt(SCENE, NAME)
-    print(f"stereo window -> outer {mo} inner {mi} y {my}; visible per eye {EYE_W-mo-mi:.0f}x{1080-2*my:.0f}; last_error={cur.get('last_error','')!r}")
+    print("stereo window ->", vals, f"| visible L eye {EYE_W-vals['left_eye_left']-vals['left_eye_right']:.0f} px, R eye {EYE_W-vals['right_eye_left']-vals['right_eye_right']:.0f} px, height {1080-vals['margin_top']-vals['margin_bottom']:.0f} | last_error={cur.get('last_error','')!r}")
     await ws.disconnect()
 
 
