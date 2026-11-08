@@ -1559,15 +1559,18 @@
                 },
                 {
                     "prev_ver": 536936450,
-                    "name": "luma key",
-                    "uuid": "9816e7f5-e4bd-41e1-ab85-039c3d09bfee",
-                    "id": "luma_key_filter",
-                    "versioned_id": "luma_key_filter",
+                    "name": "camera key",
+                    "uuid": "7135e25d-246e-4ffd-ba66-52c89e99f3f7",
+                    "id": "shader_filter",
+                    "versioned_id": "shader_filter",
                     "settings": {
+                        "from_file": true,
+                        "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/camera_key.shader",
                         "luma_min": 0.07,
-                        "luma_min_smooth": 0.012,
-                        "luma_max": 1.0,
-                        "luma_max_smooth": 0.0
+                        "luma_smooth": 0.012,
+                        "fill_radius": 40.0,
+                        "fill_cover": 0.8,
+                        "fill_steps": 10.0
                     },
                     "mixers": 0,
                     "sync": 0,

@@ -43,10 +43,14 @@ Virtual Camera for the relays. Scene `Scene`, bottom to top:
 2. **Camera layer** — nested scene **`camera_chain`** (raw `StereoPi AV` stretched to
    3840×1080 inside it). Scene filters: `sbs align` (convergence/trim, **canvas px = 2× camera px**;
    slider ±400) → `synth color` (soften 0) → `palette` → `pillar box` (aspect 1.0) →
-   `mix opacity` → **`luma key`** (OBS built-in; `luma_min` 0.07, smooth 0.012 — the
-   grading lifts true black to luma 0.063, and the key must sit LAST because the
-   shader filters write opaque alpha). Blend **normal**, so the keyed statue occludes
-   the synth (was *screen* before the key). Depth synthesis is
+   `mix opacity` → **`camera key`** ([`camera_key.shader`](camera_key.shader): luma key
+   `luma_min` 0.07 / ramp 0.012 — the grading lifts true black to luma 0.063 — plus a
+   morphological hole fill: a keyed-out pixel is kept when foreground is found within
+   `fill_radius` 40 px in ≥ 80 % of 16 directions, so the statue's deep shadows stay
+   solid while open background doesn't; rays never cross the eye seam). Must sit LAST
+   because the shader filters before it write opaque alpha. Costs ~8 ms of render time
+   on this machine. Blend **normal**, so the keyed statue occludes the synth (was
+   *screen* before the key). Depth synthesis is
    off here: the camera already carries real stereo. **Trim sbs align on
    `camera_chain`, not on the input** — the depth sidecar screenshots the raw input.
 
