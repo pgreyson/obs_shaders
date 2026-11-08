@@ -233,8 +233,8 @@
                         "luma_levels": 0.05,
                         "shimmer": 0.57,
                         "size": 6.0,
-                        "rotation": 0.9924768805503845,
-                        "hue_pull": 0.6074729710817337,
+                        "rotation": 0.992428183555603,
+                        "hue_pull": 0.6074773818254471,
                         "skew": 0.0,
                         "luma_pull": 0.0,
                         "chroma_pull": 0.0
@@ -266,7 +266,7 @@
                         "from_file": true,
                         "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/chromadepth_bake.shader",
                         "room_depth_source": "StereoPi Depth",
-                        "hue_rotation": 0.41407888382673264,
+                        "hue_rotation": 0.41400253027677536,
                         "color_weight": 0.9999902248382568,
                         "wheel_shape": 0.0,
                         "room_mix": 0.0,
@@ -357,7 +357,7 @@
                     "versioned_id": "stereo_splat_filter",
                     "settings": {
                         "depth": 0.0,
-                        "convergence": 0.3372245892654439,
+                        "convergence": 0.138868272566129,
                         "mode": 0,
                         "window": true,
                         "fill": 0,
@@ -787,7 +787,7 @@
             "id": "syphon-input",
             "versioned_id": "syphon-input",
             "settings": {
-                "uuid": "info.v002.Syphon.871F11A7-4116-4760-AB41-BDE22CB11B61",
+                "uuid": "info.v002.Syphon.F47574D9-A2DF-4696-AFB3-A94AACD9A396",
                 "app_name": "Python",
                 "name": "stereopi-depth"
             },
@@ -821,7 +821,7 @@
                     {
                         "name": "Video Capture Device",
                         "source_uuid": "7ae49ae8-97f6-49b5-ada2-30cf28527f7b",
-                        "visible": false,
+                        "visible": true,
                         "locked": false,
                         "rot": 0.0,
                         "scale_ref": {
@@ -1324,7 +1324,7 @@
                             "y": 1080.0
                         },
                         "align": 5,
-                        "bounds_type": 0,
+                        "bounds_type": 1,
                         "bounds_align": 0,
                         "bounds_crop": false,
                         "crop_left": 0,
@@ -1350,12 +1350,12 @@
                             "y": 1.0
                         },
                         "bounds": {
-                            "x": 0.0,
-                            "y": 0.0
+                            "x": 3840.0,
+                            "y": 1080.0
                         },
                         "bounds_rel": {
-                            "x": 0.0,
-                            "y": 0.0
+                            "x": 7.111111164093018,
+                            "y": 2.0
                         },
                         "scale_filter": "disable",
                         "blend_method": "default",
@@ -1402,10 +1402,10 @@
                         "expand_top": 0,
                         "from_file": true,
                         "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/sbs_align.shader",
-                        "left_x": -71.54,
-                        "left_y": -25.0,
-                        "right_x": 71.54,
-                        "right_y": 24.0
+                        "left_x": -143.0,
+                        "left_y": -50.0,
+                        "right_x": 143.0,
+                        "right_y": 48.0
                     },
                     "mixers": 0,
                     "sync": 0,

@@ -1,5 +1,7 @@
 # OBS Shaders
 
+> **Current live topology, source to screen: [`SIGNAL_CHAIN.md`](SIGNAL_CHAIN.md).**
+
 Stereoscopic video-synthesis shaders for OBS, run via the [obs-shaderfilter](https://github.com/exeldro/obs-shaderfilter) plugin. Companion to [structure_tools](../structure_tools), which holds the GLES 2.0 shaders that run on the Erogenous Tones Structure module itself. These OBS shaders do the same kinds of work — mono→stereo conversion, per-eye stereo effects — but in software, around a mono-native video synth, with no Structure-hardware constraints (full HD instead of 320/640 SD).
 
 ## Why a separate OBS chain
