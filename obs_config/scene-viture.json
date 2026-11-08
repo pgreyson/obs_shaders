@@ -1166,12 +1166,12 @@
                     "settings": {
                         "from_file": true,
                         "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/stereo_window.shader",
-                        "left_eye_left": 276,
-                        "left_eye_right": 228,
-                        "right_eye_left": 228,
-                        "right_eye_right": 276,
-                        "margin_top": 77,
-                        "margin_bottom": 77
+                        "left_eye_left": 295.0,
+                        "left_eye_right": 287.0,
+                        "right_eye_left": 228.0,
+                        "right_eye_right": 276.0,
+                        "margin_top": 62.0,
+                        "margin_bottom": 77.0
                     },
                     "mixers": 0,
                     "sync": 0,
