@@ -141,6 +141,93 @@ class CameraAlign:
         self._mode_logged = None
         self._last_log = 0.0
         self.last = None   # last solved (depth, conv, info) for status tools
+        # User convergence OFFSET: the splat's convergence slider in the OBS filter
+        # panel is treated as an offset on top of the solved value. Any convergence
+        # change OBS reports that we did not write ourselves is a slider move; its
+        # delta accumulates here (persisted so a bridge restart keeps it).
+        self.offset_path = cfg.get("offset_file", "/tmp/camera_align_offset.json")
+        self.conv_offset = 0.0
+        self.last_written_conv = None
+        self._offset_mtime = None
+        self._load_offset()
+        # obs-websocket 5.7 does not deliver SourceFilterSettingsChanged for this
+        # filter (verified), so slider moves are detected by POLLING the splat's
+        # convergence ~10x/s; while the user is dragging we hold our own writes.
+        self.poll_s = float(cfg.get("slider_poll_s", 0.1))
+        self.hold_s = float(cfg.get("slider_hold_s", 0.8))
+        self._next_poll = 0.0
+        self.hold_until = 0.0
+
+    async def poll_slider(self, obs_clients: dict):
+        """Detect user moves of the convergence slider (any value we did not write)."""
+        now = time.time()
+        if not self.active or now < self._next_poll or not self.conv_targets:
+            return
+        self._next_poll = now + self.poll_s
+        t = self.conv_targets[0]
+        ws = obs_clients.get(t["instance"])
+        if ws is None:
+            return
+        try:
+            resp = await ws.call(simpleobsws.Request("GetSourceFilter",
+                                                     {"sourceName": t["source"], "filterName": t["filter"]}))
+        except Exception:
+            return
+        if not resp.ok():
+            return
+        cur = resp.responseData["filterSettings"].get("convergence")
+        if cur is None or self.last_written_conv is None:
+            return
+        cur = float(cur)
+        if abs(cur - self.last_written_conv) > 1e-4:
+            self.conv_offset += cur - self.last_written_conv
+            self.last_written_conv = cur
+            self.hold_until = now + self.hold_s
+            self._save_offset()
+            log.info(f"camera_align: slider moved -> convergence offset {self.conv_offset:+.3f}")
+
+    @property
+    def holding(self) -> bool:
+        return time.time() < self.hold_until
+
+    def _load_offset(self):
+        try:
+            st = os.stat(self.offset_path)
+            if st.st_mtime == self._offset_mtime:
+                return
+            with open(self.offset_path) as fh:
+                self.conv_offset = float(json.load(fh).get("conv_offset", 0.0))
+            self._offset_mtime = st.st_mtime
+            log.info(f"camera_align: convergence offset {self.conv_offset:+.3f} (from {self.offset_path})")
+        except (OSError, ValueError):
+            pass
+
+    def _save_offset(self):
+        try:
+            tmp = self.offset_path + ".tmp"
+            with open(tmp, "w") as fh:
+                json.dump({"conv_offset": self.conv_offset, "t": time.time()}, fh)
+            os.replace(tmp, self.offset_path)
+            self._offset_mtime = os.stat(self.offset_path).st_mtime
+        except OSError as exc:
+            log.warning(f"camera_align: could not save offset: {exc}")
+
+    def on_filter_settings(self, source: str, filter_name: str, settings: dict):
+        """SourceFilterSettingsChanged hook: fold user slider moves into the offset."""
+        if not self.active or "convergence" not in settings:
+            return
+        for t in self.conv_targets:
+            if t["source"] == source and t["filter"] == filter_name:
+                break
+        else:
+            return
+        new = float(settings["convergence"])
+        if self.last_written_conv is None or abs(new - self.last_written_conv) < 1e-4:
+            return   # our own write echoing back
+        self.conv_offset += new - self.last_written_conv
+        self.last_written_conv = new
+        self._save_offset()
+        log.info(f"camera_align: slider moved -> convergence offset {self.conv_offset:+.3f}")
 
     def _read(self, path, max_age=None):
         try:
@@ -199,6 +286,8 @@ class CameraAlign:
             else:
                 c = 1.0 - front_canvas / (2.0 * f0 * self.eye_px)
             info = f"{mode} front@{front_src:+.1f}src px (cam far {p5:+.1f})"
+        self._load_offset()   # picks up `synth_plane.py offset ...`
+        c += self.conv_offset
         c_cl = min(2.0, max(-1.0, c))
         if c_cl != c:
             clamped.append("conv")
@@ -210,8 +299,11 @@ class CameraAlign:
             self.active = True
             self._last_log = now
             log.info(f"camera_align: {info} knob {knob:.2f} -> depth={depth_cl:.3f} conv={c_cl:.3f}"
+                     + (f" (offset {self.conv_offset:+.3f})" if abs(self.conv_offset) > 1e-4 else "")
                      + (f" [clamped: {','.join(clamped)}]" if clamped else ""))
         self.last = (depth_cl, c_cl, info)
+        if not self.holding:
+            self.last_written_conv = c_cl
         return depth_cl, c_cl
 
 
@@ -290,11 +382,13 @@ async def cv_writer_loop(
             writes = [(t, v) for t in mapping.get("targets", [])]
             align = mapping.get("_align")
             if align is not None:
+                await align.poll_slider(obs_clients)
                 solved = align.solve(v)
                 if solved is not None:
                     v, conv = solved
-                    writes = [(t, v) for t in mapping.get("targets", [])] + \
-                             [(t, conv) for t in align.conv_targets]
+                    writes = [(t, v) for t in mapping.get("targets", [])]
+                    if not align.holding:   # user is dragging: leave convergence alone
+                        writes += [(t, conv) for t in align.conv_targets]
             for target, val in writes:
                 inst = target["instance"]
                 if inst not in obs_clients:
@@ -332,6 +426,15 @@ async def main_async(config: dict) -> None:
             obs_clients[inst_name] = await connect_obs(inst_name, host, port, password)
         except Exception as exc:
             log.error(f"[{inst_name}] failed to connect: {exc}")
+
+    aligns = [m["_align"] for m in config.get("mappings", []) if "_align" in m]
+    if aligns:
+        async def _on_filter_settings(data):
+            for al in aligns:
+                al.on_filter_settings(data.get("sourceName", ""), data.get("filterName", ""),
+                                      data.get("filterSettings") or {})
+        for ws in obs_clients.values():
+            ws.register_event_callback(_on_filter_settings, "SourceFilterSettingsChanged")
 
     # Dump current values for each unique (instance, source, filter) the config
     # touches, so we know our names match the OBS scene.

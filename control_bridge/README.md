@@ -83,5 +83,16 @@ $P tools/synth_plane.py match         # synth occupies the statue's own depth ra
 $P tools/synth_plane.py off
 ```
 
+**Convergence offset from the OBS filter panel.** The splat's `convergence` slider
+is not overwritten blindly: the bridge polls it ~10×/s and treats any value it did not
+write itself as a slider move. The delta is folded into a persistent offset
+(`offset_file`, default `/tmp/camera_align_offset.json`) that is added to the solved
+convergence in every mode, and the bridge holds its own convergence writes for
+`slider_hold_s` (0.8 s) while you drag. So in *behind* mode the slider nudges the
+synth's front plane forward/back of the auto-solved position and stays there as the
+camera stats move. `tools/synth_plane.py offset 0` resets it; `offset` alone shows it.
+(obs-websocket 5.7 emits no `SourceFilterSettingsChanged` for this filter — verified —
+hence polling rather than events.)
+
 Log lines are tagged `camera_align:`. The bridge must run with `.venv/bin/python3`
 (system python lacks numpy); launch detached with nohup.

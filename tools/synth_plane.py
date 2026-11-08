@@ -11,12 +11,17 @@ negative = behind the screen plane, positive = in front.
   synth_plane.py front PX          synth front plane at an absolute disparity PX (e.g. -20)
   synth_plane.py match             synth spans the camera's own depth range; knob = fraction
   synth_plane.py off               knob drives splat depth directly (legacy)
+  synth_plane.py offset [VALUE]    show / set the convergence OFFSET (default 0 = reset).
+                                   Moving the splat's convergence slider in OBS's filter
+                                   panel also changes this offset — the bridge adds it to
+                                   the solved convergence instead of overwriting the slider.
 
 Run with: control_bridge/.venv/bin/python3 tools/synth_plane.py <cmd>
 """
 import json, os, sys, time
 
 CTL = "/tmp/camera_align_ctl.json"
+OFFSET = "/tmp/camera_align_offset.json"
 STATS = "/tmp/stereopi_depth_stats.json"
 LOG = "/tmp/owl_bridge.log"
 
@@ -37,6 +42,11 @@ def status():
               f"near p95 {st['p95']:+.1f}   ({age:.1f} s old{'' if age < 6 else ' — STALE'})")
     except Exception as e:
         print(f"camera stats unavailable ({e}) — is depth_sidecar running?")
+    try:
+        off = json.load(open(OFFSET)).get("conv_offset", 0.0)
+    except Exception:
+        off = 0.0
+    print(f"convergence offset: {off:+.3f}  (move the splat's convergence slider in OBS, or: synth_plane.py offset 0)")
     ctl = {}
     if os.path.exists(CTL):
         ctl = json.load(open(CTL))
@@ -60,6 +70,15 @@ def main():
         write({"mode": "match"})
     elif a[0] == "off":
         write({"mode": "off"})
+    elif a[0] == "offset":
+        if len(a) > 1:
+            tmp = OFFSET + ".tmp"
+            with open(tmp, "w") as fh:
+                json.dump({"conv_offset": float(a[1]), "t": time.time()}, fh)
+            os.replace(tmp, OFFSET)
+            print("convergence offset ->", float(a[1]))
+        else:
+            status()
     else:
         sys.exit(__doc__)
 

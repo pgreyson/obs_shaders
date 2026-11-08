@@ -67,6 +67,8 @@ Audio: `Mic/Aux` unmuted, *monitor and output*, monitoring device = system defau
   Modes via `tools/synth_plane.py`: **behind** (default: synth front plane `gap_px`
   behind the statue's far plane, knob = how far it recedes), `front PX`, `match`
   (synth spans the statue's depth, knob = fraction), `off`. Stale stats → `off`.
+  The splat's **convergence slider** in the OBS filter panel acts as a persistent
+  OFFSET on the solved convergence (bridge polls it; `synth_plane.py offset 0` resets).
 - `depth bake` can also take the sidecar's depth map (`room_depth`, Syphon source
   `StereoPi Depth`); `room_mix` is 0 and the sidecar runs the cheap stereo-only engine,
   so the depth map is currently unused.
