@@ -233,7 +233,7 @@
                         "luma_levels": 0.05,
                         "shimmer": 0.57,
                         "size": 6.0,
-                        "rotation": 0.1632487177848816,
+                        "rotation": 0.2138766348361969,
                         "hue_pull": 0.8528873920440674,
                         "skew": 0.0,
                         "luma_pull": 0.0,
@@ -266,7 +266,7 @@
                         "from_file": true,
                         "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/chromadepth_bake.shader",
                         "room_depth_source": "StereoPi Depth",
-                        "hue_rotation": 0.3846552297472954,
+                        "hue_rotation": 0.4856536481529474,
                         "color_weight": 0.9999902248382568,
                         "wheel_shape": 0.0,
                         "room_mix": 0.0,
@@ -356,8 +356,8 @@
                     "id": "stereo_splat_filter",
                     "versioned_id": "stereo_splat_filter",
                     "settings": {
-                        "depth": 0.43037594109773636,
-                        "convergence": 1.7585765840233236,
+                        "depth": 0.39671318233013153,
+                        "convergence": 1.8601424539557976,
                         "mode": 0,
                         "window": true,
                         "fill": 0,
@@ -1073,7 +1073,7 @@
                     {
                         "name": "stage",
                         "source_uuid": "3dfa2df3-c1a3-48df-8b5a-69db9a9f202b",
-                        "visible": false,
+                        "visible": true,
                         "locked": false,
                         "rot": 0.0,
                         "scale_ref": {
@@ -1160,18 +1160,18 @@
                 {
                     "prev_ver": 536936450,
                     "name": "stereo window",
-                    "uuid": "2330efe4-4503-4c6c-b431-db48b945ecd4",
+                    "uuid": "a8994500-0862-40ec-9d7c-16d51cc1c766",
                     "id": "shader_filter",
                     "versioned_id": "shader_filter",
                     "settings": {
                         "from_file": true,
                         "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/stereo_window.shader",
-                        "left_eye_left": 276.0,
-                        "left_eye_right": 228.0,
-                        "right_eye_left": 228.0,
-                        "right_eye_right": 276.0,
-                        "margin_top": 77.0,
-                        "margin_bottom": 77.0
+                        "left_eye_left": 276,
+                        "left_eye_right": 228,
+                        "right_eye_left": 228,
+                        "right_eye_right": 276,
+                        "margin_top": 77,
+                        "margin_bottom": 77
                     },
                     "mixers": 0,
                     "sync": 0,
@@ -1975,7 +1975,7 @@
                 {
                     "prev_ver": 536936450,
                     "name": "sbs align",
-                    "uuid": "972cb775-9c2e-479f-b808-5dcfc5e21b40",
+                    "uuid": "306c3d07-8a9a-4070-b3bc-cdd65c58b674",
                     "id": "shader_filter",
                     "versioned_id": "shader_filter",
                     "settings": {
@@ -1987,9 +1987,9 @@
                         "right_y": 48.0,
                         "mask_common": true,
                         "mask_left_eye_left": 0.0,
-                        "mask_right_eye_right": 0.0,
                         "mask_left_eye_right": 0.0,
                         "mask_right_eye_left": 0.0,
+                        "mask_right_eye_right": 0.0,
                         "mask_top": 0.0,
                         "mask_bottom": 0.0
                     },
@@ -2124,10 +2124,11 @@
                     "id": "color_filter",
                     "versioned_id": "color_filter_v2",
                     "settings": {
-                        "opacity": 0.2648,
+                        "opacity": 0.0405,
                         "brightness": 0.0063,
                         "saturation": 1.81,
-                        "hue_shift": 45.28
+                        "hue_shift": -81.51,
+                        "contrast": 0.25
                     },
                     "mixers": 0,
                     "sync": 0,
@@ -2223,8 +2224,8 @@
                             "y": -1.0
                         },
                         "scale_rel": {
-                            "x": 1.0,
-                            "y": 1.0
+                            "x": -1.0,
+                            "y": -1.0
                         },
                         "bounds": {
                             "x": 3840.0,
@@ -2272,21 +2273,21 @@
                 {
                     "prev_ver": 536936450,
                     "name": "sbs align",
-                    "uuid": "e5a5598f-e5b0-40af-b5c4-9d919627f124",
+                    "uuid": "280c0d4f-f5b0-487a-b33d-aaa3d25afa84",
                     "id": "shader_filter",
                     "versioned_id": "shader_filter",
                     "settings": {
                         "from_file": true,
                         "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/sbs_align.shader",
                         "left_x": -75.66,
-                        "left_y": 76.71,
+                        "left_y": 61.5,
                         "right_x": 75.66,
                         "right_y": -76.71,
                         "mask_common": true,
-                        "mask_left_eye_left": 200.0,
-                        "mask_right_eye_right": 200.0,
-                        "mask_left_eye_right": 152.0,
+                        "mask_left_eye_left": 219.0,
+                        "mask_left_eye_right": 211.0,
                         "mask_right_eye_left": 152.0,
+                        "mask_right_eye_right": 200.0,
                         "mask_top": 0.0,
                         "mask_bottom": 0.0
                     },
@@ -2390,13 +2391,7 @@
                     "uuid": "9a852a0a-47ff-451f-bbb4-9cdc93762a0b",
                     "id": "shader_filter",
                     "versioned_id": "shader_filter",
-                    "settings": {
-                        "from_file": true,
-                        "override_entire_effect": false,
-                        "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/halfsbs_pillarbox.shader",
-                        "aspect_correction": 1.0,
-                        "half_sbs": true
-                    },
+                    "settings": {},
                     "mixers": 0,
                     "sync": 0,
                     "flags": 0,
@@ -2422,9 +2417,11 @@
                     "versioned_id": "color_filter_v2",
                     "settings": {
                         "brightness": 0.0063,
-                        "saturation": 1.81,
-                        "hue_shift": 45.28,
-                        "opacity": 0.2648
+                        "saturation": 2.84,
+                        "hue_shift": -140.38,
+                        "opacity": 0.012,
+                        "contrast": 2.28,
+                        "gamma": -0.17
                     },
                     "mixers": 0,
                     "sync": 0,
@@ -2531,6 +2528,12 @@
             "monitor": -1,
             "type": 0,
             "geometry": "AdnQywADAAAAAAEQAAAA3QAAAu8AAAIGAAABEAAAAPkAAALvAAACBgAAAAAAAAAABAAAAAEQAAAA+QAAAu8AAAIG",
+            "alwaysOnTopOverridden": false
+        },
+        {
+            "monitor": 2,
+            "type": 2,
+            "geometry": "AdnQywADAAAAAApAAAAAAAAAGT8AAAQ3AAAKQAAAAAAAABk/AAAENwAAAAIABAAADwAAAApAAAAAAAAAGT8AAAQ3",
             "alwaysOnTopOverridden": false
         }
     ],
