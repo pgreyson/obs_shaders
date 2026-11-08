@@ -7,9 +7,10 @@ setting if it ever goes stale).
 
 ```
 .venv/bin/python3 depth_sidecar.py                     # fused engine, defaults
-nohup .venv/bin/python3 depth_sidecar.py --grab-width 1920 \
-      --align-source camera_chain --align-source-width 3840 \
-      > /tmp/depth_sidecar.log 2>&1 &                  # detached (sessions!); main's camera_chain
+nohup .venv/bin/python3 depth_sidecar.py --engine sgbm --fps 1.5 --cv-threads 2 \
+      --grab-width 1920 --align-source camera_chain --align-source-width 3840 \
+      > /tmp/depth_sidecar.log 2>&1 &                  # detached; stats-only duty (cheap)
+# fused engine (full depth map for room_depth) costs far more CPU: add --engine fused --fps 3
 .venv/bin/python3 depth_sidecar.py --calibrate --grab-width 1920
 .venv/bin/python3 eval_depth.py "label"                # objective metrics
 ```
@@ -27,6 +28,11 @@ canvas px — pass `--align-source-width 3840`). `control_bridge`'s
 synth occupies the same screen-disparity range as the camera — zoom the camera
 and the splat follows. The sidecar must see the RAW camera input (no filters on
 `StereoPi AV`), or the calibration no longer matches.
+
+**CPU:** at 1920 grab, SGBM+WLS on all cores plus the DPT model saturate an M2 that is
+also running four OBS instances (load avg 28). For alignment-stats duty use
+`--engine sgbm --fps 1.5 --cv-threads 2`; the depth map is then holey but `room_mix`
+is 0 anyway. Bring `fused` back only when the bake actually uses `room_depth`.
 
 ## Architecture
 

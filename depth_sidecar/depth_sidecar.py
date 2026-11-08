@@ -165,13 +165,13 @@ class SgbmEngine:
         dl = self.left_m.compute(Lc, Rc)
         dr = self.right_m.compute(Rc, Lc)
         disp = self.wls.filter(dl, Lc, disparity_map_right=dr).astype(np.float32) / 16.0
+        self.last_stats = self._displayed_stats(disp, disp >= self.min_disp)  # rectified frame
         if self.H1 is not None:  # back to the original left-eye framing
             disp = cv2.warpPerspective(disp, self.H1, (half, h),
                                        flags=cv2.WARP_INVERSE_MAP | cv2.INTER_LINEAR)
         valid = disp >= self.min_disp  # SGBM marks invalid as min_disp - 1
         if valid.sum() < 500:
             return np.zeros(L.shape, np.float32)
-        self.last_stats = self._displayed_stats(disp, valid) if self.H1 is None else None
         lo, hi = np.percentile(disp[valid], 2), np.percentile(disp[valid], 98)
         return np.clip((disp - lo) / max(hi - lo, 1e-6), 0.0, 1.0).astype(np.float32)
 
@@ -334,9 +334,12 @@ async def main():
     ap.add_argument("--align-source-width", type=int, default=1920,
                     help="width in px of --align-source (the filter's px units); a nested SCENE "
                          "is canvas-sized, e.g. 3840 for main's camera_chain")
+    ap.add_argument("--cv-threads", type=int, default=2,
+                    help="OpenCV worker threads (SGBM+WLS at 1920 grab eat a whole M2 otherwise)")
     ap.add_argument("--calibrate", action="store_true",
                     help="grab one frame, compute self-rectification, save, exit")
     args = ap.parse_args()
+    cv2.setNumThreads(max(1, args.cv_threads))
 
     import yaml, simpleobsws, syphon
     from syphon.utils.numpy import copy_image_to_mtl_texture

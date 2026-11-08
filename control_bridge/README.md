@@ -59,16 +59,29 @@ Ctrl-C to exit cleanly.
 
 Optional block on the splat `depth` mapping (see `config.example.yaml`). While
 `depth_sidecar` publishes fresh camera disparity stats (`stats_file`, younger than
-`max_age_s`), the bridge solves for the splat that puts the synth's depth range on
-the camera's screen-disparity range:
+`max_age_s`), the bridge places the splat relative to the camera. Screen disparity
+(L−R, canvas px): camera = `canvas_scale`·d_src; splat = 2·(dt−c)·f0·`eye_px` with
+f0 = depth²·`max_parallax`, dt = bake depth (1 = synth front plane).
 
-```
-f0 = canvas_scale * (p95 - p5) / (2 * eye_px)      # depth^2 * max_parallax
-convergence = -p5 / (p95 - p5)                     # where the camera crosses the screen plane
-depth = sqrt(knob * f0 / max_parallax)             # knob = this channel's remapped CV, 0..1
+| mode | what it does | knob (this channel) |
+|---|---|---|
+| `behind` (default) | synth **front** plane `gap_px` behind the camera's far plane (p5); convergence solved every pass: c = 1 − canvas_scale·(p5−gap)/(2·f0·eye_px) | splat depth = how far the synth recedes behind that front |
+| `front` | same, front plane at an absolute `front_px` (source px; negative = behind screen) | splat depth |
+| `match` | synth's 0..1 range spans the camera's p5..p95: f0 = canvas_scale·(p95−p5)/(2·eye_px), c = −p5/(p95−p5) | fraction of that range (0 flat .. 1 exact) |
+| `off` | legacy: knob = depth, convergence untouched | depth |
+
+Stale stats behave like `off`. Convergence may legitimately exceed the 0..1 slider
+(a front plane behind the screen needs c > 1); it is clamped to −1..2. Switch modes
+live — no restart — with `tools/synth_plane.py` (writes `control_file`):
+
+```bash
+P=control_bridge/.venv/bin/python3
+$P tools/synth_plane.py status        # camera far/near planes, mode, solved splat
+$P tools/synth_plane.py behind 2      # statue on top of the synth, 2 px gap (default)
+$P tools/synth_plane.py front -20     # synth front plane 20 source px behind the screen
+$P tools/synth_plane.py match         # synth occupies the statue's own depth range
+$P tools/synth_plane.py off
 ```
 
-so the CV knob becomes the *fraction* of the camera's depth range the synth uses.
-Convergence is written to `convergence_targets`. Stale stats → the knob drives
-`depth` directly, as before, and convergence is left alone. Log lines are tagged
-`camera_align:`.
+Log lines are tagged `camera_align:`. The bridge must run with `.venv/bin/python3`
+(system python lacks numpy); launch detached with nohup.

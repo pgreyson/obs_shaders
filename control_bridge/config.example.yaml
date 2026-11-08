@@ -46,6 +46,10 @@ mappings:
     # its disparities -> the splat follows. Stats stale (>6 s) -> knob = depth, as before.
     camera_align:
       stats_file: /tmp/stereopi_depth_stats.json
+      control_file: /tmp/camera_align_ctl.json   # live overrides, written by tools/synth_plane.py
+      mode: behind             # behind | front | match | off  (see tools/synth_plane.py)
+      gap_px: 2.0              # behind: synth front plane this far (source px) behind the camera's far plane
+      front_px: -10.0          # front: absolute front-plane disparity (source px; negative = behind screen)
       max_age_s: 6.0
       canvas_scale: 2.0        # camera source 1920 px stretched to the 3840 canvas
       eye_px: 1920             # canvas px per eye

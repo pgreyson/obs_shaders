@@ -107,69 +107,111 @@ async def write_filter_property(
 
 
 class CameraAlign:
-    """Scale the stereo splat so the synth's depth range occupies the SAME
-    screen-disparity range as the live stereo camera (depth_sidecar publishes
-    the camera's displayed disparity percentiles). The CV knob becomes the
-    FRACTION of that range the synth uses (0 = flat, 1 = exact match); if the
-    stats go stale (camera off, sidecar down) the knob falls back to driving
-    the splat depth directly, as before.
+    """Place the stereo splat relative to the live stereo camera (depth_sidecar
+    publishes the camera's displayed disparity percentiles p5/p50/p95, source px).
 
-      camera screen disparity  = canvas_scale * d_src            (px, L-R)
-      splat screen disparity   = 2 * (dt - c) * f0 * eye_px,  f0 = depth^2 * max_parallax
-      match dt=0 -> p5, dt=1 -> p95:
-        f0 = canvas_scale * (p95 - p5) / (2 * eye_px),   c = -p5 / (p95 - p5)
+    Screen disparities (L-R, canvas px):  camera = canvas_scale * d_src
+                                          splat  = 2 * (dt - c) * f0 * eye_px,  f0 = depth^2 * max_parallax
+    dt = bake depth (1 = synth near/front plane, 0 = far), c = convergence.
+
+    Modes (config `mode`, overridden live by the control file):
+      behind  synth FRONT plane sits `gap_px` (source px) behind the camera's far
+              plane (p5); the knob is splat depth as before, i.e. how far the synth
+              recedes behind that front. Convergence is solved per frame.  (default)
+      front   like behind, but the front plane is at an absolute `front_px`
+              (source px of camera disparity; negative = behind the screen).
+      match   synth depth range spans the camera's p5..p95; knob = fraction (0 flat
+              .. 1 exact).
+      off     knob drives depth directly, convergence untouched (legacy).
+    Stale stats (camera/sidecar down) -> behaves like `off`.
     """
 
     def __init__(self, cfg: dict):
         self.path = cfg.get("stats_file", "/tmp/stereopi_depth_stats.json")
-        self.max_age = float(cfg.get("max_age_s", 3.0))
+        self.ctl_path = cfg.get("control_file", "/tmp/camera_align_ctl.json")
+        self.max_age = float(cfg.get("max_age_s", 6.0))
         self.canvas_scale = float(cfg.get("canvas_scale", 2.0))   # camera 1920 -> 3840 canvas
         self.eye_px = float(cfg.get("eye_px", 1920))
         self.max_parallax = float(cfg.get("max_parallax", 0.08))
         self.conv_targets = cfg.get("convergence_targets", [])
-        self._mtime = None
-        self._stats = None
+        self.defaults = {"mode": cfg.get("mode", "behind"), "gap_px": float(cfg.get("gap_px", 2.0)),
+                         "front_px": float(cfg.get("front_px", -10.0))}
+        self._files: dict[str, tuple] = {}   # path -> (mtime, data)
         self.active = False
+        self._mode_logged = None
         self._last_log = 0.0
+        self.last = None   # last solved (depth, conv, info) for status tools
 
-    def stats(self):
+    def _read(self, path, max_age=None):
         try:
-            st = os.stat(self.path)
+            st = os.stat(path)
         except OSError:
             return None
-        if time.time() - st.st_mtime > self.max_age:
+        if max_age is not None and time.time() - st.st_mtime > max_age:
             return None
-        if st.st_mtime != self._mtime:
-            try:
-                with open(self.path) as fh:
-                    self._stats = json.load(fh)
-                self._mtime = st.st_mtime
-            except (OSError, ValueError):
-                return None
-        return self._stats
+        cached = self._files.get(path)
+        if cached and cached[0] == st.st_mtime:
+            return cached[1]
+        try:
+            with open(path) as fh:
+                data = json.load(fh)
+        except (OSError, ValueError):
+            return None
+        self._files[path] = (st.st_mtime, data)
+        return data
+
+    def control(self) -> dict:
+        ctl = dict(self.defaults)
+        ctl.update(self._read(self.ctl_path) or {})
+        return ctl
 
     def solve(self, knob: float):
-        """-> (depth, convergence) or None when stats are stale."""
-        st = self.stats()
-        if st is None:
+        """-> (depth, convergence) or None when alignment is off/stale (knob = depth)."""
+        ctl = self.control()
+        mode = ctl.get("mode", "behind")
+        if mode != self._mode_logged:
+            log.info(f"camera_align: mode {mode} {ctl}")
+            self._mode_logged = mode
+        st = self._read(self.path, self.max_age)
+        if mode == "off" or st is None:
             if self.active:
-                log.info("camera_align: stats stale -> knob drives splat depth directly")
+                log.info("camera_align: " + ("mode off" if mode == "off" else "stats stale")
+                         + " -> knob drives splat depth directly")
             self.active = False
+            self.last = None
             return None
         p5, p95 = float(st["p5"]), float(st["p95"])
         span = max(p95 - p5, 0.5)
-        f0 = self.canvas_scale * span / (2.0 * self.eye_px)
-        c = -p5 / span
-        c_cl = min(1.0, max(0.0, c))
-        depth = math.sqrt(max(0.0, knob) * f0 / self.max_parallax)
+        clamped = []
+        if mode == "match":
+            f0 = self.canvas_scale * span / (2.0 * self.eye_px)
+            c = -p5 / span
+            depth = math.sqrt(max(0.0, knob) * f0 / self.max_parallax)
+            info = f"match cam[{p5:+.1f}..{p95:+.1f}]"
+        else:
+            depth = max(0.0, min(1.0, knob))
+            f0 = depth * depth * self.max_parallax
+            front_src = (p5 - float(ctl.get("gap_px", 2.0))) if mode == "behind" else float(ctl.get("front_px", -10.0))
+            front_canvas = self.canvas_scale * front_src
+            if f0 < 1e-6:
+                # flat synth: park it exactly at the front plane (dt - c = anything * 0 = 0 -> screen plane)
+                c = 1.0
+            else:
+                c = 1.0 - front_canvas / (2.0 * f0 * self.eye_px)
+            info = f"{mode} front@{front_src:+.1f}src px (cam far {p5:+.1f})"
+        c_cl = min(2.0, max(-1.0, c))
+        if c_cl != c:
+            clamped.append("conv")
         depth_cl = min(1.0, depth)
+        if depth_cl != depth:
+            clamped.append("depth")
         now = time.time()
         if not self.active or now - self._last_log > 10:
             self.active = True
             self._last_log = now
-            log.info(f"camera_align: cam disp p5 {p5:+.1f} p95 {p95:+.1f} src px -> "
-                     f"f0={f0:.4f} depth={depth_cl:.3f} (knob {knob:.2f}) conv={c_cl:.3f}"
-                     + (" [conv clamped]" if c != c_cl else "") + (" [depth clamped]" if depth != depth_cl else ""))
+            log.info(f"camera_align: {info} knob {knob:.2f} -> depth={depth_cl:.3f} conv={c_cl:.3f}"
+                     + (f" [clamped: {','.join(clamped)}]" if clamped else ""))
+        self.last = (depth_cl, c_cl, info)
         return depth_cl, c_cl
 
 
