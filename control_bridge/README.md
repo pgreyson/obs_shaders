@@ -54,3 +54,21 @@ Ctrl-C to exit cleanly.
 - **v2 (next)**: wire CV → `SetSourceFilterSettings` writes (CV actually controls filter values).
 - **v3**: bidirectional GUI mirror via `SourceFilterSettingsChanged` event subscription, with a guard to prevent feedback loops between instances.
 - **v4 (eventually)**: output stage — drive the OWL-ACDC's 4 outputs from OBS state, closing the loop back into the synth rack.
+
+## Camera alignment (`camera_align` on a mapping)
+
+Optional block on the splat `depth` mapping (see `config.example.yaml`). While
+`depth_sidecar` publishes fresh camera disparity stats (`stats_file`, younger than
+`max_age_s`), the bridge solves for the splat that puts the synth's depth range on
+the camera's screen-disparity range:
+
+```
+f0 = canvas_scale * (p95 - p5) / (2 * eye_px)      # depth^2 * max_parallax
+convergence = -p5 / (p95 - p5)                     # where the camera crosses the screen plane
+depth = sqrt(knob * f0 / max_parallax)             # knob = this channel's remapped CV, 0..1
+```
+
+so the CV knob becomes the *fraction* of the camera's depth range the synth uses.
+Convergence is written to `convergence_targets`. Stale stats → the knob drives
+`depth` directly, as before, and convergence is left alone. Log lines are tagged
+`camera_align:`.

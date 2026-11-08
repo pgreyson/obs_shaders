@@ -38,6 +38,23 @@ mappings:
     name: depth
     cv_range:  [-1.0, 1.0]
     out_range: [ 0.0, 1.0]
+    # Camera alignment (2026-11-07): while depth_sidecar publishes the StereoPi's
+    # live displayed-disparity percentiles, the splat is scaled so the synth's
+    # depth range spans the SAME screen disparity as the camera (convergence set
+    # where the camera scene crosses the screen plane), and this knob becomes the
+    # fraction of that range (0 flat .. 1 exact match). Zooming the camera changes
+    # its disparities -> the splat follows. Stats stale (>3 s) -> knob = depth, as before.
+    camera_align:
+      stats_file: /tmp/stereopi_depth_stats.json
+      max_age_s: 3.0
+      canvas_scale: 2.0        # camera source 1920 px stretched to the 3840 canvas
+      eye_px: 1920             # canvas px per eye
+      max_parallax: 0.08       # MAX_PARALLAX in plugin/src/stereo-splat.c
+      convergence_targets:
+        - instance: viture
+          source: "Video Capture Device"
+          filter: "stereo splat"
+          property: convergence
     targets:
       - instance: viture
         source: "Video Capture Device"

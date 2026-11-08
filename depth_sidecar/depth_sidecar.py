@@ -19,7 +19,7 @@ Upgrade path to 30 fps: pin OBS's virtual camera to the camera scene and
 capture that via AVFoundation (virtual cam is readable from CLI, unlike
 the BMD extension); the engine and Syphon side stay unchanged.
 """
-import argparse, asyncio, base64, io, os, sys, time
+import argparse, json, asyncio, base64, io, os, sys, time
 
 import cv2
 import numpy as np
@@ -171,8 +171,31 @@ class SgbmEngine:
         valid = disp >= self.min_disp  # SGBM marks invalid as min_disp - 1
         if valid.sum() < 500:
             return np.zeros(L.shape, np.float32)
+        self.last_stats = self._displayed_stats(disp, valid) if self.H1 is None else None
         lo, hi = np.percentile(disp[valid], 2), np.percentile(disp[valid], 98)
         return np.clip((disp - lo) / max(hi - lo, 1e-6), 0.0, 1.0).astype(np.float32)
+
+    def _displayed_stats(self, disp_rect, mask):
+        """Percentiles of the disparity the VIEWER sees (raw L/R frames + the
+        'sbs align' shift), from rectified-frame measurements. Rectification
+        moves the zero point, so rectified disparities are mapped back through
+        the inverse homographies: raw = xL_raw - xR_raw, displayed = raw - dx."""
+        ys, xs = np.nonzero(mask)
+        if len(xs) < 500:
+            return None
+        if len(xs) > 4000:
+            sel = np.random.default_rng(0).choice(len(xs), 4000, replace=False)
+            xs, ys = xs[sel], ys[sel]
+        d = disp_rect[ys, xs].astype(np.float32)
+        if self.H1 is not None:
+            if not hasattr(self, "_H1i"):
+                self._H1i, self._H2i = np.linalg.inv(self.H1), np.linalg.inv(self.H2)
+            pl = cv2.perspectiveTransform(np.stack([xs, ys], 1).astype(np.float32)[None], self._H1i)[0]
+            pr = cv2.perspectiveTransform(np.stack([xs - d, ys], 1).astype(np.float32)[None], self._H2i)[0]
+            displayed = (pl[:, 0] - pr[:, 0]) - self.dx   # dx = right_x - left_x (sbs align)
+        else:
+            displayed = d   # the pre-shift already equals the displayed alignment
+        return _disp_percentiles(displayed)
 
     def raw_disparity(self, frame):
         """Disparity + confidence in ORIGINAL left-eye framing, for fusion.
@@ -194,6 +217,7 @@ class SgbmEngine:
         gy = cv2.Sobel(Lc, cv2.CV_32F, 0, 1, ksize=3)
         tex = cv2.boxFilter(gx * gx + gy * gy, -1, (9, 9))
         conf = (disp >= self.min_disp) & (tex > np.percentile(tex, 70))
+        self.last_stats = self._displayed_stats(disp, conf)
         if self.H1 is not None:
             inv = cv2.WARP_INVERSE_MAP | cv2.INTER_NEAREST
             disp = cv2.warpPerspective(disp, self.H1, (half, h), flags=inv)
@@ -201,6 +225,14 @@ class SgbmEngine:
                                        (half, h), flags=inv).astype(bool)
             conf &= disp >= self.min_disp
         return disp, conf
+
+
+def _disp_percentiles(vals):
+    """Robust summary of a set of DISPLAYED disparities (px): p5/p50/p95 + count."""
+    if vals is None or len(vals) < 500:
+        return None
+    p5, p50, p95 = np.percentile(vals, [5, 50, 95])
+    return {"p5": float(p5), "p50": float(p50), "p95": float(p95), "n": int(len(vals))}
 
 
 class FusedEngine:
@@ -231,6 +263,10 @@ class FusedEngine:
         new = val if old is None else k * old + (1 - k) * val
         setattr(self, attr, new)
         return new
+
+    @property
+    def last_stats(self):
+        return getattr(self.stereo, "last_stats", None)
 
     def infer(self, frame):
         m = self.mono.infer(frame)                     # dense, [0,1]
@@ -290,6 +326,11 @@ async def main():
     ap.add_argument("--engine", choices=("midas", "sgbm", "fused"), default="fused")
     ap.add_argument("--model", default="DPT_SwinV2_T_256",
                     choices=("MiDaS_small", "DPT_SwinV2_T_256", "DPT_Hybrid"))
+    ap.add_argument("--stats-file", default="/tmp/stereopi_depth_stats.json",
+                    help="where to publish live DISPLAYED camera disparity percentiles "
+                         "(source px, 960/eye basis) for control_bridge camera_align; '' disables")
+    ap.add_argument("--align-source", default=None,
+                    help="OBS source whose 'sbs align' filter the viewer sees (default: --source)")
     ap.add_argument("--calibrate", action="store_true",
                     help="grab one frame, compute self-rectification, save, exit")
     args = ap.parse_args()
@@ -325,7 +366,7 @@ async def main():
         # 1920-wide source; scale to grab size)
         dx = dy = 0.0
         r = await ws.call(simpleobsws.Request('GetSourceFilter',
-            {'sourceName': 'Video Capture Device', 'filterName': 'sbs align'}))
+            {'sourceName': args.align_source or args.source, 'filterName': 'sbs align'}))
         if r.responseData:
             s = r.responseData['filterSettings']
             scale = args.grab_width / 1920.0
@@ -343,14 +384,30 @@ async def main():
 
     gw = args.grab_width
     gh = int(gw * 1080 / 1920)
+    align_src = args.align_source or args.source
+    last_align_poll = 0.0
+
+    async def refresh_align():
+        """Follow live 'sbs align' edits: the DISPLAYED disparity depends on them."""
+        r = await ws.call(simpleobsws.Request('GetSourceFilter',
+            {'sourceName': align_src, 'filterName': 'sbs align'}))
+        if r.responseData and hasattr(engine, 'stereo'):
+            a = r.responseData['filterSettings']
+            scale = args.grab_width / 1920.0
+            engine.stereo.dx = (a.get('right_x', 0.0) - a.get('left_x', 0.0)) * scale
+            engine.stereo.dy = (a.get('right_y', 0.0) - a.get('left_y', 0.0)) * scale
     ema = None
     guide_ema = None
     sharp_ema = None
+    stats_ema = None
     frames = 0
     t0 = time.time()
     try:
         while True:
             tick = time.time()
+            if tick - last_align_poll > 1.0:
+                last_align_poll = tick
+                await refresh_align()
             r = await ws.call(simpleobsws.Request('GetSourceScreenshot',
                 {'sourceName': args.source, 'imageFormat': 'jpeg',
                  'imageWidth': gw, 'imageHeight': gh, 'imageCompressionQuality': 85}))
@@ -360,6 +417,22 @@ async def main():
                 if frame is not None:
                     left = frame[:, :frame.shape[1] // 2]
                     d = engine.infer(frame)
+                    st = getattr(engine, 'last_stats', None)
+                    if st and args.stats_file:
+                        k = 0.8  # ~1 s time constant at 3-4 fps: no pumping, still follows a zoom
+                        stats_ema = dict(st) if stats_ema is None else \
+                            {q: k * stats_ema[q] + (1 - k) * st[q] for q in ('p5', 'p50', 'p95')}
+                        sc = 1920.0 / gw   # grab px -> source px (camera is 1920 wide, 960/eye)
+                        out = {"t": time.time(), "unit": "source_px_960_per_eye",
+                               "p5": stats_ema['p5'] * sc, "p50": stats_ema['p50'] * sc,
+                               "p95": stats_ema['p95'] * sc, "n": st['n'], "grab_width": gw}
+                        tmp = args.stats_file + ".tmp"
+                        with open(tmp, 'w') as fh:
+                            json.dump(out, fh)
+                        os.replace(tmp, args.stats_file)
+                        if frames % 100 == 0:
+                            print(f"cam disparity (displayed, source px): p5 {out['p5']:+.1f} "
+                                  f"p50 {out['p50']:+.1f} p95 {out['p95']:+.1f} n={out['n']}", flush=True)
                     n_eng = int(np.isnan(d).sum())
                     if n_eng:
                         print(f"NaN: engine output {n_eng}px — scrubbing", flush=True)

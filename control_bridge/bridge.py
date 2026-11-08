@@ -14,11 +14,14 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import logging
+import math
 import os
 import signal
 import sys
 import threading
+import time
 from pathlib import Path
 
 import numpy as np
@@ -103,6 +106,73 @@ async def write_filter_property(
     return resp.ok()
 
 
+class CameraAlign:
+    """Scale the stereo splat so the synth's depth range occupies the SAME
+    screen-disparity range as the live stereo camera (depth_sidecar publishes
+    the camera's displayed disparity percentiles). The CV knob becomes the
+    FRACTION of that range the synth uses (0 = flat, 1 = exact match); if the
+    stats go stale (camera off, sidecar down) the knob falls back to driving
+    the splat depth directly, as before.
+
+      camera screen disparity  = canvas_scale * d_src            (px, L-R)
+      splat screen disparity   = 2 * (dt - c) * f0 * eye_px,  f0 = depth^2 * max_parallax
+      match dt=0 -> p5, dt=1 -> p95:
+        f0 = canvas_scale * (p95 - p5) / (2 * eye_px),   c = -p5 / (p95 - p5)
+    """
+
+    def __init__(self, cfg: dict):
+        self.path = cfg.get("stats_file", "/tmp/stereopi_depth_stats.json")
+        self.max_age = float(cfg.get("max_age_s", 3.0))
+        self.canvas_scale = float(cfg.get("canvas_scale", 2.0))   # camera 1920 -> 3840 canvas
+        self.eye_px = float(cfg.get("eye_px", 1920))
+        self.max_parallax = float(cfg.get("max_parallax", 0.08))
+        self.conv_targets = cfg.get("convergence_targets", [])
+        self._mtime = None
+        self._stats = None
+        self.active = False
+        self._last_log = 0.0
+
+    def stats(self):
+        try:
+            st = os.stat(self.path)
+        except OSError:
+            return None
+        if time.time() - st.st_mtime > self.max_age:
+            return None
+        if st.st_mtime != self._mtime:
+            try:
+                with open(self.path) as fh:
+                    self._stats = json.load(fh)
+                self._mtime = st.st_mtime
+            except (OSError, ValueError):
+                return None
+        return self._stats
+
+    def solve(self, knob: float):
+        """-> (depth, convergence) or None when stats are stale."""
+        st = self.stats()
+        if st is None:
+            if self.active:
+                log.info("camera_align: stats stale -> knob drives splat depth directly")
+            self.active = False
+            return None
+        p5, p95 = float(st["p5"]), float(st["p95"])
+        span = max(p95 - p5, 0.5)
+        f0 = self.canvas_scale * span / (2.0 * self.eye_px)
+        c = -p5 / span
+        c_cl = min(1.0, max(0.0, c))
+        depth = math.sqrt(max(0.0, knob) * f0 / self.max_parallax)
+        depth_cl = min(1.0, depth)
+        now = time.time()
+        if not self.active or now - self._last_log > 10:
+            self.active = True
+            self._last_log = now
+            log.info(f"camera_align: cam disp p5 {p5:+.1f} p95 {p95:+.1f} src px -> "
+                     f"f0={f0:.4f} depth={depth_cl:.3f} (knob {knob:.2f}) conv={c_cl:.3f}"
+                     + (" [conv clamped]" if c != c_cl else "") + (" [depth clamped]" if depth != depth_cl else ""))
+        return depth_cl, c_cl
+
+
 def clamp_and_remap(v: float, cv_range: tuple[float, float], out_range: tuple[float, float]) -> float:
     cv_lo, cv_hi = cv_range
     out_lo, out_hi = out_range
@@ -175,17 +245,25 @@ async def cv_writer_loop(
             cv_range = tuple(mapping.get("cv_range", [0.0, 1.0]))
             out_range = tuple(mapping.get("out_range", [0.0, 1.0]))
             v = clamp_and_remap(float(means[ch]), cv_range, out_range)
-            for target in mapping.get("targets", []):
+            writes = [(t, v) for t in mapping.get("targets", [])]
+            align = mapping.get("_align")
+            if align is not None:
+                solved = align.solve(v)
+                if solved is not None:
+                    v, conv = solved
+                    writes = [(t, v) for t in mapping.get("targets", [])] + \
+                             [(t, conv) for t in align.conv_targets]
+            for target, val in writes:
                 inst = target["instance"]
                 if inst not in obs_clients:
                     continue
                 prop_key = (inst, target["source"], target["filter"], target["property"])
                 prev = last_written.get(prop_key)
-                if prev is not None and abs(prev - v) < write_threshold:
+                if prev is not None and abs(prev - val) < write_threshold:
                     continue
-                last_written[prop_key] = v
+                last_written[prop_key] = val
                 group_key = (inst, target["source"], target["filter"])
-                batched.setdefault(group_key, {})[target["property"]] = v
+                batched.setdefault(group_key, {})[target["property"]] = val
 
         if not batched:
             continue
@@ -197,6 +275,11 @@ async def cv_writer_loop(
 
 
 async def main_async(config: dict) -> None:
+    for mapping in config.get("mappings", []):
+        if "camera_align" in mapping:
+            mapping["_align"] = CameraAlign(mapping["camera_align"])
+            log.info(f"[{mapping.get('name', '?')}] camera_align enabled "
+                     f"(stats {mapping['_align'].path}, max age {mapping['_align'].max_age}s)")
     obs_clients: dict[str, simpleobsws.WebSocketClient] = {}
     for inst_name, inst_cfg in config.get("obs_instances", {}).items():
         host = inst_cfg.get("host", "localhost")

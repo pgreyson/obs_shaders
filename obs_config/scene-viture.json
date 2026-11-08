@@ -233,8 +233,8 @@
                         "luma_levels": 0.05,
                         "shimmer": 0.57,
                         "size": 6.0,
-                        "rotation": 0.9923399090766907,
-                        "hue_pull": 0.6066979616880417,
+                        "rotation": 0.9924768805503845,
+                        "hue_pull": 0.6074729710817337,
                         "skew": 0.0,
                         "luma_pull": 0.0,
                         "chroma_pull": 0.0
@@ -266,7 +266,7 @@
                         "from_file": true,
                         "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/chromadepth_bake.shader",
                         "room_depth_source": "StereoPi Depth",
-                        "hue_rotation": 0.41506876051425934,
+                        "hue_rotation": 0.41407888382673264,
                         "color_weight": 0.9999902248382568,
                         "wheel_shape": 0.0,
                         "room_mix": 0.0,
@@ -356,8 +356,8 @@
                     "id": "stereo_splat_filter",
                     "versioned_id": "stereo_splat_filter",
                     "settings": {
-                        "depth": 0.45616956800222397,
-                        "convergence": 0.45,
+                        "depth": 0.0,
+                        "convergence": 0.3372245892654439,
                         "mode": 0,
                         "window": true,
                         "fill": 0,
@@ -778,173 +778,7 @@
             "deinterlace_mode": 0,
             "deinterlace_field_order": 0,
             "monitoring_type": 0,
-            "private_settings": {},
-            "filters": [
-                {
-                    "prev_ver": 536936450,
-                    "name": "sbs align",
-                    "uuid": "101f367f-888e-4e80-8600-42585a355eb6",
-                    "id": "shader_filter",
-                    "versioned_id": "shader_filter",
-                    "settings": {
-                        "from_file": true,
-                        "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/sbs_align.shader",
-                        "left_x": 0.75,
-                        "left_y": -6.0,
-                        "right_x": 0.0,
-                        "right_y": 0.0
-                    },
-                    "mixers": 0,
-                    "sync": 0,
-                    "flags": 0,
-                    "volume": 1.0,
-                    "balance": 0.5,
-                    "enabled": true,
-                    "muted": false,
-                    "push-to-mute": false,
-                    "push-to-mute-delay": 0,
-                    "push-to-talk": false,
-                    "push-to-talk-delay": 0,
-                    "hotkeys": {},
-                    "deinterlace_mode": 0,
-                    "deinterlace_field_order": 0,
-                    "monitoring_type": 0,
-                    "private_settings": {}
-                },
-                {
-                    "prev_ver": 536936450,
-                    "name": "synth color",
-                    "uuid": "e56f0bfc-c9e6-4655-83ed-aed51988c900",
-                    "id": "shader_filter",
-                    "versioned_id": "shader_filter",
-                    "settings": {
-                        "from_file": true,
-                        "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/synth_color.shader",
-                        "black_level": 0.39457349479198456,
-                        "contrast": 0.28,
-                        "gamma": 0.35,
-                        "saturation": 0.36,
-                        "hue_shift": 0.0,
-                        "chroma_smooth": 0.0,
-                        "soften": 0.0
-                    },
-                    "mixers": 0,
-                    "sync": 0,
-                    "flags": 0,
-                    "volume": 1.0,
-                    "balance": 0.5,
-                    "enabled": true,
-                    "muted": false,
-                    "push-to-mute": false,
-                    "push-to-mute-delay": 0,
-                    "push-to-talk": false,
-                    "push-to-talk-delay": 0,
-                    "hotkeys": {},
-                    "deinterlace_mode": 0,
-                    "deinterlace_field_order": 0,
-                    "monitoring_type": 0,
-                    "private_settings": {}
-                },
-                {
-                    "prev_ver": 536936450,
-                    "name": "palette",
-                    "uuid": "09f9ded0-4d04-40ca-94d5-133f3006981f",
-                    "id": "shader_filter",
-                    "versioned_id": "shader_filter",
-                    "settings": {
-                        "chroma_amount": 0.0,
-                        "dither": 0.0,
-                        "from_file": true,
-                        "hue_amount": 0.64,
-                        "jitter": 0.67,
-                        "luma_amount": 0.29,
-                        "luma_levels": 0.05,
-                        "seed": 1.0,
-                        "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/palette_quantize.shader",
-                        "shimmer": 0.57,
-                        "spread": 0.11,
-                        "temperature": 0.84,
-                        "size": 6.0,
-                        "rotation": 0.9923399090766907,
-                        "hue_pull": 0.6066979616880417,
-                        "skew": 0.0,
-                        "luma_pull": 0.0,
-                        "chroma_pull": 0.0
-                    },
-                    "mixers": 0,
-                    "sync": 0,
-                    "flags": 0,
-                    "volume": 1.0,
-                    "balance": 0.5,
-                    "enabled": true,
-                    "muted": false,
-                    "push-to-mute": false,
-                    "push-to-mute-delay": 0,
-                    "push-to-talk": false,
-                    "push-to-talk-delay": 0,
-                    "hotkeys": {},
-                    "deinterlace_mode": 0,
-                    "deinterlace_field_order": 0,
-                    "monitoring_type": 0,
-                    "private_settings": {}
-                },
-                {
-                    "prev_ver": 536936450,
-                    "name": "pillar box",
-                    "uuid": "28bb9e1c-dc45-415c-a404-e5c0bfc0fb05",
-                    "id": "shader_filter",
-                    "versioned_id": "shader_filter",
-                    "settings": {
-                        "from_file": true,
-                        "override_entire_effect": false,
-                        "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/halfsbs_pillarbox.shader",
-                        "aspect_correction": 1.0,
-                        "half_sbs": true
-                    },
-                    "mixers": 0,
-                    "sync": 0,
-                    "flags": 0,
-                    "volume": 1.0,
-                    "balance": 0.5,
-                    "enabled": true,
-                    "muted": false,
-                    "push-to-mute": false,
-                    "push-to-mute-delay": 0,
-                    "push-to-talk": false,
-                    "push-to-talk-delay": 0,
-                    "hotkeys": {},
-                    "deinterlace_mode": 0,
-                    "deinterlace_field_order": 0,
-                    "monitoring_type": 0,
-                    "private_settings": {}
-                },
-                {
-                    "prev_ver": 536936450,
-                    "name": "mix opacity",
-                    "uuid": "cb9ca5be-f599-42cd-82e0-0dd4d16c4154",
-                    "id": "color_filter",
-                    "versioned_id": "color_filter_v2",
-                    "settings": {
-                        "opacity": 1.0
-                    },
-                    "mixers": 0,
-                    "sync": 0,
-                    "flags": 0,
-                    "volume": 1.0,
-                    "balance": 0.5,
-                    "enabled": true,
-                    "muted": false,
-                    "push-to-mute": false,
-                    "push-to-mute-delay": 0,
-                    "push-to-talk": false,
-                    "push-to-talk-delay": 0,
-                    "hotkeys": {},
-                    "deinterlace_mode": 0,
-                    "deinterlace_field_order": 0,
-                    "monitoring_type": 0,
-                    "private_settings": {}
-                }
-            ]
+            "private_settings": {}
         },
         {
             "prev_ver": 536936450,
@@ -953,7 +787,7 @@
             "id": "syphon-input",
             "versioned_id": "syphon-input",
             "settings": {
-                "uuid": "info.v002.Syphon.8378994E-489A-4C04-AC33-3034EC8989E0",
+                "uuid": "info.v002.Syphon.871F11A7-4116-4760-AB41-BDE22CB11B61",
                 "app_name": "Python",
                 "name": "stereopi-depth"
             },
@@ -981,13 +815,13 @@
             "id": "scene",
             "versioned_id": "scene",
             "settings": {
-                "id_counter": 7,
+                "id_counter": 8,
                 "custom_size": false,
                 "items": [
                     {
                         "name": "Video Capture Device",
                         "source_uuid": "7ae49ae8-97f6-49b5-ada2-30cf28527f7b",
-                        "visible": true,
+                        "visible": false,
                         "locked": false,
                         "rot": 0.0,
                         "scale_ref": {
@@ -1150,8 +984,8 @@
                         "private_settings": {}
                     },
                     {
-                        "name": "StereoPi AV",
-                        "source_uuid": "16c36939-53af-4de8-a8a6-27935bf5a853",
+                        "name": "camera_chain",
+                        "source_uuid": "3dfa2df3-c1a3-48df-8b5a-69db9a9f202b",
                         "visible": true,
                         "locked": false,
                         "rot": 0.0,
@@ -1167,7 +1001,7 @@
                         "crop_top": 0,
                         "crop_right": 0,
                         "crop_bottom": 0,
-                        "id": 7,
+                        "id": 8,
                         "group_item_backup": false,
                         "pos": {
                             "x": 0.0,
@@ -1225,8 +1059,8 @@
                 "libobs.hide_scene_item.3": [],
                 "libobs.show_scene_item.4": [],
                 "libobs.hide_scene_item.4": [],
-                "libobs.show_scene_item.7": [],
-                "libobs.hide_scene_item.7": []
+                "libobs.show_scene_item.8": [],
+                "libobs.hide_scene_item.8": []
             },
             "deinterlace_mode": 0,
             "deinterlace_field_order": 0,
@@ -1468,12 +1302,271 @@
             "monitoring_type": 0,
             "canvas_uuid": "6c69626f-6273-4c00-9d88-c5136d61696e",
             "private_settings": {}
+        },
+        {
+            "prev_ver": 536936450,
+            "name": "camera_chain",
+            "uuid": "3dfa2df3-c1a3-48df-8b5a-69db9a9f202b",
+            "id": "scene",
+            "versioned_id": "scene",
+            "settings": {
+                "id_counter": 1,
+                "custom_size": false,
+                "items": [
+                    {
+                        "name": "StereoPi AV",
+                        "source_uuid": "16c36939-53af-4de8-a8a6-27935bf5a853",
+                        "visible": true,
+                        "locked": false,
+                        "rot": 0.0,
+                        "scale_ref": {
+                            "x": 3840.0,
+                            "y": 1080.0
+                        },
+                        "align": 5,
+                        "bounds_type": 0,
+                        "bounds_align": 0,
+                        "bounds_crop": false,
+                        "crop_left": 0,
+                        "crop_top": 0,
+                        "crop_right": 0,
+                        "crop_bottom": 0,
+                        "id": 1,
+                        "group_item_backup": false,
+                        "pos": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "pos_rel": {
+                            "x": -3.555555582046509,
+                            "y": -1.0
+                        },
+                        "scale": {
+                            "x": 1.0,
+                            "y": 1.0
+                        },
+                        "scale_rel": {
+                            "x": 1.0,
+                            "y": 1.0
+                        },
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_rel": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "scale_filter": "disable",
+                        "blend_method": "default",
+                        "blend_type": "normal",
+                        "show_transition": {
+                            "duration": 0
+                        },
+                        "hide_transition": {
+                            "duration": 0
+                        },
+                        "private_settings": {}
+                    }
+                ]
+            },
+            "mixers": 0,
+            "sync": 0,
+            "flags": 0,
+            "volume": 1.0,
+            "balance": 0.5,
+            "enabled": true,
+            "muted": false,
+            "push-to-mute": false,
+            "push-to-mute-delay": 0,
+            "push-to-talk": false,
+            "push-to-talk-delay": 0,
+            "hotkeys": {
+                "OBSBasic.SelectScene": [],
+                "libobs.show_scene_item.1": [],
+                "libobs.hide_scene_item.1": []
+            },
+            "deinterlace_mode": 0,
+            "deinterlace_field_order": 0,
+            "monitoring_type": 0,
+            "canvas_uuid": "6c69626f-6273-4c00-9d88-c5136d61696e",
+            "private_settings": {},
+            "filters": [
+                {
+                    "prev_ver": 536936450,
+                    "name": "sbs align",
+                    "uuid": "9faeefb2-5cea-41a4-9e77-9ce5d85e5873",
+                    "id": "shader_filter",
+                    "versioned_id": "shader_filter",
+                    "settings": {
+                        "expand_top": 0,
+                        "from_file": true,
+                        "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/sbs_align.shader",
+                        "left_x": -71.54,
+                        "left_y": -25.0,
+                        "right_x": 71.54,
+                        "right_y": 24.0
+                    },
+                    "mixers": 0,
+                    "sync": 0,
+                    "flags": 0,
+                    "volume": 1.0,
+                    "balance": 0.5,
+                    "enabled": true,
+                    "muted": false,
+                    "push-to-mute": false,
+                    "push-to-mute-delay": 0,
+                    "push-to-talk": false,
+                    "push-to-talk-delay": 0,
+                    "hotkeys": {},
+                    "deinterlace_mode": 0,
+                    "deinterlace_field_order": 0,
+                    "monitoring_type": 0,
+                    "private_settings": {}
+                },
+                {
+                    "prev_ver": 536936450,
+                    "name": "synth color",
+                    "uuid": "89d5fd26-9fbf-4538-90c2-0b92140d94d4",
+                    "id": "shader_filter",
+                    "versioned_id": "shader_filter",
+                    "settings": {
+                        "from_file": true,
+                        "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/synth_color.shader",
+                        "black_level": 0.39457349479198456,
+                        "contrast": 0.28,
+                        "gamma": 0.35,
+                        "saturation": 0.36,
+                        "hue_shift": 0.0,
+                        "chroma_smooth": 0.0,
+                        "soften": 0.0
+                    },
+                    "mixers": 0,
+                    "sync": 0,
+                    "flags": 0,
+                    "volume": 1.0,
+                    "balance": 0.5,
+                    "enabled": true,
+                    "muted": false,
+                    "push-to-mute": false,
+                    "push-to-mute-delay": 0,
+                    "push-to-talk": false,
+                    "push-to-talk-delay": 0,
+                    "hotkeys": {},
+                    "deinterlace_mode": 0,
+                    "deinterlace_field_order": 0,
+                    "monitoring_type": 0,
+                    "private_settings": {}
+                },
+                {
+                    "prev_ver": 536936450,
+                    "name": "palette",
+                    "uuid": "61f68d20-88af-4f42-a0d3-91d7e5a2dcd5",
+                    "id": "shader_filter",
+                    "versioned_id": "shader_filter",
+                    "settings": {
+                        "chroma_amount": 0.0,
+                        "dither": 0.0,
+                        "from_file": true,
+                        "hue_amount": 0.64,
+                        "jitter": 0.67,
+                        "luma_amount": 0.29,
+                        "luma_levels": 0.05,
+                        "seed": 1.0,
+                        "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/palette_quantize.shader",
+                        "shimmer": 0.57,
+                        "spread": 0.11,
+                        "temperature": 0.84,
+                        "size": 6.0,
+                        "rotation": 0.9923399090766907,
+                        "hue_pull": 0.6066979616880417,
+                        "skew": 0.0,
+                        "luma_pull": 0.0,
+                        "chroma_pull": 0.0
+                    },
+                    "mixers": 0,
+                    "sync": 0,
+                    "flags": 0,
+                    "volume": 1.0,
+                    "balance": 0.5,
+                    "enabled": true,
+                    "muted": false,
+                    "push-to-mute": false,
+                    "push-to-mute-delay": 0,
+                    "push-to-talk": false,
+                    "push-to-talk-delay": 0,
+                    "hotkeys": {},
+                    "deinterlace_mode": 0,
+                    "deinterlace_field_order": 0,
+                    "monitoring_type": 0,
+                    "private_settings": {}
+                },
+                {
+                    "prev_ver": 536936450,
+                    "name": "pillar box",
+                    "uuid": "48635ce1-0ace-42cc-bfca-2f68b74e83c7",
+                    "id": "shader_filter",
+                    "versioned_id": "shader_filter",
+                    "settings": {
+                        "from_file": true,
+                        "override_entire_effect": false,
+                        "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/halfsbs_pillarbox.shader",
+                        "aspect_correction": 1.0,
+                        "half_sbs": true
+                    },
+                    "mixers": 0,
+                    "sync": 0,
+                    "flags": 0,
+                    "volume": 1.0,
+                    "balance": 0.5,
+                    "enabled": true,
+                    "muted": false,
+                    "push-to-mute": false,
+                    "push-to-mute-delay": 0,
+                    "push-to-talk": false,
+                    "push-to-talk-delay": 0,
+                    "hotkeys": {},
+                    "deinterlace_mode": 0,
+                    "deinterlace_field_order": 0,
+                    "monitoring_type": 0,
+                    "private_settings": {}
+                },
+                {
+                    "prev_ver": 536936450,
+                    "name": "mix opacity",
+                    "uuid": "b6197625-543c-457e-9aee-08ff0d7dd8af",
+                    "id": "color_filter",
+                    "versioned_id": "color_filter_v2",
+                    "settings": {
+                        "opacity": 1.0
+                    },
+                    "mixers": 0,
+                    "sync": 0,
+                    "flags": 0,
+                    "volume": 1.0,
+                    "balance": 0.5,
+                    "enabled": true,
+                    "muted": false,
+                    "push-to-mute": false,
+                    "push-to-mute-delay": 0,
+                    "push-to-talk": false,
+                    "push-to-talk-delay": 0,
+                    "hotkeys": {},
+                    "deinterlace_mode": 0,
+                    "deinterlace_field_order": 0,
+                    "monitoring_type": 0,
+                    "private_settings": {}
+                }
+            ]
         }
     ],
     "groups": [],
     "scene_order": [
         {
             "name": "Scene"
+        },
+        {
+            "name": "camera_chain"
         },
         {
             "name": "yt_inset"
@@ -1511,7 +1604,14 @@
             "fade_to_black": true
         }
     ],
-    "saved_projectors": [],
+    "saved_projectors": [
+        {
+            "monitor": 3,
+            "type": 2,
+            "geometry": "AdnQywADAAAAABHAAAAAAAAAIL8AAAQ3AAARwAAAAAAAACC/AAAENwAAAAMABAAADwAAABHAAAAAAAAAIL8AAAQ3",
+            "alwaysOnTopOverridden": false
+        }
+    ],
     "preview_locked": false,
     "scaling_enabled": true,
     "scaling_level": -20,
