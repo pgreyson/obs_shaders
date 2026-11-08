@@ -57,28 +57,26 @@ uniform float right_y<
 uniform bool mask_common<
     string label = "Mask to the region both eyes can see";
 > = true;
-// The shift mask only covers the convergence offset itself. Extra crop per edge
-// is manual: one slider for each edge of each eye (px of this surface), plus
-// top/bottom applied to both eyes. Trim until nothing is visible to one eye only.
-uniform float mask_left_eye_left<
-    string label = "Left eye: extra crop on its LEFT edge (px)";
+// Stereo WINDOW on top of the shift mask: the same width in both eyes, moved as a
+// pair by window_shift, and slid apart by window_offset — the left eye's window
+// moves right by offset/2 while the right eye's moves left by offset/2 (positive =
+// window floats in front of the screen, which is what near content at the frame
+// edges needs; negative = behind). window_width 0 = no extra crop. Units: px of
+// this surface. Top/bottom crops apply to both eyes.
+uniform float window_width<
+    string label = "Stereo window width, both eyes (px; 0 = off)";
     string widget_type = "slider";
-    float minimum = 0.0; float maximum = 600.0; float step = 1.0;
+    float minimum = 0.0; float maximum = 1920.0; float step = 1.0;
 > = 0.0;
-uniform float mask_left_eye_right<
-    string label = "Left eye: extra crop on its RIGHT edge (px)";
+uniform float window_shift<
+    string label = "Stereo window shift, both eyes (px, + = right)";
     string widget_type = "slider";
-    float minimum = 0.0; float maximum = 600.0; float step = 1.0;
+    float minimum = -600.0; float maximum = 600.0; float step = 1.0;
 > = 0.0;
-uniform float mask_right_eye_left<
-    string label = "Right eye: extra crop on its LEFT edge (px)";
+uniform float window_offset<
+    string label = "Stereo window L/R offset (px, + = floats in front)";
     string widget_type = "slider";
-    float minimum = 0.0; float maximum = 600.0; float step = 1.0;
-> = 0.0;
-uniform float mask_right_eye_right<
-    string label = "Right eye: extra crop on its RIGHT edge (px)";
-    string widget_type = "slider";
-    float minimum = 0.0; float maximum = 600.0; float step = 1.0;
+    float minimum = -400.0; float maximum = 400.0; float step = 1.0;
 > = 0.0;
 uniform float mask_top<
     string label = "Both eyes: extra crop at the TOP (px)";
@@ -107,8 +105,11 @@ float4 mainImage(VertData v_in) : TARGET
         // the common window is the intersection over both eyes
         float x0 = max(max(0.0, left_x), max(0.0, right_x));
         float x1 = eye_px.x + min(min(0.0, left_x), min(0.0, right_x));
-        x0 += lerp(mask_right_eye_left, mask_left_eye_left, is_left);
-        x1 -= lerp(mask_right_eye_right, mask_left_eye_right, is_left);
+        if (window_width > 0.5) {
+            float c = eye_px.x * 0.5 + window_shift + (is_left > 0.5 ? 0.5 : -0.5) * window_offset;
+            x0 = max(x0, c - window_width * 0.5);
+            x1 = min(x1, c + window_width * 0.5);
+        }
         float y0 = max(max(0.0, left_y), max(0.0, right_y)) + mask_top;
         float y1 = eye_px.y + min(min(0.0, left_y), min(0.0, right_y)) - mask_bottom;
         if (p.x < x0 || p.x > x1 || p.y < y0 || p.y > y1)

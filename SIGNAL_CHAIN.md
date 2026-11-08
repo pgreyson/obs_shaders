@@ -49,10 +49,10 @@ Virtual Camera for the relays. Scene `Scene`, bottom to top:
    alone would leave it mirrored with the eyes crossed). Scene filters: `sbs align` (convergence/trim, **canvas px = 2× camera px**;
    slider ±400; **`mask_common`** on: after the shift, each eye is cropped to the
    region BOTH eyes can see — the stereo window — so no pixel is visible to one eye only;
-   six manual crop sliders on top: `mask_left_eye_left/right`,
-   `mask_right_eye_left/right`, `mask_top`, `mask_bottom` (px of the surface) — the user trims
-   these by eye until nothing is visible to one eye only; near content spills at the OUTER
-   edges (left of L, right of R), far content at the INNER edges) → `synth color` (soften 0) → `palette` → `pillar box` (aspect 1.0) →
+   a stereo WINDOW on top: `window_width` (same in both eyes), `window_shift`
+   (both eyes together), `window_offset` (left window minus right window — the floating-window
+   depth, + = in front of the screen), plus `mask_top` / `mask_bottom`. The user trims these by
+   eye; room is currently width 1339, shift −10, offset +28) → `synth color` (soften 0) → `palette` → `pillar box` (aspect 1.0) →
    `mix opacity` → **`camera key`** ([`camera_key.shader`](camera_key.shader): luma key
    `luma_min` 0.07 / ramp 0.012 — the grading lifts true black to luma 0.063 — plus a
    morphological hole fill: a keyed-out pixel is kept when foreground is found within
@@ -87,12 +87,12 @@ Audio: `Mic/Aux` unmuted, *monitor and output*, monitoring device = system defau
 
 ### Common stereo window (program-wide)
 `Scene` itself carries one last filter, **`stereo window`** ([`stereo_window.shader`](stereo_window.shader)):
-one value per edge of each eye (`left_eye_left`, `left_eye_right`, `right_eye_left`,
-`right_eye_right`) plus `margin_top` / `margin_bottom`, so synth, stage and room share one
-field of view. `tools/stereo_window.py auto` sizes it from the ENABLED layers (synth pillar
-box → (1−aspect)/2 of the eye on every edge; each camera layer → its shift + its per-edge
-mask sliders) and takes the max per edge; `set LL LR RL RR TOP BOTTOM` forces values.
-Re-run `auto` after toggling layers or trimming any layer's masks.
+the same model as the layers: `window_width` (identical in both eyes), `window_shift`,
+`window_offset` (floating-window depth), `margin_top`, `margin_bottom`. `tools/stereo_window.py
+auto` intersects the ENABLED layers' per-eye windows (synth pillar box, each camera layer's
+shift mask ∩ its own window), equalises the two eye widths around their centres and writes
+width/shift/offset; `set WIDTH SHIFT OFFSET TOP BOTTOM` forces values. Re-run `auto` after
+toggling layers or re-trimming a layer.
 
 ## Relays (each 1920×1080, source = main's virtual camera, **no shaders**)
 

@@ -1166,12 +1166,11 @@
                     "settings": {
                         "from_file": true,
                         "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/stereo_window.shader",
-                        "left_eye_left": 295.0,
-                        "left_eye_right": 287.0,
-                        "right_eye_left": 228.0,
-                        "right_eye_right": 276.0,
                         "margin_top": 62.0,
-                        "margin_bottom": 77.0
+                        "margin_bottom": 77.0,
+                        "window_width": 1339.0,
+                        "window_shift": -10.0,
+                        "window_offset": 28.0
                     },
                     "mixers": 0,
                     "sync": 0,
@@ -1986,12 +1985,11 @@
                         "right_x": 143.0,
                         "right_y": 48.0,
                         "mask_common": true,
-                        "mask_left_eye_left": 0.0,
-                        "mask_left_eye_right": 0.0,
-                        "mask_right_eye_left": 0.0,
-                        "mask_right_eye_right": 0.0,
                         "mask_top": 0.0,
-                        "mask_bottom": 0.0
+                        "mask_bottom": 0.0,
+                        "window_width": 0.0,
+                        "window_shift": 0.0,
+                        "window_offset": 0.0
                     },
                     "mixers": 0,
                     "sync": 0,
@@ -2284,12 +2282,11 @@
                         "right_x": 75.66,
                         "right_y": -76.71,
                         "mask_common": true,
-                        "mask_left_eye_left": 219.0,
-                        "mask_left_eye_right": 211.0,
-                        "mask_right_eye_left": 152.0,
-                        "mask_right_eye_right": 200.0,
                         "mask_top": 0.0,
-                        "mask_bottom": 0.0
+                        "mask_bottom": 0.0,
+                        "window_width": 1339.0,
+                        "window_shift": -10.0,
+                        "window_offset": 28.0
                     },
                     "mixers": 0,
                     "sync": 0,
