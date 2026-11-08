@@ -46,8 +46,10 @@ async def mode_on():
     snap = {}
     for nm, c in cfg['obs_instances'].items():
         ws = await connect(c)
-        fl = (await ws.call(simpleobsws.Request("GetSourceFilterList",
-              {"sourceName": SOURCE}))).responseData["filters"]
+        r = await ws.call(simpleobsws.Request("GetSourceFilterList", {"sourceName": SOURCE}))
+        if not r.ok():   # relays no longer carry the chain (removed 2026-11-07) — only main does
+            print(f"[{nm}] no '{SOURCE}' here; skipping"); await ws.disconnect(); continue
+        fl = r.responseData["filters"]
         enabled = {f["filterName"]: f["filterEnabled"] for f in fl}
         pb = (await ws.call(simpleobsws.Request("GetSourceFilter",
               {"sourceName": SOURCE, "filterName": "pillar box"}))).responseData["filterSettings"]
@@ -77,6 +79,8 @@ async def mode_off():
         s = snap.get(nm, {"enabled": FALLBACK, "aspect": FALLBACK_ASPECT,
                           "soften": FALLBACK_SOFTEN.get(nm, 0.5)})
         ws = await connect(c)
+        if not (await ws.call(simpleobsws.Request("GetSourceFilterList", {"sourceName": SOURCE}))).ok():
+            print(f"[{nm}] no '{SOURCE}' here; skipping"); await ws.disconnect(); continue
         for f, en in s["enabled"].items():
             await ws.call(simpleobsws.Request("SetSourceFilterEnabled",
                 {"sourceName": SOURCE, "filterName": f, "filterEnabled": bool(en)}))
@@ -96,8 +100,10 @@ async def mode_off():
 async def status():
     for nm, c in cfg['obs_instances'].items():
         ws = await connect(c)
-        fl = (await ws.call(simpleobsws.Request("GetSourceFilterList",
-              {"sourceName": SOURCE}))).responseData["filters"]
+        r = await ws.call(simpleobsws.Request("GetSourceFilterList", {"sourceName": SOURCE}))
+        if not r.ok():
+            print(f"[{nm}] no '{SOURCE}' here"); await ws.disconnect(); continue
+        fl = r.responseData["filters"]
         sc = (await ws.call(simpleobsws.Request("GetSourceFilter",
               {"sourceName": SOURCE, "filterName": "synth color"}))).responseData["filterSettings"]
         chain = " -> ".join(f"{f['filterName']}{'' if f['filterEnabled'] else '[OFF]'}" for f in fl)
