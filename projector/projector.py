@@ -8,6 +8,10 @@
                          shows up here (e.g. "LTV") even while its display is asleep
   audio NAME_SUBSTRING   set the profile's monitoring device to that output, then
                          restart the instance so it takes effect
+  kick                   re-arm audio monitoring: toggle Mic/Aux monitor type off/on so OBS
+                         re-opens the monitoring device. Needed when the instance started while
+                         the LTV was off (log: "audio_monitor_init: start failed: -66680") —
+                         OBS never retries on its own. `open` runs this automatically.
   close                  close all projector windows of this instance
   show                   bring this instance's CONTROL window to the front (all four
                          instances are called "OBS"; System Events must be matched by pid)
@@ -89,13 +93,35 @@ async def cmd_status(_):
         print(f"  {x['monitorIndex']}: {x['monitorName']} {x['monitorWidth']}x{x['monitorHeight']} @({x['monitorPositionX']},{x['monitorPositionY']})")
 
 
+async def kick_monitor(o, name="Mic/Aux"):
+    """Toggle the source's monitor type off and back so OBS re-creates its audio monitor
+    on the CURRENT monitoring device. OBS tries to open that device once at startup; if
+    the projector (and its HDMI audio) was off, audio_monitor_init fails (-66680) and the
+    source stays silent forever even though meters show signal."""
+    cur = (await o.call("GetInputAudioMonitorType", {"inputName": name}))["monitorType"]
+    if cur == "OBS_MONITORING_TYPE_NONE":
+        print(f"{name}: monitoring is NONE in this collection — nothing to re-arm")
+        return
+    await o.call("SetInputAudioMonitorType", {"inputName": name, "monitorType": "OBS_MONITORING_TYPE_NONE"})
+    await asyncio.sleep(0.7)
+    await o.call("SetInputAudioMonitorType", {"inputName": name, "monitorType": cur})
+    print(f"{name}: audio monitor re-armed ({cur.split('TYPE_')[-1].lower()})")
+
+
+async def cmd_kick(_):
+    async with WS() as o:
+        await kick_monitor(o)
+
+
 async def cmd_open(a):
     async with WS() as o:
         mons = (await o.call("GetMonitorList"))["monitors"]
         m = pick_monitor(mons, a.monitor)
         await o.call("OpenVideoMixProjector", {"videoMixType": "OBS_WEBSOCKET_VIDEO_MIX_TYPE_PROGRAM",
                                                "monitorIndex": m["monitorIndex"]})
-    print(f"program projector opened on monitor {m['monitorIndex']}: {m['monitorName']} {m['monitorWidth']}x{m['monitorHeight']}")
+        print(f"program projector opened on monitor {m['monitorIndex']}: {m['monitorName']} {m['monitorWidth']}x{m['monitorHeight']}")
+        await asyncio.sleep(1.0)
+        await kick_monitor(o)   # the display is on, so its HDMI audio exists now too
 
 
 def list_devices():
@@ -180,6 +206,7 @@ def main():
     sub.add_parser("devices").set_defaults(fn=cmd_devices)
     sp = sub.add_parser("audio"); sp.add_argument("name"); sp.add_argument("--monitor"); sp.add_argument("--open", action="store_true")
     sp.set_defaults(fn=cmd_audio)
+    sub.add_parser("kick").set_defaults(fn=cmd_kick)
     sub.add_parser("close").set_defaults(fn=cmd_close)
     sub.add_parser("show").set_defaults(fn=cmd_show)
     a = p.parse_args()

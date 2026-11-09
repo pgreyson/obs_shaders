@@ -140,6 +140,11 @@ chain` repeatedly and **leaks memory without bound** (2026-11-08: the projector
 instance reached 19 GB, swap 21 GB, and main could no longer create GL surfaces —
 the Filters dialog preview went blank). Fix: restart that instance
 (`projector/projector.py` relaunch or `launch_dual.sh`); swap drains immediately.
+
+**Projector silent although meters move:** the instance started while the LTV was off, so its
+HDMI audio device did not exist and OBS's one-shot monitor init failed (log: `audio_monitor_init:
+start failed: -66680`); OBS never retries. `projector/projector.py kick` toggles Mic/Aux monitoring
+off/on to re-open the device (no restart); `open` does it automatically.
 Check with `ps -o rss= -p <pid>` when the machine feels wrong.
 
 ## Which OBS is which (Dock / app switcher)
