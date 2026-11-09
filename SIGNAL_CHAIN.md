@@ -38,8 +38,11 @@ Virtual Camera for the relays. Scene `Scene`, bottom to top:
 1. **Synth layer** — source `Video Capture Device` (Elgato), stretched to 3840×1080.
    Chain: `test pattern`[off] → `sbs align`[off] → `synth color` → `palette` →
    `depth bake` → `field smooth h` → `field smooth v` → `stereo splat` (native
-   plugin) → `stereo soften`[off] → `stereo displace`[off] → `pillar box`.
-   Output: full-SBS stereo, one eye per 1920 px half.
+   plugin) → `stereo soften`[off] → `stereo displace`[off] → `pillar box`[off].
+   Output: full-SBS stereo, one eye per 1920 px half. The 4:3 synth is STRETCHED to the
+   16:9 eye (2026-11-08, user's choice: the cameras are 16:9 and pillar boxing wasted the
+   projector's width); `pillar box` sits at aspect 1.0 and disabled — a passthrough pass
+   costs ~4 ms of the 33 ms frame budget, so unused filters stay OFF, not neutral.
 2. **Camera layers** — nested scenes **`stage`** (raw `StereoPi stage`) and
    **`room`** (raw `StereoPi room`), each with the camera stretched to
    3840×1080 inside it; room sits below stage in `Scene`. Each scene carries the same
@@ -56,7 +59,7 @@ Virtual Camera for the relays. Scene `Scene`, bottom to top:
    the layer beneath instead of ending in a hard line. `synth_color` and `palette_quantize`
    now preserve alpha so the feather survives the chain (`pillar box` always did; `camera
    key` multiplies it). The user trims these by eye; room is currently width 1339, shift −10,
-   offset +28, vignette 60) → `synth color` (soften 0) → `palette` → `pillar box` (aspect 1.0) →
+   offset +28, vignette 60) → `synth color` (soften 0) → `palette` → `pillar box`[off, passthrough] →
    `mix opacity` → **`camera key`** ([`camera_key.shader`](camera_key.shader): luma key
    `luma_min` 0.07 / ramp 0.012 — the grading lifts true black to luma 0.063 — plus a
    morphological hole fill: a keyed-out pixel is kept when foreground is found within
@@ -89,8 +92,11 @@ Audio: `Mic/Aux` unmuted, *monitor and output*, monitoring device = system defau
 - `tools/sbs_mode.py on|off` switches main's synth chain for SBS *input* (camera on the
   Elgato) — not used in the current topology; harmless.
 
-### Common stereo window (program-wide)
-`Scene` itself carries one last filter, **`stereo window`** ([`stereo_window.shader`](stereo_window.shader)):
+### Common stereo window (program-wide) — currently OFF
+`Scene` itself carries one last filter, **`stereo window`** (disabled 2026-11-08: with the synth
+full-width and every camera layer masking its own eyes identically, the program-wide window only
+narrowed the frame and cost a render pass; re-enable it with `tools/stereo_window.py set …` if a
+floating window for the whole program is wanted again) ([`stereo_window.shader`](stereo_window.shader)):
 the same model as the layers: `window_width` (identical in both eyes), `window_shift`,
 `window_offset` (floating-window depth), `margin_top`, `margin_bottom`. `tools/stereo_window.py
 auto` intersects the ENABLED layers' per-eye windows (synth pillar box, each camera layer's
