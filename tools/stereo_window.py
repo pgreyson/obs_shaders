@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 """stereo_window: one common stereo window on main's program scene.
 
-  stereo_window.py auto            derive margins from the layers: synth pillar box
+  stereo_window.py auto [--vertical]
+                                   derive the window from the layers: synth pillar box
                                    ((1-aspect)/2 of the eye), each camera layer's shift mask ∩ its own
-                                   window_width/shift/offset; intersect, equalise the eye widths
+                                   window_width/shift/offset; intersect, equalise the eye widths.
+                                   Top/bottom margins stay 0: each camera layer's sbs align already masks
+                                   both eyes to the same vertical span, so cropping the whole program
+                                   (and the synth under it) only loses height. --vertical crops anyway.
   stereo_window.py set WIDTH SHIFT OFFSET TOP BOTTOM   explicit values (canvas px): one window
                                    width for both eyes, shared shift (+ = right), L/R offset (+ = floats in
                                    front of the screen), top and bottom crops
@@ -71,8 +75,10 @@ async def main():
         Rw = [max(t[2][0] for t in on), min(t[2][1] for t in on)]
         width = round(min(L[1] - L[0], Rw[1] - Rw[0]))
         cL, cR = (L[0] + L[1]) / 2, (Rw[0] + Rw[1]) / 2        # equalise widths around each eye's centre
+        vert = "--vertical" in sys.argv
         vals = dict(window_width=width, window_shift=round((cL + cR) / 2 - EYE_W / 2), window_offset=round(cL - cR),
-                    margin_top=round(max(t[3] for t in on)), margin_bottom=round(max(t[4] for t in on)))
+                    margin_top=round(max(t[3] for t in on)) if vert else 0,
+                    margin_bottom=round(max(t[4] for t in on)) if vert else 0)
     elif cmd == "set":
         vals = dict(zip(KEYS, (float(v) for v in sys.argv[2:7])))
     else:

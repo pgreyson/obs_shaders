@@ -95,7 +95,9 @@ the same model as the layers: `window_width` (identical in both eyes), `window_s
 `window_offset` (floating-window depth), `margin_top`, `margin_bottom`. `tools/stereo_window.py
 auto` intersects the ENABLED layers' per-eye windows (synth pillar box, each camera layer's
 shift mask ∩ its own window), equalises the two eye widths around their centres and writes
-width/shift/offset; `set WIDTH SHIFT OFFSET TOP BOTTOM` forces values. Re-run `auto` after
+width/shift/offset and leaves `margin_top`/`margin_bottom` at 0 (each camera layer's sbs align
+already masks both eyes to one vertical span, so a program-wide top/bottom crop only costs height;
+`auto --vertical` crops anyway); `set WIDTH SHIFT OFFSET TOP BOTTOM` forces values. Re-run `auto` after
 toggling layers or re-trimming a layer.
 
 ## Relays (each 1920×1080, source = main's virtual camera, **no shaders**)
