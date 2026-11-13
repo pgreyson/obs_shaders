@@ -35,7 +35,7 @@ set -euo pipefail
 # camera/mic permission; main keeps the stock id for the Virtual Camera extension.
 # Plugin updates must be applied to each.
 OBS_APP="/Applications/OBS.app"               # fallback
-OBS_APP_MAIN="/Applications/OBS Main.app"
+OBS_APP_MAIN="/Applications/OBS.app"         # NOT the clone: the Virtual Camera system extension only installs from the Apple-signed bundle
 OBS_APP_TWITCH="/Applications/OBS Twitch.app"
 OBS_APP_YOUTUBE="/Applications/OBS YouTube.app"
 OBS_APP_PROJECTOR="/Applications/OBS Projector.app"

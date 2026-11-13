@@ -162,8 +162,9 @@ Each instance runs from its own renamed clone of `OBS.app`: **OBS Main**, **OBS 
 **OBS YouTube**, **OBS Projector** (`/Applications/*.app`). They are APFS clones
 (`cp -cR`, no extra disk) with `CFBundleName`/`CFBundleDisplayName` changed and the bundle
 ad-hoc re-signed (`codesign --force --deep --sign -`). **Bundle ids differ** (2026-11-13):
-`OBS Main` keeps `com.obsproject.obs-studio` (the Virtual Camera system extension is bound to
-it), the relays are `com.obsproject.obs-studio.twitch` / `.youtube` / `.projector`. macOS keeps
+main must run from the STOCK `/Applications/OBS.app` (launching it from `OBS Main.app` on 2026-11-13 produced
+"Virtual camera not installed": the camera system extension is only accepted from the Apple/OBS-signed
+bundle, an ad-hoc re-signed clone cannot activate it — so `OBS Main.app` is unused), the relays are `com.obsproject.obs-studio.twitch` / `.youtube` / `.projector`. macOS keeps
 ONE camera/microphone permission record per bundle id, so while all four shared the id each
 differently-signed clone overwrote the others' grant: every launch re-prompted "OBS Twitch
 would like to access the microphone", and until Allow was clicked the instance sat in
