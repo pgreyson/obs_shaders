@@ -149,11 +149,18 @@ class OBS:
         return (await self.call("GetStreamServiceSettings"))["streamServiceSettings"]
 
     async def set_stream_key(self, key: str, server: str = RTMPS_INGEST) -> None:
-        settings = await self.service_settings()
-        settings.update({"key": key, "server": server, "service": "YouTube - RTMPS", "protocol": "RTMPS"})
+        # Keep the relay on the CUSTOM service type. Switching it to the built-in
+        # "YouTube - RTMPS" (rtmp_common) makes OBS's frontend open its YouTube dock on
+        # stream start, which needs CEF and SIGSEGVs a `--multi` relay a few seconds after
+        # the RTMP connection succeeds (crashed the relay twice on 2026-11-13).
+        cur = await self.call("GetStreamServiceSettings")
+        settings = dict(cur.get("streamServiceSettings") or {})
+        settings.update({"key": key, "server": server, "use_auth": False, "bwtest": False})
+        for k in ("service", "protocol", "stream_key_link"):
+            settings.pop(k, None)
         await self.call(
             "SetStreamServiceSettings",
-            {"streamServiceType": "rtmp_common", "streamServiceSettings": settings},
+            {"streamServiceType": "rtmp_custom", "streamServiceSettings": settings},
         )
 
     async def start_stream(self) -> None:

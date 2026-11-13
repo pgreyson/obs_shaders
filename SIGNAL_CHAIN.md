@@ -141,6 +141,20 @@ instance reached 19 GB, swap 21 GB, and main could no longer create GL surfaces 
 the Filters dialog preview went blank). Fix: restart that instance
 (`projector/projector.py` relaunch or `launch_dual.sh`); swap drains immediately.
 
+**YouTube relay SIGSEGVs ~6 s after the RTMP connection succeeds:** its service was switched to the built-in
+`YouTube - RTMPS` (`rtmp_common`) — on 2026-11-13 by `yt_live.py`'s stream-key push. That service makes the
+frontend open its YouTube dock on stream start (needs CEF → crash in a `--multi` relay). The relay must stay
+`rtmp_custom` (server `rtmps://a.rtmps.youtube.com:443/live2` + key); `yt_live.py` now preserves that type.
+After a crash macOS may reopen the app WITHOUT its `--multi …` arguments — look for an argument-less `OBS YouTube`
+process and kill it before relaunching properly.
+
+**Camera sources frozen in main while the Pis answer ping/HTTP:** VideoCore firmware mailbox wedge (both Pis on
+2026-11-13, room alone on 11-09): on the Pi console `vcgencmd measure_temp` prints nothing and `dmesg -T` shows
+hourly `mbox_send_message returned -62`. `?command=reboot` on each affected Pi; frames resume in OBS by themselves.
+
+**Relays show a frozen Virtual Camera after main was relaunched with a different OBS build:** the camera system
+extension got replaced and the relays' capture sessions stayed on the dead one — relaunch the relays.
+
 **No audio anywhere, meters dead in every instance (2026-11-10, 2026-11-12):** the Elgato's
 CoreAudio capture stalls inside OBS with nothing in the log — CoreAudio shows no process has the
 Elgato open while a recording from any other process works. Fix: re-apply the same `device_id` to
