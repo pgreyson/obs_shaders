@@ -119,6 +119,13 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 ( sleep 12; "$HERE/control_bridge/.venv/bin/python3" "$HERE/projector/projector.py" open \
       || echo "  (projector display not found — plug it in and run: projector/projector.py open)" ) &
 
+# Audio watchdog: re-arms each instance's Elgato audio capture when it silently stalls
+# (tools/audio_watchdog.py). Detached so it outlives this shell; skipped if already running.
+if ! pgrep -f tools/audio_watchdog.py >/dev/null; then
+  nohup "$HERE/control_bridge/.venv/bin/python3" "$HERE/tools/audio_watchdog.py" > /tmp/audio_watchdog.log 2>&1 &
+  echo "audio watchdog started (log: /tmp/audio_watchdog.log)"
+fi
+
 echo
 echo "All four OBS instances launched."
 echo "Viture instance  : profile=$VITURE_PROFILE, collection=$VITURE_COLLECTION, ws=:$VITURE_WS_PORT"

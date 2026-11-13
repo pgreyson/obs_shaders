@@ -141,6 +141,15 @@ instance reached 19 GB, swap 21 GB, and main could no longer create GL surfaces 
 the Filters dialog preview went blank). Fix: restart that instance
 (`projector/projector.py` relaunch or `launch_dual.sh`); swap drains immediately.
 
+**No audio anywhere, meters dead in every instance (2026-11-10, 2026-11-12):** the Elgato's
+CoreAudio capture stalls inside OBS with nothing in the log — CoreAudio shows no process has the
+Elgato open while a recording from any other process works. Fix: re-apply the same `device_id` to
+`Mic/Aux` with `SetInputSettings` (the source closes and re-opens the device, ~18 s). Never bounce it
+through `default` (= OWL → CV noise on the streams). `tools/audio_watchdog.py` (started by
+`launch_dual.sh`, log `/tmp/audio_watchdog.log`) watches `InputVolumeMeters` on all four instances
+and does this automatically after 30 s without levels. If the re-init itself hangs, look for a macOS
+microphone-permission dialog — each renamed OBS bundle is its own identity to the privacy system.
+
 **Projector silent although meters move:** the instance started while the LTV was off, so its
 HDMI audio device did not exist and OBS's one-shot monitor init failed (log: `audio_monitor_init:
 start failed: -66680`); OBS never retries. `projector/projector.py kick` toggles Mic/Aux monitoring
