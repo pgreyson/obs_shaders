@@ -260,15 +260,20 @@ class CameraAlign:
             log.info(f"camera_align: mode {mode} {ctl}")
             self._mode_logged = mode
         st = self._read(self.path, self.max_age)
-        if mode == "off" or st is None:
+        # `front` places the plane at an ABSOLUTE disparity: it needs no camera stats, so it
+        # keeps working while the depth sidecar is stopped (the camera numbers are info only).
+        if mode == "off" or (st is None and mode != "front"):
             if self.active:
                 log.info("camera_align: " + ("mode off" if mode == "off" else "stats stale")
                          + " -> knob drives splat depth directly")
             self.active = False
             self.last = None
             return None
-        p5, p95 = float(st["p5"]), float(st["p95"])
-        span = max(p95 - p5, 0.5)
+        if st is None:
+            p5, p95 = float("nan"), float("nan")
+        else:
+            p5, p95 = float(st["p5"]), float(st["p95"])
+        span = max(p95 - p5, 0.5) if st is not None else 0.5
         clamped = []
         if mode == "match":
             f0 = self.canvas_scale * span / (2.0 * self.eye_px)
