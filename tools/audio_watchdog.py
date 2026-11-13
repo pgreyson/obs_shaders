@@ -43,10 +43,21 @@ def password():
 
 
 def elgato_present():
-    addr = co.PropAddr(co.DEVICES, co.GLOBAL, 0)
-    size = c_uint32(co._size(co.SYSTEM_OBJECT, addr)); ids = (c_uint32 * (size.value // 4))()
-    co.CA.AudioObjectGetPropertyData(co.SYSTEM_OBJECT, byref(addr), 0, None, byref(size), ids)
-    return any(DEVICE_MATCH in (co._cfstring(i, co.NAME) or "") for i in ids)
+    """Enumerate in a fresh subprocess: a long-lived process without a CFRunLoop keeps the
+    CoreAudio HAL's device list frozen at its first query (seen 2026-11-13: the watchdog
+    reported the Elgato missing for an hour while every new process listed it)."""
+    import subprocess
+    code = ("import sys; sys.path.insert(0, %r); import coreaudio_outputs as co\n"
+            "from ctypes import byref, c_uint32\n"
+            "addr = co.PropAddr(co.DEVICES, co.GLOBAL, 0)\n"
+            "size = c_uint32(co._size(co.SYSTEM_OBJECT, addr)); ids = (c_uint32 * (size.value // 4))()\n"
+            "co.CA.AudioObjectGetPropertyData(co.SYSTEM_OBJECT, byref(addr), 0, None, byref(size), ids)\n"
+            "print(int(any(%r in (co._cfstring(i, co.NAME) or '') for i in ids)))") % (os.path.join(HERE, "..", "projector"), DEVICE_MATCH)
+    try:
+        out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=15).stdout.strip()
+        return out.endswith("1")
+    except Exception as e:
+        log(f"device enumeration failed ({e!r}); assuming present"); return True
 
 
 async def watch(port, name, pw):

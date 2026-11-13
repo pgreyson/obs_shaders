@@ -162,6 +162,14 @@ Each instance runs from its own renamed clone of `OBS.app`: **OBS Main**, **OBS 
 **OBS YouTube**, **OBS Projector** (`/Applications/*.app`). They are APFS clones
 (`cp -cR`, no extra disk) with `CFBundleName`/`CFBundleDisplayName` changed and the bundle
 ad-hoc re-signed (`codesign --force --deep --sign -`). **Bundle ids differ** (2026-11-13):
+**OBS auto-update is a live hazard:** Sparkle silently replaced `/Applications/OBS.app` with 33.0.1 on
+2026-11-02 while the 32.1.2 process kept running; it only bit on 2026-11-13 when main was relaunched
+(33.x: shaderfilter ABI + Elgato avcapture broken, Virtual Camera extension replaced). Fixed by
+reinstalling the notarized 32.1.2 dmg as `OBS.app` (33.0.1 parked as `OBS-33.0.1.app`) and
+`defaults write com.obsproject.obs-studio SUEnableAutomaticChecks/SUAutomaticallyUpdate -bool false`
+(both were TRUE). Check with `PlistBuddy -c 'Print CFBundleShortVersionString' /Applications/OBS.app/Contents/Info.plist`
+before any relaunch. Custom plugins live in `~/Library/Application Support/obs-studio/plugins`, not in the bundle.
+
 main must run from the STOCK `/Applications/OBS.app` (launching it from `OBS Main.app` on 2026-11-13 produced
 "Virtual camera not installed": the camera system extension is only accepted from the Apple/OBS-signed
 bundle, an ad-hoc re-signed clone cannot activate it — so `OBS Main.app` is unused), the relays are `com.obsproject.obs-studio.twitch` / `.youtube` / `.projector`. macOS keeps
