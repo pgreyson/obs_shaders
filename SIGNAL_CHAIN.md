@@ -161,8 +161,14 @@ Check with `ps -o rss= -p <pid>` when the machine feels wrong.
 Each instance runs from its own renamed clone of `OBS.app`: **OBS Main**, **OBS Twitch**,
 **OBS YouTube**, **OBS Projector** (`/Applications/*.app`). They are APFS clones
 (`cp -cR`, no extra disk) with `CFBundleName`/`CFBundleDisplayName` changed and the bundle
-ad-hoc re-signed (`codesign --force --deep --sign -`); the bundle id stays
-`com.obsproject.obs-studio`, so camera/mic permissions carry over. `launch_dual.sh` picks
+ad-hoc re-signed (`codesign --force --deep --sign -`). **Bundle ids differ** (2026-11-13):
+`OBS Main` keeps `com.obsproject.obs-studio` (the Virtual Camera system extension is bound to
+it), the relays are `com.obsproject.obs-studio.twitch` / `.youtube` / `.projector`. macOS keeps
+ONE camera/microphone permission record per bundle id, so while all four shared the id each
+differently-signed clone overwrote the others' grant: every launch re-prompted "OBS Twitch
+would like to access the microphone", and until Allow was clicked the instance sat in
+startup ("OBS is not ready") retrying `coreaudio_init_buffer … 2003332927` on the Elgato.
+With unique ids each clone is asked once and remembered. `launch_dual.sh` picks
 the right bundle per instance and falls back to `OBS.app` if a clone is missing.
 **Plugin updates (obs-shaderfilter, stereo-splat) must go into every clone**, or delete
 the clones and re-run the three-line recipe above. System Events still names every

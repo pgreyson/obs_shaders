@@ -255,7 +255,10 @@ class YouTube:
                 creds.refresh(Request())
                 self._save(creds)
             except RefreshError as e:
-                raise SystemExit(AUTH_EXPIRED_MSG.format(path=self.token_path, err=e))
+                if not interactive:
+                    raise SystemExit(AUTH_EXPIRED_MSG.format(path=self.token_path, err=e))
+                print(f"stored token can no longer be refreshed ({e}); starting a fresh authorization")
+                creds = None
         if not creds or not creds.valid:
             if not interactive:
                 raise SystemExit(

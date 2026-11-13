@@ -30,7 +30,10 @@ set -euo pipefail
 
 # One renamed clone of OBS.app per instance so the Dock / app switcher show which is
 # which (APFS clones: near-zero disk; Info.plist CFBundleName/DisplayName changed and the
-# bundle ad-hoc re-signed — see SIGNAL_CHAIN.md). Plugin updates must be applied to each.
+# bundle ad-hoc re-signed — see SIGNAL_CHAIN.md). Relays carry their own CFBundleIdentifier
+# (com.obsproject.obs-studio.twitch/.youtube/.projector) so macOS remembers each one's
+# camera/mic permission; main keeps the stock id for the Virtual Camera extension.
+# Plugin updates must be applied to each.
 OBS_APP="/Applications/OBS.app"               # fallback
 OBS_APP_MAIN="/Applications/OBS Main.app"
 OBS_APP_TWITCH="/Applications/OBS Twitch.app"
