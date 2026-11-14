@@ -162,6 +162,20 @@ process and kill it before relaunching properly.
 **Camera sources frozen in main while the Pis answer ping/HTTP:** VideoCore firmware mailbox wedge (both Pis on
 2026-11-13, room alone on 11-09): on the Pi console `vcgencmd measure_temp` prints nothing and `dmesg -T` shows
 hourly `mbox_send_message returned -62`. `?command=reboot` on each affected Pi; frames resume in OBS by themselves.
+**Automatic recovery (2026-11-14): `tools/pi_watchdog.py`** (started by `launch_dual.sh`, log
+`/tmp/pi_watchdog.log`) hashes a small screenshot of `StereoPi stage` / `StereoPi room` every 5 s;
+a frame unchanged for 30 s is checked on the Pi itself (console: `vcgencmd measure_temp` empty, or
+raspivid's `/proc/<pid>/stat` CPU ticks unchanged over 4 s) and only a confirmed stall gets
+`?command=reboot`, then a 4 min cooldown. A Pi whose console does not answer is logged once as
+needing a power cycle. The log doubles as the freeze-frequency record for the config experiment below.
+**Config experiment (2026-11-14 11:28, stage Pi only; room is the control):** `/boot/config.txt`
+`[all]` now has `gpu_mem=256` (was 160 — Pi engineers traced one firmware-timeout family to GPU memory
+exhaustion), `force_turbo=1` + `arm_freq=1200` (fixed clock: the `ondemand` governor's clock requests
+are the first callers to time out when the firmware wedges; 1200 instead of 1500 to hold the heat —
+71 °C right after boot). Original kept at `/boot/config.txt.bak-20261114` on the Pi. Compare the two
+Pis' reboot counts in `/tmp/pi_watchdog.log` over the next days. Console recipe: `mount -o remount,rw
+/boot`, `sed -i` with UNANCHORED patterns (the console escapes `^ $ [ ]` and swallows `>`), `sync`,
+`mount -o remount,ro /boot`, `reboot`; check with `vcgencmd get_config int`.
 Variant (stage, 11-13 evening, 5 h uptime): `measure_temp` answered and dmesg was clean, yet the feed was frozen —
 raspivid itself had stalled: `cat /proc/<raspivid pid>/stat` fields 14/15 (utime/stime) did not change over 5 s at a
 nominal 30 fps, and cosmostreamer-ng was idle. Same fix (reboot, back in ~15–50 s). So the decisive test is raspivid's

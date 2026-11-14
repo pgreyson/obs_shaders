@@ -129,6 +129,13 @@ if ! pgrep -f tools/audio_watchdog.py >/dev/null; then
   echo "audio watchdog started (log: /tmp/audio_watchdog.log)"
 fi
 
+# Pi watchdog: reboots a StereoPi (via its web console) when its camera feed freezes in main
+# and the Pi confirms the stall (tools/pi_watchdog.py). Detached; skipped if already running.
+if ! pgrep -f tools/pi_watchdog.py >/dev/null; then
+  nohup "$HERE/control_bridge/.venv/bin/python3" "$HERE/tools/pi_watchdog.py" > /tmp/pi_watchdog.out 2>&1 &
+  echo "pi watchdog started (log: /tmp/pi_watchdog.log)"
+fi
+
 echo
 echo "All four OBS instances launched."
 echo "Viture instance  : profile=$VITURE_PROFILE, collection=$VITURE_COLLECTION, ws=:$VITURE_WS_PORT"

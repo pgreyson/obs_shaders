@@ -135,7 +135,7 @@ To launch both pinned to the right profile/scene + obs-websocket port:
 ./launch_dual.sh
 ```
 
-That brings up four OBS processes: main `elegato->full_sbs` on ws :4455, Twitch relay `full_sbs->twitch` on :4456, YouTube relay `full_sbs->youtube` on :4457, and the half-SBS projector relay `full_sbs->projector` on :4458 (see [`projector/`](projector/)). It also starts `tools/audio_watchdog.py` detached: it watches every instance's `Mic/Aux` meters and re-opens the Elgato audio capture if it silently stalls (log `/tmp/audio_watchdog.log`).
+That brings up four OBS processes: main `elegato->full_sbs` on ws :4455, Twitch relay `full_sbs->twitch` on :4456, YouTube relay `full_sbs->youtube` on :4457, and the half-SBS projector relay `full_sbs->projector` on :4458 (see [`projector/`](projector/)). It also starts `tools/audio_watchdog.py` detached: it watches every instance's `Mic/Aux` meters and re-opens the Elgato audio capture if it silently stalls (log `/tmp/audio_watchdog.log`). Two detached watchdogs start with it: `tools/audio_watchdog.py` (re-arms a silently stalled Elgato audio capture) and `tools/pi_watchdog.py` (reboots a StereoPi whose camera feed froze, after confirming the stall on the Pi); logs in `/tmp/audio_watchdog.log` and `/tmp/pi_watchdog.log`.
 
 **One-time setup** before running the script for the first time: enable obs-websocket in OBS (Tools → WebSocket Server Settings → "Enable WebSocket server"). This flips `server_enabled` to `true` in `~/Library/Application Support/obs-studio/plugin_config/obs-websocket/config.json` — the config is shared by both instances, but each binds its own port via the `--websocket_port` launch flag. Note the auto-generated password there; the control bridge needs it.
 
