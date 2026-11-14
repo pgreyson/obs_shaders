@@ -11,12 +11,13 @@
 // ±400 so a near object (hundreds of px raw disparity) can be converged. Positive x moves that eye's image right,
 // positive y moves it down ("left frame is higher" → raise left_y, or
 // lower right_y, until rows match). Revealed area at the trailing
-// edges renders black; samples are clamped inside the eye's half so
+// edges renders transparent; samples are clamped inside the eye's half so
 // one eye never bleeds into the other (the sampler wraps at uv 0/1).
 //
-// Sits FIRST in the chain (after the test pattern) so everything
-// downstream — palette, pillar box — sees aligned frames. Only
-// meaningful on SBS input; harmless but pointless on mono synth.
+// Sits FIRST in the camera chain: sbs align → camera key → camera out.
+// This filter owns alignment CORRECTNESS only (shift + the hard common-region
+// mask). The stereo WINDOW (width / shift / L-R offset / top / bottom) and its
+// edge feather are presentation and live in camera_out.shader (2026-11-14).
 
 uniform float left_x<
     string label = "Left eye X offset (px)";
@@ -50,53 +51,14 @@ uniform float right_y<
     float step = 0.25;
 > = 0.0;
 
-// Stereo window: after shifting, each eye has content the other eye lacks
-// (the strip that slid in from off-frame on one side, and the black revealed
-// on the other). Those pixels have no counterpart and fight fusion, so mask
-// them in BOTH eyes: only the region visible to both survives.
+// After shifting, each eye has content the other eye lacks (the strip that
+// slid in from off-frame on one side, and the area revealed on the other).
+// Those pixels have no counterpart and fight fusion, so mask them in BOTH
+// eyes: only the region visible to both survives. Hard edge; camera_out's
+// window + vignette normally sit inside it.
 uniform bool mask_common<
     string label = "Mask to the region both eyes can see";
 > = true;
-// Stereo WINDOW on top of the shift mask: the same width in both eyes, moved as a
-// pair by window_shift, and slid apart by window_offset — the left eye's window
-// moves right by offset/2 while the right eye's moves left by offset/2 (positive =
-// window floats in front of the screen, which is what near content at the frame
-// edges needs; negative = behind). window_width 0 = no extra crop. Units: px of
-// this surface. Top/bottom crops apply to both eyes.
-uniform float window_width<
-    string label = "Stereo window width, both eyes (px; 0 = off)";
-    string widget_type = "slider";
-    float minimum = 0.0; float maximum = 1920.0; float step = 1.0;
-> = 0.0;
-uniform float window_shift<
-    string label = "Stereo window shift, both eyes (px, + = right)";
-    string widget_type = "slider";
-    float minimum = -600.0; float maximum = 600.0; float step = 1.0;
-> = 0.0;
-uniform float window_offset<
-    string label = "Stereo window L/R offset (px, + = floats in front)";
-    string widget_type = "slider";
-    float minimum = -400.0; float maximum = 400.0; float step = 1.0;
-> = 0.0;
-// Feather the window edges (and the shift mask edges) over this many px so a
-// layer with a narrower field of view fades into the layer beneath instead of
-// ending in a hard line. The fade goes to TRANSPARENT, so downstream filters
-// must preserve alpha (synth_color / palette_quantize do; the camera key keeps it).
-uniform float vignette<
-    string label = "Edge feather / vignette (px, 0 = hard edge)";
-    string widget_type = "slider";
-    float minimum = 0.0; float maximum = 400.0; float step = 1.0;
-> = 0.0;
-uniform float mask_top<
-    string label = "Both eyes: extra crop at the TOP (px)";
-    string widget_type = "slider";
-    float minimum = 0.0; float maximum = 400.0; float step = 1.0;
-> = 0.0;
-uniform float mask_bottom<
-    string label = "Both eyes: extra crop at the BOTTOM (px)";
-    string widget_type = "slider";
-    float minimum = 0.0; float maximum = 400.0; float step = 1.0;
-> = 0.0;
 
 float4 mainImage(VertData v_in) : TARGET
 {
@@ -106,7 +68,6 @@ float4 mainImage(VertData v_in) : TARGET
     float2 off = float2(lerp(right_x, left_x, is_left),
                         lerp(right_y, left_y, is_left));
 
-    float fade = 1.0;
     if (mask_common) {
         // position within this eye, in px of the eye (half the surface wide)
         float2 eye_px = float2(uv_size.x * 0.5, uv_size.y);
@@ -115,21 +76,10 @@ float4 mainImage(VertData v_in) : TARGET
         // the common window is the intersection over both eyes
         float x0 = max(max(0.0, left_x), max(0.0, right_x));
         float x1 = eye_px.x + min(min(0.0, left_x), min(0.0, right_x));
-        if (window_width > 0.5) {
-            float c = eye_px.x * 0.5 + window_shift + (is_left > 0.5 ? 0.5 : -0.5) * window_offset;
-            x0 = max(x0, c - window_width * 0.5);
-            x1 = min(x1, c + window_width * 0.5);
-        }
-        float y0 = max(max(0.0, left_y), max(0.0, right_y)) + mask_top;
-        float y1 = eye_px.y + min(min(0.0, left_y), min(0.0, right_y)) - mask_bottom;
+        float y0 = max(max(0.0, left_y), max(0.0, right_y));
+        float y1 = eye_px.y + min(min(0.0, left_y), min(0.0, right_y));
         if (p.x < x0 || p.x > x1 || p.y < y0 || p.y > y1)
-            return float4(0.0, 0.0, 0.0, 0.0);   // outside the window: transparent
-        if (vignette > 0.5) {
-            float v = vignette;
-            fade = clamp((p.x - x0) / v, 0.0, 1.0) * clamp((x1 - p.x) / v, 0.0, 1.0)
-                 * clamp((p.y - y0) / v, 0.0, 1.0) * clamp((y1 - p.y) / v, 0.0, 1.0);
-            fade = fade * fade * (3.0 - 2.0 * fade);   // smoothstep
-        }
+            return float4(0.0, 0.0, 0.0, 0.0);   // only one eye sees this: transparent
     }
 
     // shift content by +off pixels = sample -off pixels upstream
@@ -148,6 +98,5 @@ float4 mainImage(VertData v_in) : TARGET
     suv.x = clamp(suv.x, xmin + half_px.x, xmax - half_px.x);
     suv.y = clamp(suv.y, half_px.y, 1.0 - half_px.y);
 
-    float4 c = image.Sample(textureSampler, suv);
-    return float4(c.rgb, c.a * fade);
+    return image.Sample(textureSampler, suv);
 }

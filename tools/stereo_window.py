@@ -3,10 +3,10 @@
 
   stereo_window.py auto [--vertical]
                                    derive the window from the layers: synth pillar box
-                                   ((1-aspect)/2 of the eye), each camera layer's shift mask ∩ its own
-                                   window_width/shift/offset; intersect, equalise the eye widths.
-                                   Top/bottom margins stay 0: each camera layer's sbs align already masks
-                                   both eyes to the same vertical span, so cropping the whole program
+                                   ((1-aspect)/2 of the eye), each camera layer's shift mask (sbs align)
+                                   ∩ its own window_width/shift/offset (camera out); intersect, equalise
+                                   the eye widths. Top/bottom margins stay 0: each camera layer already
+                                   masks both eyes to the same vertical span, so cropping the whole program
                                    (and the synth under it) only loses height. --vertical crops anyway.
   stereo_window.py set WIDTH SHIFT OFFSET TOP BOTTOM   explicit values (canvas px): one window
                                    width for both eyes, shared shift (+ = right), L/R offset (+ = floats in
@@ -56,7 +56,8 @@ async def main():
         al = await filt(lay, "sbs align")
         if al is None:
             continue
-        g = lambda k, d=0.0: float(al.get(k, d))
+        wnd = await filt(lay, "camera out") or {}      # window/vignette moved here 2026-11-14
+        g = lambda k, d=0.0: float(wnd.get(k, al.get(k, d)) if k.startswith(("window_", "mask_")) else al.get(k, d))
         lx, rx, ly, ry = g("left_x"), g("right_x"), g("left_y"), g("right_y")
         x0 = max(0.0, lx, rx); x1 = EYE_W + min(0.0, lx, rx)
         L, Rw = [x0, x1], [x0, x1]
@@ -64,7 +65,7 @@ async def main():
             for win, sgn in ((L, 0.5), (Rw, -0.5)):
                 c = EYE_W / 2 + g("window_shift") + sgn * g("window_offset")
                 win[0] = max(win[0], c - g("window_width") / 2); win[1] = min(win[1], c + g("window_width") / 2)
-        top = max(0.0, ly, ry) + g("mask_top"); bot = -min(0.0, ly, ry) + g("mask_bottom")
+        top = max(0.0, ly, ry, g("mask_top")); bot = max(0.0, -ly, -ry, g("mask_bottom"))   # both from the frame edge
         needs.append((lay, L, Rw, top, bot, enabled.get(lay)))
     for n, L, Rw, top, bot, en in needs:
         print(f"  {n:22s} L eye [{L[0]:4.0f},{L[1]:4.0f}]  R eye [{Rw[0]:4.0f},{Rw[1]:4.0f}]  top {top:3.0f} bottom {bot:3.0f}  {'(on)' if en else '(off)'}")

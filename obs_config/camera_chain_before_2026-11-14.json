@@ -1,0 +1,206 @@
+{
+ "room": {
+  "camera key": {
+   "enabled": true,
+   "index": 5,
+   "kind": "shader_filter",
+   "settings": {
+    "fill_cover": 0.8,
+    "fill_radius": 119.0,
+    "fill_steps": 16.0,
+    "from_file": true,
+    "luma_min": 0.126,
+    "luma_smooth": 0.107,
+    "out_brightness": -0.06,
+    "out_contrast": 0.22,
+    "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/camera_key.shader"
+   }
+  },
+  "mix opacity": {
+   "enabled": true,
+   "index": 4,
+   "kind": "color_filter_v2",
+   "settings": {
+    "brightness": 0.0063,
+    "contrast": 2.33,
+    "gamma": -0.17,
+    "hue_shift": -53.21,
+    "opacity": 0.0623,
+    "saturation": 2.48
+   }
+  },
+  "palette": {
+   "enabled": true,
+   "index": 2,
+   "kind": "shader_filter",
+   "settings": {
+    "chroma_amount": 0.0,
+    "chroma_pull": 0.0,
+    "dither": 0.0,
+    "from_file": true,
+    "hue_amount": 0.64,
+    "hue_pull": 0.6066979616880417,
+    "jitter": 0.67,
+    "luma_amount": 0.29,
+    "luma_levels": 0.05,
+    "luma_pull": 0.0,
+    "rotation": 0.9923399090766907,
+    "seed": 1.0,
+    "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/palette_quantize.shader",
+    "shimmer": 0.57,
+    "size": 6.0,
+    "skew": 0.0,
+    "spread": 0.11,
+    "temperature": 0.84
+   }
+  },
+  "pillar box": {
+   "enabled": false,
+   "index": 3,
+   "kind": "shader_filter",
+   "settings": {}
+  },
+  "sbs align": {
+   "enabled": true,
+   "index": 0,
+   "kind": "shader_filter",
+   "settings": {
+    "from_file": true,
+    "left_x": -103.0,
+    "left_y": 61.5,
+    "mask_bottom": 0.0,
+    "mask_common": true,
+    "mask_top": 0.0,
+    "right_x": 75.66,
+    "right_y": -76.71,
+    "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/sbs_align.shader",
+    "vignette": 184.0,
+    "window_offset": 28.0,
+    "window_shift": -10.0,
+    "window_width": 1161.0
+   }
+  },
+  "synth color": {
+   "enabled": true,
+   "index": 1,
+   "kind": "shader_filter",
+   "settings": {
+    "black_level": 1.0,
+    "chroma_smooth": 0.0,
+    "contrast": 0.16,
+    "from_file": true,
+    "gamma": 0.33,
+    "hue_shift": 0.96,
+    "saturation": 0.13,
+    "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/synth_color.shader",
+    "soften": 0.0
+   }
+  }
+ },
+ "stage": {
+  "camera key": {
+   "enabled": true,
+   "index": 5,
+   "kind": "shader_filter",
+   "settings": {
+    "fill_cover": 0.76,
+    "fill_radius": 62.0,
+    "fill_steps": 22.0,
+    "from_file": true,
+    "luma_min": 0.232,
+    "luma_smooth": 0.038,
+    "out_brightness": -0.24,
+    "out_contrast": 0.99,
+    "out_gain": 0.79,
+    "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/camera_key.shader"
+   }
+  },
+  "mix opacity": {
+   "enabled": true,
+   "index": 4,
+   "kind": "color_filter_v2",
+   "settings": {
+    "brightness": 0.0314,
+    "contrast": 0.42,
+    "hue_shift": -14.72,
+    "opacity": 1.0,
+    "saturation": 1.34
+   }
+  },
+  "palette": {
+   "enabled": true,
+   "index": 2,
+   "kind": "shader_filter",
+   "settings": {
+    "black_floor": 0.0,
+    "chroma_amount": 0.0,
+    "chroma_pull": 0.54,
+    "chroma_target": 0.87,
+    "dither": 0.0,
+    "from_file": true,
+    "hue_amount": 0.64,
+    "hue_pull": 0.39,
+    "jitter": 0.67,
+    "luma_amount": 0.29,
+    "luma_levels": 0.05,
+    "luma_pull": 0.0,
+    "rotation": 0.08,
+    "seed": 1.0,
+    "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/palette_quantize.shader",
+    "shimmer": 0.57,
+    "size": 6.0,
+    "skew": 0.0,
+    "spread": 0.11,
+    "temperature": 0.84
+   }
+  },
+  "pillar box": {
+   "enabled": false,
+   "index": 3,
+   "kind": "shader_filter",
+   "settings": {
+    "aspect_correction": 1.0,
+    "from_file": true,
+    "half_sbs": true,
+    "override_entire_effect": false,
+    "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/halfsbs_pillarbox.shader"
+   }
+  },
+  "sbs align": {
+   "enabled": true,
+   "index": 0,
+   "kind": "shader_filter",
+   "settings": {
+    "from_file": true,
+    "left_x": 24.25,
+    "left_y": -36.25,
+    "mask_bottom": 0.0,
+    "mask_common": true,
+    "mask_top": 0.0,
+    "right_x": 121.25,
+    "right_y": 38.5,
+    "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/sbs_align.shader",
+    "vignette": 0.0,
+    "window_offset": -67.0,
+    "window_shift": 9.0,
+    "window_width": 0.0
+   }
+  },
+  "synth color": {
+   "enabled": true,
+   "index": 1,
+   "kind": "shader_filter",
+   "settings": {
+    "black_level": 0.0,
+    "chroma_smooth": 0.03,
+    "contrast": 0.03,
+    "from_file": true,
+    "gamma": 0.27,
+    "hue_shift": 0.44,
+    "saturation": 0.24,
+    "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/synth_color.shader",
+    "soften": 0.53
+   }
+  }
+ }
+}

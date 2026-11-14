@@ -1,29 +1,80 @@
-// camera_key — luma key with morphological hole fill, for the stereo-camera layer.
+// camera_key — luma/chroma key with morphological hole fill, for the stereo-camera layer.
 //
 // The camera object (statue) is bright on a black background with hard edges,
 // but its own deep shadows fall below any luma threshold and the plain luma
-// key punches holes in it. This filter keys on luma like OBS's Luma Key, then
-// FILLS holes: a pixel that fails the key is kept anyway when foreground is
-// found within `fill_radius` px in at least `fill_cover` of 16 directions —
-// true for a pocket inside the silhouette, false for open background next to
-// an edge (which sees foreground on roughly one side only). The outline is
-// therefore still decided by luma; the fill only acts inside it.
+// key punches holes in it. This filter keys like OBS's Luma Key, then FILLS
+// holes: a pixel that fails the key is kept anyway when foreground is found
+// within `fill_radius` px in at least `fill_cover` of 16 directions — true for
+// a pocket inside the silhouette, false for open background next to an edge
+// (which sees foreground on roughly one side only). The outline is therefore
+// still decided by the key; the fill only acts inside it.
 //
-// Place LAST on the camera chain: the shader filters before it write opaque
-// alpha. Works on the full-SBS frame: rays never cross the eye seam, so one
-// eye's content cannot fill the other's background.
-// Units are px of the surface the filter sits on (camera_chain = canvas px).
+// THIS FILTER OWNS THE KEY AND NOTHING ELSE. Everything about how the picture
+// LOOKS (window, feather, colour, brightness, opacity) lives in camera_out.
+// The `key_*` conditioning controls (gain / gamma / contrast / brightness)
+// are applied to a private copy of the pixel that only the key measures, so a
+// too-dark source can be boosted to get a hard key while the colour that
+// leaves this filter is exactly the colour that entered it.
 //
-// The key is decided on the INCOMING image (luma, chroma = saturation, or the
-// larger of the two); `out_gain` / `out_contrast` / `out_brightness` are applied
-// to the colour AFTER alpha is settled, so the foreground can be made dark
-// without the key letting go of it.
+// Chain: sbs align → camera key → camera out. Alpha arriving here (sbs
+// align's common-region mask) is preserved and multiplied by the key.
+// Works on the full-SBS frame: rays never cross the eye seam, so one eye's
+// content cannot fill the other's background. Units are px of the surface
+// the filter sits on (camera_chain = canvas px).
 
-uniform float luma_min<
-    string label = "Key: luma below this is background";
+uniform float key_amount<
+    string label = "Key amount (0 = no key / plain mix, 1 = full key)";
     string widget_type = "slider";
     float minimum = 0.0;
-    float maximum = 0.5;
+    float maximum = 1.0;
+    float step = 0.01;
+> = 1.0;
+
+uniform float key_source<
+    string label = "Key on: 0 = luma, 1 = chroma (saturation), 2 = max of both";
+    string widget_type = "slider";
+    float minimum = 0.0;
+    float maximum = 2.0;
+    float step = 1.0;
+> = 0.0;
+
+uniform float key_gain<
+    string label = "Key input: gain (key signal only, not the picture)";
+    string widget_type = "slider";
+    float minimum = 0.0;
+    float maximum = 4.0;
+    float step = 0.01;
+> = 1.0;
+
+uniform float key_gamma<
+    string label = "Key input: gamma (>1 lifts shadows into the key)";
+    string widget_type = "slider";
+    float minimum = 0.2;
+    float maximum = 4.0;
+    float step = 0.01;
+> = 1.0;
+
+uniform float key_contrast<
+    string label = "Key input: contrast about mid grey";
+    string widget_type = "slider";
+    float minimum = 0.0;
+    float maximum = 4.0;
+    float step = 0.01;
+> = 1.0;
+
+uniform float key_brightness<
+    string label = "Key input: brightness offset";
+    string widget_type = "slider";
+    float minimum = -1.0;
+    float maximum = 1.0;
+    float step = 0.01;
+> = 0.0;
+
+uniform float luma_min<
+    string label = "Key: threshold (key signal below this is background)";
+    string widget_type = "slider";
+    float minimum = 0.0;
+    float maximum = 1.0;
     float step = 0.001;
 > = 0.07;
 
@@ -59,44 +110,18 @@ uniform float fill_steps<
     float step = 1.0;
 > = 10.0;
 
-uniform float key_source<
-    string label = "Key on: 0 = luma, 1 = chroma (saturation), 2 = max of both";
-    string widget_type = "slider";
-    float minimum = 0.0;
-    float maximum = 2.0;
-    float step = 1.0;
-> = 0.0;
-
-uniform float out_gain<
-    string label = "Output: gain (multiply, after the key)";
-    string widget_type = "slider";
-    float minimum = 0.0;
-    float maximum = 2.0;
-    float step = 0.01;
-> = 1.0;
-
-uniform float out_contrast<
-    string label = "Output: contrast about mid grey (after the key)";
-    string widget_type = "slider";
-    float minimum = 0.0;
-    float maximum = 2.0;
-    float step = 0.01;
-> = 1.0;
-
-uniform float out_brightness<
-    string label = "Output: brightness offset (after the key)";
-    string widget_type = "slider";
-    float minimum = -1.0;
-    float maximum = 1.0;
-    float step = 0.01;
-> = 0.0;
-
 float luma_of(float3 c) { return dot(c, float3(0.2126, 0.7152, 0.0722)); }
 float chroma_of(float3 c) { return max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b)); }
 
-// the quantity the key thresholds, measured on the un-adjusted input
+// The quantity the key thresholds. The conditioning here touches ONLY this
+// measurement; the pixel that leaves the filter is untouched.
 float key_value(float3 c)
 {
+    c = c * key_gain;
+    float ge = 1.0 / max(key_gamma, 0.01);
+    c = pow(max(c, 0.0), float3(ge, ge, ge));
+    c = (c - 0.5) * key_contrast + 0.5 + key_brightness;
+    c = clamp(c, 0.0, 1.0);
     float l = luma_of(c);
     float k = chroma_of(c);
     if (key_source < 0.5) return l;
@@ -110,18 +135,13 @@ float key_at(float2 uv)
     return smoothstep(luma_min, luma_min + luma_smooth, key_value(c));
 }
 
-// post-key colour adjustment: alpha is never touched by this
-float3 out_adjust(float3 c)
-{
-    c = c * out_gain;
-    c = (c - 0.5) * out_contrast + 0.5 + out_brightness;
-    return clamp(c, 0.0, 1.0);
-}
-
 float4 mainImage(VertData v_in) : TARGET
 {
     float2 uv = v_in.uv;
     float4 src = image.Sample(textureSampler, uv);
+    if (key_amount < 0.001)
+        return src;                                  // bypass: plain mix
+
     float a = smoothstep(luma_min, luma_min + luma_smooth, key_value(src.rgb));
 
     if (a < 0.5 && fill_radius > 0.5) {
@@ -141,7 +161,7 @@ float4 mainImage(VertData v_in) : TARGET
             pre += step(0.5, key_at(p));
         }
         if (pre < 3.0)
-            return float4(out_adjust(src.rgb), src.a * a);
+            return float4(src.rgb, src.a * lerp(1.0, a, key_amount));
         float hits = 0.0;
         // 16 directions around the compass (float counters: GLSL has no int*float)
         for (float d = 0.0; d < 16.0; d += 1.0) {
@@ -160,5 +180,5 @@ float4 mainImage(VertData v_in) : TARGET
         if (hits / 16.0 >= fill_cover)
             a = 1.0;   // inside the silhouette: hard fill
     }
-    return float4(out_adjust(src.rgb), src.a * a);
+    return float4(src.rgb, src.a * lerp(1.0, a, key_amount));
 }

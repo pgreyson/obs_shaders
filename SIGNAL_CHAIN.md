@@ -49,26 +49,36 @@ Virtual Camera for the relays. Scene `Scene`, bottom to top:
    filter set (room's sbs align is auto-measured with SIFT on the raw pair — re-run after any refocus, it moved the vertical by 23 px: currently left_y +76.7 / right_y −76.7, left_x −75.7 / right_x +75.7, per-edge masks user-trimmed; `camera key` is OFF on room — a lit room has no black background to key). The room rig is
    mounted upside down: its item inside `room` is scaled −1/−1 (a 180° turn of the
    whole SBS frame, which rights each eye AND swaps the eye halves — a vertical flip
-   alone would leave it mirrored with the eyes crossed). Scene filters: `sbs align` (convergence/trim, **canvas px = 2× camera px**;
-   slider ±400; **`mask_common`** on: after the shift, each eye is cropped to the
-   region BOTH eyes can see — the stereo window — so no pixel is visible to one eye only;
-   a stereo WINDOW on top: `window_width` (same in both eyes), `window_shift`
-   (both eyes together), `window_offset` (left window minus right window — the floating-window
-   depth, + = in front of the screen), plus `mask_top` / `mask_bottom`, and **`vignette`** (px): the window and shift-mask
-   edges feather to TRANSPARENT over that distance so a narrower field of view blends into
-   the layer beneath instead of ending in a hard line. `synth_color` and `palette_quantize`
-   now preserve alpha so the feather survives the chain (`pillar box` always did; `camera
-   key` multiplies it). The user trims these by eye; room is currently width 1339, shift −10,
-   offset +28, vignette 60) → `synth color` (soften 0) → `palette` → `pillar box`[off, passthrough] →
-   `mix opacity` → **`camera key`** ([`camera_key.shader`](camera_key.shader): luma key
-   `luma_min` 0.07 / ramp 0.012 — the grading lifts true black to luma 0.063; `key_source` can switch the thresholded quantity to chroma or max(luma, chroma), and `out_gain` / `out_contrast` / `out_brightness` adjust the colour only after alpha is fixed, so darkening the foreground there never loosens the key (2026-11-14) — plus a
-   morphological hole fill: a keyed-out pixel is kept when foreground is found within
-   `fill_radius` 40 px in ≥ 80 % of 16 directions, so the statue's deep shadows stay
-   solid while open background doesn't; rays never cross the eye seam). Must sit LAST
-   because the shader filters before it write opaque alpha. Costs ~8 ms of render time
-   on this machine. Blend **normal**, so the keyed statue occludes the synth (was
-   *screen* before the key). Depth synthesis is
-   off here: the camera already carries real stereo. **Trim sbs align on
+   alone would leave it mirrored with the eyes crossed). Scene filters (rationalised
+   2026-11-14 — split by WHAT A CONTROL AFFECTS, `tools/camera_chain.py status`; the old
+   six-filter chain `sbs align → synth color → palette → pillar box → mix opacity → camera key`
+   is kept verbatim in `obs_config/camera_chain_before_2026-11-14.json` for rollback):
+   1. **`sbs align`** ([`sbs_align.shader`](sbs_align.shader)) — alignment CORRECTNESS only:
+      per-eye x/y shift (**canvas px = 2× camera px**, slider ±400) and **`mask_common`**: after
+      the shift each eye is cropped, hard, to the region BOTH eyes can see, so no pixel is
+      visible to one eye only.
+   2. **`camera key`** ([`camera_key.shader`](camera_key.shader)) — the KEY and nothing else.
+      `key_source` picks luma / chroma / max; `key_gain` / `key_gamma` / `key_contrast` /
+      `key_brightness` condition a private copy of the pixel that only the key measures (boost a
+      dark source to get a hard key — the colour leaving the filter is untouched); `luma_min`
+      threshold / `luma_smooth` ramp; morphological hole fill (a keyed-out pixel is kept when
+      foreground is found within `fill_radius` px in ≥ `fill_cover` of 16 directions, rays never
+      cross the eye seam); `key_amount` 0 = plain unkeyed mix (or just disable the filter).
+   3. **`camera out`** ([`camera_out.shader`](camera_out.shader)) — everything about the LOOK,
+      natural units (1.0 / 0 = neutral, exact passthrough at defaults): the stereo WINDOW
+      (`window_width` same in both eyes, `window_shift` both together, `window_offset` = left
+      window minus right — floating-window depth, + = in front of the screen — `mask_top` /
+      `mask_bottom`, and `vignette` px of feather to TRANSPARENT so a narrower field of view
+      blends into the layer beneath; moved here from sbs align), then soften → black level →
+      gain → contrast → gamma → brightness → saturation → hue shift (°) → hue concentration
+      (`hue_peaks` / `hue_pull` / `hue_phase`, the hue-only part of palette_quantize) → `opacity`.
+      Alpha from the key is only ever multiplied here, so nothing in this stage can change
+      what was keyed. Room currently: width 1161, shift −10, offset +28, vignette 184, opacity 0.06.
+   Three passes instead of five: render time on main fell 54.5 → 41 ms (17.8 → 24 fps) at the
+   migration. NOTE: filter add/remove over obs-websocket does not mark the project changed, so
+   OBS does not autosave such a change — `camera_chain.py` creates and removes a scratch scene
+   afterwards, which does trigger the save (check the collection file's mtime if in doubt). Blend **normal**, so the keyed statue occludes the synth. Depth synthesis is
+   off here: the camera already carries real stereo. **Trim sbs align / camera out on
    `stage` / `room`, not on the inputs** — the depth sidecar screenshots the raw stage input.
 
 Audio: `Mic/Aux` unmuted, *monitor and output*, monitoring device = system default
@@ -100,8 +110,8 @@ floating window for the whole program is wanted again) ([`stereo_window.shader`]
 the same model as the layers: `window_width` (identical in both eyes), `window_shift`,
 `window_offset` (floating-window depth), `margin_top`, `margin_bottom`. `tools/stereo_window.py
 auto` intersects the ENABLED layers' per-eye windows (synth pillar box, each camera layer's
-shift mask ∩ its own window), equalises the two eye widths around their centres and writes
-width/shift/offset and leaves `margin_top`/`margin_bottom` at 0 (each camera layer's sbs align
+shift mask from `sbs align` ∩ its own window from `camera out`), equalises the two eye widths around their centres and writes
+width/shift/offset and leaves `margin_top`/`margin_bottom` at 0 (each camera layer
 already masks both eyes to one vertical span, so a program-wide top/bottom crop only costs height;
 `auto --vertical` crops anyway); `set WIDTH SHIFT OFFSET TOP BOTTOM` forces values. Re-run `auto` after
 toggling layers or re-trimming a layer.
