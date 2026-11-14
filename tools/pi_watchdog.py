@@ -45,6 +45,7 @@ POLL_S = 5.0
 STALL_S = 30.0        # identical frames for this long -> suspect
 CONFIRM_S = 4.0       # raspivid tick sample interval
 COOLDOWN_S = 240.0    # after a reboot, leave the Pi alone this long
+HEALTH_S = 600.0      # per-Pi health line (temp, GPU heap headroom, alloc failures) this often
 LOG = "/tmp/pi_watchdog.log"
 
 
@@ -87,6 +88,27 @@ def raspivid_ticks(host):
     return None, None
 
 
+def pi_health(host):
+    """One line of evidence for the config experiment, independent of whether the scene moves:
+    temperature, free relocatable GPU heap (camera + encoder live there; the stock 160M config
+    leaves ~20M), the firmware's alloc_fails counter, raspivid CPU ticks over CONFIRM_S."""
+    up = console(host, "uptime")
+    if up is None or "load average" not in up:
+        return f"{host}: console unreachable"
+    m = re.search(r"up\s+(.*?),\s+\d+ users?", up)
+    uptime = m.group(1).strip() if m else "?"
+    temp = (console(host, "vcgencmd measure_temp") or "").strip() or "temp=EMPTY(mailbox wedged)"
+    reloc = (console(host, "vcgencmd get_mem reloc") or "").strip() or "reloc=?"
+    stats = console(host, "vcdbg reloc stats") or ""
+    fails = re.search(r"alloc_fails\s*:\s*(\d+)", stats)
+    fails = fails.group(1) if fails else "?"
+    pid, t0 = raspivid_ticks(host)
+    time.sleep(CONFIRM_S)
+    _, t1 = raspivid_ticks(host)
+    ticks = "raspivid=none" if pid is None else (f"raspivid_ticks/{CONFIRM_S:.0f}s={t1 - t0}" if None not in (t0, t1) else "raspivid_ticks=?")
+    return f"{host}: up {uptime} | {temp} | {reloc} alloc_fails={fails} | {ticks}"
+
+
 def pi_confirms_stall(host):
     """True when the Pi itself shows the camera pipeline is dead; None when it cannot be reached."""
     up = console(host, "uptime")
@@ -105,7 +127,6 @@ def pi_confirms_stall(host):
     if t0 is not None and t1 is not None and t1 == t0:
         log(f"  {host}: raspivid pid {pid} consumed 0 CPU ticks in {CONFIRM_S:.0f} s -> stalled")
         return True
-    log(f"  {host}: raspivid pid {pid} is running ({t0} -> {t1} ticks); frame static but Pi healthy, not rebooting")
     return False
 
 
@@ -115,6 +136,8 @@ async def main():
     static_since = {n: None for n in PIS}
     cooldown_until = {n: 0.0 for n in PIS}
     unreachable_logged = {n: False for n in PIS}
+    healthy_static_logged = {n: False for n in PIS}
+    next_health = 0.0
     ws = None
     while True:
         try:
@@ -124,6 +147,11 @@ async def main():
                 await asyncio.wait_for(ws.wait_until_identified(), 10)
                 log("connected to OBS main")
             now = time.time()
+            if now >= next_health:
+                next_health = now + HEALTH_S
+                for name, host in PIS.items():
+                    line = await asyncio.get_event_loop().run_in_executor(None, pi_health, host)
+                    log(f"health {name}: {line}")
             for name, host in PIS.items():
                 r = await ws.call(simpleobsws.Request("GetSourceScreenshot", {
                     "sourceName": name, "imageFormat": "png", "imageWidth": 320}), timeout=15)
@@ -134,13 +162,15 @@ async def main():
                     last_hash[name] = h
                     static_since[name] = None
                     unreachable_logged[name] = False
+                    healthy_static_logged[name] = False
                     continue
                 if static_since[name] is None:
                     static_since[name] = now
                     continue
                 if now - static_since[name] < STALL_S or now < cooldown_until[name]:
                     continue
-                log(f"{name}: frame unchanged for {now - static_since[name]:.0f} s, checking {host}")
+                if not healthy_static_logged[name]:
+                    log(f"{name}: frame unchanged for {now - static_since[name]:.0f} s, checking {host}")
                 verdict = await asyncio.get_event_loop().run_in_executor(None, pi_confirms_stall, host)
                 if verdict is None:
                     if not unreachable_logged[name]:
@@ -153,6 +183,9 @@ async def main():
                     cooldown_until[name] = now + COOLDOWN_S
                     static_since[name] = None
                 else:
+                    if not healthy_static_logged[name]:
+                        log(f"{name}: Pi healthy, scene is just still; re-checking quietly every 60 s")
+                        healthy_static_logged[name] = True
                     cooldown_until[name] = now + 60.0
         except Exception as e:  # OBS restart, websocket drop, ...
             log(f"error: {type(e).__name__}: {e}; reconnecting in 10 s")
