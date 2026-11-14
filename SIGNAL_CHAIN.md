@@ -61,7 +61,7 @@ Virtual Camera for the relays. Scene `Scene`, bottom to top:
    key` multiplies it). The user trims these by eye; room is currently width 1339, shift −10,
    offset +28, vignette 60) → `synth color` (soften 0) → `palette` → `pillar box`[off, passthrough] →
    `mix opacity` → **`camera key`** ([`camera_key.shader`](camera_key.shader): luma key
-   `luma_min` 0.07 / ramp 0.012 — the grading lifts true black to luma 0.063 — plus a
+   `luma_min` 0.07 / ramp 0.012 — the grading lifts true black to luma 0.063; `key_source` can switch the thresholded quantity to chroma or max(luma, chroma), and `out_gain` / `out_contrast` / `out_brightness` adjust the colour only after alpha is fixed, so darkening the foreground there never loosens the key (2026-11-14) — plus a
    morphological hole fill: a keyed-out pixel is kept when foreground is found within
    `fill_radius` 40 px in ≥ 80 % of 16 directions, so the statue's deep shadows stay
    solid while open background doesn't; rays never cross the eye seam). Must sit LAST

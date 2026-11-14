@@ -41,7 +41,7 @@ All shaders are obs-shaderfilter `.shader` files. Add them as a **User-defined s
 | `stereo_displace_bw.shader` | mono | half-SBS | Same + wide depth blur (4px) for stronger smoothing. |
 | `sbs_align.shader` | SBS | SBS + alpha | Per-eye x/y shift (convergence + vertical trim); stereo window as `window_width` / `window_shift` / `window_offset` (+ top/bottom); `vignette` feathers the edges to transparent. First on the camera chain. |
 | `stereo_window.shader` | full SBS | full SBS | (currently disabled) Program-wide stereo window: identical black bands in both eyes for all layers (`tools/stereo_window.py auto`). Last filter on main's `Scene`. |
-| `camera_key.shader` | SBS camera | SBS camera + alpha | Luma key with morphological hole fill for the stereo-camera layer (`camera_chain` in main). Keys on graded luma, fills shadow pockets inside the silhouette (16-ray search within `fill_radius`), never crosses the eye seam. Sits last in the chain. |
+| `camera_key.shader` | SBS camera | SBS camera + alpha | Luma/chroma key with morphological hole fill for the stereo-camera layer (`camera_chain` in main). `key_source` picks luma, chroma (saturation) or the max of both, always measured on the incoming image; fills shadow pockets inside the silhouette (16-ray search within `fill_radius`), never crosses the eye seam. `out_gain` / `out_contrast` / `out_brightness` darken or flatten the colour AFTER alpha is decided, so a hard key can carry a dark foreground. Sits last in the chain. |
 | `stereo_zoom.shader` | half-SBS | half-SBS | Per-eye centered zoom. Apply after a mono→stereo shader. |
 | `stereo_feedback_depth.shader` | mono | half-SBS | **(Planned)** Parallax encodes feedback recency, decoupled from color. Color-displace optional via parameter. |
 

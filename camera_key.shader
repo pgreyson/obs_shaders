@@ -13,6 +13,11 @@
 // alpha. Works on the full-SBS frame: rays never cross the eye seam, so one
 // eye's content cannot fill the other's background.
 // Units are px of the surface the filter sits on (camera_chain = canvas px).
+//
+// The key is decided on the INCOMING image (luma, chroma = saturation, or the
+// larger of the two); `out_gain` / `out_contrast` / `out_brightness` are applied
+// to the colour AFTER alpha is settled, so the foreground can be made dark
+// without the key letting go of it.
 
 uniform float luma_min<
     string label = "Key: luma below this is background";
@@ -54,19 +59,70 @@ uniform float fill_steps<
     float step = 1.0;
 > = 10.0;
 
+uniform float key_source<
+    string label = "Key on: 0 = luma, 1 = chroma (saturation), 2 = max of both";
+    string widget_type = "slider";
+    float minimum = 0.0;
+    float maximum = 2.0;
+    float step = 1.0;
+> = 0.0;
+
+uniform float out_gain<
+    string label = "Output: gain (multiply, after the key)";
+    string widget_type = "slider";
+    float minimum = 0.0;
+    float maximum = 2.0;
+    float step = 0.01;
+> = 1.0;
+
+uniform float out_contrast<
+    string label = "Output: contrast about mid grey (after the key)";
+    string widget_type = "slider";
+    float minimum = 0.0;
+    float maximum = 2.0;
+    float step = 0.01;
+> = 1.0;
+
+uniform float out_brightness<
+    string label = "Output: brightness offset (after the key)";
+    string widget_type = "slider";
+    float minimum = -1.0;
+    float maximum = 1.0;
+    float step = 0.01;
+> = 0.0;
+
 float luma_of(float3 c) { return dot(c, float3(0.2126, 0.7152, 0.0722)); }
+float chroma_of(float3 c) { return max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b)); }
+
+// the quantity the key thresholds, measured on the un-adjusted input
+float key_value(float3 c)
+{
+    float l = luma_of(c);
+    float k = chroma_of(c);
+    if (key_source < 0.5) return l;
+    if (key_source < 1.5) return k;
+    return max(l, k);
+}
 
 float key_at(float2 uv)
 {
     float3 c = image.Sample(textureSampler, uv).rgb;
-    return smoothstep(luma_min, luma_min + luma_smooth, luma_of(c));
+    return smoothstep(luma_min, luma_min + luma_smooth, key_value(c));
+}
+
+// post-key colour adjustment: alpha is never touched by this
+float3 out_adjust(float3 c)
+{
+    c = c * out_gain;
+    c = (c - 0.5) * out_contrast + 0.5 + out_brightness;
+    return clamp(c, 0.0, 1.0);
 }
 
 float4 mainImage(VertData v_in) : TARGET
 {
     float2 uv = v_in.uv;
     float4 src = image.Sample(textureSampler, uv);
-    float a = smoothstep(luma_min, luma_min + luma_smooth, luma_of(src.rgb));
+    float a = smoothstep(luma_min, luma_min + luma_smooth, key_value(src.rgb));
 
     if (a < 0.5 && fill_radius > 0.5) {
         // this eye's horizontal span (never let rays cross the seam)
@@ -85,7 +141,7 @@ float4 mainImage(VertData v_in) : TARGET
             pre += step(0.5, key_at(p));
         }
         if (pre < 3.0)
-            return float4(src.rgb, src.a * a);
+            return float4(out_adjust(src.rgb), src.a * a);
         float hits = 0.0;
         // 16 directions around the compass (float counters: GLSL has no int*float)
         for (float d = 0.0; d < 16.0; d += 1.0) {
@@ -104,5 +160,5 @@ float4 mainImage(VertData v_in) : TARGET
         if (hits / 16.0 >= fill_cover)
             a = 1.0;   // inside the silhouette: hard fill
     }
-    return float4(src.rgb, src.a * a);
+    return float4(out_adjust(src.rgb), src.a * a);
 }
