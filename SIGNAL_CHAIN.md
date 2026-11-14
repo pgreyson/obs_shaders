@@ -151,6 +151,10 @@ process and kill it before relaunching properly.
 **Camera sources frozen in main while the Pis answer ping/HTTP:** VideoCore firmware mailbox wedge (both Pis on
 2026-11-13, room alone on 11-09): on the Pi console `vcgencmd measure_temp` prints nothing and `dmesg -T` shows
 hourly `mbox_send_message returned -62`. `?command=reboot` on each affected Pi; frames resume in OBS by themselves.
+Variant (stage, 11-13 evening, 5 h uptime): `measure_temp` answered and dmesg was clean, yet the feed was frozen —
+raspivid itself had stalled: `cat /proc/<raspivid pid>/stat` fields 14/15 (utime/stime) did not change over 5 s at a
+nominal 30 fps, and cosmostreamer-ng was idle. Same fix (reboot, back in ~15–50 s). So the decisive test is raspivid's
+CPU ticks, not the mailbox; `measure_temp` empty is sufficient but not necessary.
 
 **Relays show a frozen Virtual Camera after main was relaunched with a different OBS build:** the camera system
 extension got replaced and the relays' capture sessions stayed on the dead one — relaunch the relays.
