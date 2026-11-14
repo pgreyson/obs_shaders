@@ -73,7 +73,8 @@ Virtual Camera for the relays. Scene `Scene`, bottom to top:
       gain → contrast → gamma → brightness → saturation → hue shift (°) → hue concentration
       (`hue_peaks` / `hue_pull` / `hue_phase`, the hue-only part of palette_quantize) → `opacity`.
       Alpha from the key is only ever multiplied here, so nothing in this stage can change
-      what was keyed. Room currently: width 1161, shift −10, offset +28, vignette 184, opacity 0.06.
+      what was keyed. `bypass` (checkbox) passes the key's output straight through — window,
+      grading and opacity all off — to see what the stage is being fed. Room currently: width 1161, shift −10, offset +28, vignette 184, opacity 0.06.
    Three passes instead of five: render time on main fell 54.5 → 41 ms (17.8 → 24 fps) at the
    migration. NOTE: filter add/remove over obs-websocket does not mark the project changed, so
    OBS does not autosave such a change — `camera_chain.py` creates and removes a scratch scene

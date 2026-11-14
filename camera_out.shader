@@ -17,8 +17,16 @@
 //   3. hue concentration (the hue-only part of palette_quantize: N peaks the
 //      colours flow toward, pull strength, phase)
 //   4. opacity
+// `bypass` skips all of it and passes the key's output straight through.
 // Every control at its default is an exact passthrough. Units are px of the
 // surface the filter sits on (camera_chain = canvas px, 2x camera px).
+
+// ---- 0. bypass -----------------------------------------------------------
+// Shows the signal exactly as it arrives from the key: no window, feather,
+// grading, hue work or opacity. For checking what the stage is being given.
+uniform bool bypass<
+    string label = "BYPASS: show the incoming signal, no processing";
+> = false;
 
 // ---- 1. stereo window --------------------------------------------------
 uniform float window_width<
@@ -157,6 +165,8 @@ float3 hsv2rgb3(float h, float s, float v) {
 float4 mainImage(VertData v_in) : TARGET
 {
     float2 uv = v_in.uv;
+    if (bypass)
+        return image.Sample(textureSampler, uv);
     float is_left = step(uv.x, 0.5);
 
     // ---- 1. stereo window + feather (alpha only)
