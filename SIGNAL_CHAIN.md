@@ -168,6 +168,19 @@ a frame unchanged for 30 s is checked on the Pi itself (console: `vcgencmd measu
 raspivid's `/proc/<pid>/stat` CPU ticks unchanged over 4 s) and only a confirmed stall gets
 `?command=reboot`, then a 4 min cooldown. A Pi whose console does not answer is logged once as
 needing a power cycle. The log doubles as the freeze-frequency record for the config experiment below.
+**Prime suspect found 2026-11-14 ~13:00: Cosmostreamer's TFT mirror daemon.** The two Pis' configs
+are byte-identical (config.txt, cmdline, cosmostreamer.conf, stereopi.conf, rtsp.conf, firmware) — the
+CPU difference was `./tft-display-waveshare20` (conf `tft_display_enabled=1`, `tft_display_model=1` =
+Waveshare 2" SPI screen, which neither Pi has): 37 % CPU on stage, 88 % on room, 7 threads, holding
+`/dev/vcio` (the firmware MAILBOX), `/dev/vchiq` (dispmanx) and `/dev/mem` open — i.e. a userspace
+process hammering the exact interface that wedges, forever, for a display that isn't there. Disabled
+with `tools/pi_conf.sh <ip> tft-off` (+ reboot): stage done 13:52 (daemon gone, raspivid CPU halved);
+room pending — it was unreachable again (see below). `./rc --enabled=0` (pigpio, ~25 % CPU) also runs
+with nothing to do but has no conf switch; left alone.
+**Room Pi second failure mode (2026-11-14 ~13:30, 2 h after a power cycle):** no ping, no console,
+yet its HDMI picture kept MOVING in OBS — the VideoCore was fine and the ARM/Linux side (or its WiFi)
+died. Different from the mailbox wedge; only a power cycle recovers it. The watchdog logs it as
+"console unreachable" in its 10-min health line and cannot act.
 **Config experiment (2026-11-14 11:28, stage Pi only; room is the control):** `/boot/config.txt`
 `[all]` now has `gpu_mem=256` (was 160 — Pi engineers traced one firmware-timeout family to GPU memory
 exhaustion), `force_turbo=1` + `arm_freq=1200` (fixed clock: the `ondemand` governor's clock requests
