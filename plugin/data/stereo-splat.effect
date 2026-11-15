@@ -33,14 +33,18 @@ uniform float2 dims;     // source width, height
 uniform float eye_sign;  // +1 = L, -1 = R (crossed disparity)
 uniform float eye_base;  // 0 (L) or eye_w (R) in output pixels
 uniform float eye_w;     // dims.x / 2
-uniform float f0;        // depth_slider^2 * MAX_PARALLAX
-uniform float vis_lo;    // PIC_LO + f0
-uniform float span;      // (PIC_HI - f0) - vis_lo
+uniform float f0;        // per-eye displacement per unit depth (source u)
+			 //   = thickness_px * span / (2 * 1920)
+uniform float inset;     // fixed frame inset (source u), from frame_inset_px
+uniform float vis_lo;    // PIC_LO + inset
+uniform float span;      // (PIC_HI - inset) - vis_lo
 uniform float window_on; // 1 = floating window (no edge taper)
 uniform float fill_px;   // micro-fill: gaps <= this many px (0 = off)
 uniform float mlaa_on;   // reveal-edge MLAA in the present pass
-uniform float convergence; // depth whose plane sits AT the screen (0 =
-			   // original black-at-screen convention)
+uniform float shift0;    // per-eye constant shift (source u)
+			 //   = (anchor*thickness_px - plane_px) * span / (2 * 1920)
+			 // displayed disparity (L-R, px at 1920/eye) of depth dt:
+			 //   plane_px + thickness_px * (dt - anchor)
 
 sampler_state pointSampler {
 	Filter    = Point;
@@ -79,7 +83,7 @@ float edge_taper(float x)
 {
 	if (window_on > 0.5 || f0 <= 0.0)
 		return 1.0;
-	float d = min(x - (PIC_LO + f0), (PIC_HI - f0) - x) - f0;
+	float d = min(x - (PIC_LO + inset), (PIC_HI - inset) - x) - f0;
 	float t = clamp(d / (1.5 * f0 + 0.001), 0.0, 1.0);
 	return t * t * (3.0 - 2.0 * t);
 }
@@ -88,7 +92,7 @@ float edge_taper(float x)
 // COLOR stream already had it applied CPU-side).
 float src_row(float out_row)
 {
-	float sr = floor((f0 + (out_row + 0.5) / dims.y * (1.0 - 2.0 * f0)) *
+	float sr = floor((inset + (out_row + 0.5) / dims.y * (1.0 - 2.0 * inset)) *
 			 dims.y);
 	return clamp(sr, 0.0, dims.y - 1.0);
 }
@@ -106,7 +110,7 @@ SplatOut VSSplat(VertIn v_in)
 	float u_c = v_in.pos.z;
 	float d = clamp(2.0 * (v_in.col.a - 0.5), 0.0, 1.0);
 	float dt_e = d * edge_taper(u_edge);
-	float dest = u_edge + eye_sign * (dt_e - convergence) * f0;
+	float dest = u_edge + eye_sign * (dt_e * f0 - shift0);
 	float q = (dest - vis_lo) / span;
 	// +5e-4 px epsilon inside the floor: shared bin-boundary
 	// convention with the oracle (f32-vs-f64 lattice dust); change
@@ -144,7 +148,7 @@ WarpOut VSWarp(VertIn v_in)
 	float out_row = v_in.pos.y;
 	float d = clamp(2.0 * (v_in.col.a - 0.5), 0.0, 1.0);
 	float dt = d * edge_taper(u);
-	float dest = u + eye_sign * (dt - convergence) * f0;
+	float dest = u + eye_sign * (dt * f0 - shift0);
 	float q = (dest - vis_lo) / span;
 	float out_x = eye_base + clamp(q, 0.0, 1.0) * eye_w;
 	float out_y = out_row + v_in.pos.z; // z flag: 0 top, 1 bottom
@@ -164,7 +168,7 @@ SplatOut VSDebugQ(VertIn v_in)
 	float u_sub = v_in.pos.x;
 	float d = clamp(2.0 * (v_in.col.a - 0.5), 0.0, 1.0);
 	float dt = d * edge_taper(u_sub);
-	float dest = u_sub + eye_sign * (dt - convergence) * f0;
+	float dest = u_sub + eye_sign * (dt * f0 - shift0);
 	float q = (dest - vis_lo) / span;
 	float v = q * eye_w; // the value under test
 

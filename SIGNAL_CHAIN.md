@@ -82,6 +82,28 @@ Virtual Camera for the relays. Scene `Scene`, bottom to top:
    off here: the camera already carries real stereo. **Trim sbs align / camera out on
    `stage` / `room`, not on the inputs** — the depth sidecar screenshots the raw stage input.
 
+**Stereo field: one scale for all three layers (2026-11-14).** Unit everywhere: displayed
+disparity = x_left − x_right in CANVAS px (1920 per eye), **+ = in front of the screen, − = behind**.
+- **Synth** (`stereo splat` plugin): disparity of bake depth dt (1 = near) is
+  `plane_px + thickness_px · (dt − anchor)`. `thickness_px` = total depth range, linear, driven by CV
+  ch0 (bridge `out_range` 0…80 px = the performance budget); `plane_px` = where the anchor depth sits;
+  `anchor` = what holds still when thickness moves (1 front, 0.5 middle, 0 back);
+  `frame_inset_px` = fixed crop margin per side, so the picture no longer zooms with the depth knob.
+  These replace `depth` (squared budget) + `convergence` (in units of that budget), which moved both
+  planes at once; an old scene is migrated to the identical picture on first load. The bridge writes
+  thickness only: the `CameraAlign` solver, its offset files and `tools/synth_plane.py` are gone.
+- **Cameras** (`sbs align`): one `convergence` slider (+ = toward viewer) on top of the per-eye trims.
+- **`tools/stereo_field.py`** (run with `depth_sidecar/.venv/bin/python3`, needs OpenCV): `status`
+  measures every layer by feature matching between the eyes and prints them on one strip with the
+  program total against a budget (default 58 px = 3 % of the eye width); `converge stage|room|both
+  [--at 0] [--pct 50] [--fix-vertical]` puts a camera subject on the screen plane and removes vertical
+  offset; `snap [--to stage] [--gap 6] [--side behind|front]` parks the synth just behind (or in front
+  of) the camera subject; `set plane|thickness|anchor V`. On demand only: re-run converge/snap after
+  re-zooming or moving a camera.
+- Measured before (same day): stage +58…+85, room +74…+109, synth −84…+77 → 10 % of the eye width,
+  layers in different places, 7–11 px vertical error on the cameras. After `converge both
+  --fix-vertical`: stage −7…+19, room −22…+12, vertical < 1.5 px.
+
 Audio: `Mic/Aux` unmuted, *monitor and output*, monitoring device = system default
 (VITURE DisplayPort audio) via filters `Monitor Gain` +15 dB → `Monitor Limiter` −3 dB
 (the VITURE has no macOS volume control and the fader tops out at 0 dB).

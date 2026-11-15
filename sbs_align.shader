@@ -51,6 +51,20 @@ uniform float right_y<
     float step = 0.25;
 > = 0.0;
 
+// CONVERGENCE: one control for where the subject sits in depth. Adds +c/2 to
+// the left eye's x shift and -c/2 to the right eye's, on top of the per-eye
+// trims above, so displayed disparity (left - right, px of this surface)
+// changes by exactly +c. Positive brings the scene toward the viewer,
+// negative pushes it back. tools/stereo_field.py converge sets this from a
+// measurement so a chosen part of the subject lands on the screen plane.
+uniform float convergence<
+    string label = "Convergence (px; + = toward viewer, - = away)";
+    string widget_type = "slider";
+    float minimum = -300.0;
+    float maximum = 300.0;
+    float step = 0.5;
+> = 0.0;
+
 // After shifting, each eye has content the other eye lacks (the strip that
 // slid in from off-frame on one side, and the area revealed on the other).
 // Those pixels have no counterpart and fight fusion, so mask them in BOTH
@@ -65,7 +79,9 @@ float4 mainImage(VertData v_in) : TARGET
     float2 uv = v_in.uv;
 
     float is_left = step(uv.x, 0.5);
-    float2 off = float2(lerp(right_x, left_x, is_left),
+    float lx = left_x + 0.5 * convergence;     // effective per-eye x shifts
+    float rx = right_x - 0.5 * convergence;
+    float2 off = float2(lerp(rx, lx, is_left),
                         lerp(right_y, left_y, is_left));
 
     if (mask_common) {
@@ -74,8 +90,8 @@ float4 mainImage(VertData v_in) : TARGET
         float2 p = float2((uv.x - (1.0 - is_left) * 0.5) * 2.0, uv.y) * eye_px;
         // after a shift of +d, an eye shows content on [max(0,d), W+min(0,d)];
         // the common window is the intersection over both eyes
-        float x0 = max(max(0.0, left_x), max(0.0, right_x));
-        float x1 = eye_px.x + min(min(0.0, left_x), min(0.0, right_x));
+        float x0 = max(max(0.0, lx), max(0.0, rx));
+        float x1 = eye_px.x + min(min(0.0, lx), min(0.0, rx));
         float y0 = max(max(0.0, left_y), max(0.0, right_y));
         float y1 = eye_px.y + min(min(0.0, left_y), min(0.0, right_y));
         if (p.x < x0 || p.x > x1 || p.y < y0 || p.y > y1)

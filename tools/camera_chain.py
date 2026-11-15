@@ -43,7 +43,7 @@ SHADER = {
 NEW_ORDER = ("sbs align", "camera key", "camera out")
 OLD_FILTERS = ("sbs align", "synth color", "palette", "pillar box", "mix opacity", "camera key")
 
-ALIGN_KEYS = ("left_x", "left_y", "right_x", "right_y", "mask_common")
+ALIGN_KEYS = ("left_x", "left_y", "right_x", "right_y", "mask_common", "convergence")
 WINDOW_KEYS = ("window_width", "window_shift", "window_offset", "mask_top", "mask_bottom", "vignette")
 KEY_DROP = ("out_gain", "out_contrast", "out_brightness")
 

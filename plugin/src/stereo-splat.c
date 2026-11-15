@@ -33,7 +33,11 @@ All constants mirror tools/stereo_oracle.py — change both together.
 
 #define PIC_LO 0.010f
 #define PIC_HI 0.985f
-#define MAX_PARALLAX 0.08f
+#define MAX_PARALLAX 0.08f /* legacy depth^2 curve: settings migration only */
+/* The field controls are in CANVAS px at 1920 per eye (the unit of the
+   camera layers' sbs align / camera out sliders), whatever the source
+   resolution: px / FIELD_EYE_PX = fraction of the eye width. */
+#define FIELD_EYE_PX 1920.0f
 
 struct stereo_splat {
 	obs_source_t *context;
@@ -50,7 +54,8 @@ struct stereo_splat {
 	gs_eparam_t *p_window_on;
 	gs_eparam_t *p_fill_px;
 	gs_eparam_t *p_mlaa_on;
-	gs_eparam_t *p_convergence;
+	gs_eparam_t *p_convergence; /* effect param "shift0" */
+	gs_eparam_t *p_inset;
 
 	gs_texrender_t *input_rt;
 	gs_texrender_t *output_rt;
@@ -81,8 +86,17 @@ struct stereo_splat {
 	uint32_t vb_width, vb_height;
 	bool vb_ssaa;
 
-	float depth;    /* slider 0..1 (CV ch0) */
-	float convergence; /* depth plane placed AT the screen (0..1) */
+	/* Stereo field, displayed disparity (L - R, canvas px, + = in front
+	   of the screen) of bake depth dt (1 = near):
+	       D(dt) = plane_px + thickness_px * (dt - anchor)
+	   thickness = total depth range (CV ch0), plane = where the anchor
+	   depth sits, anchor = which depth holds still when thickness moves
+	   (1 front, 0.5 middle, 0 back). frame_inset_px = fixed crop margin
+	   per side, so framing does not breathe with thickness. */
+	float thickness_px;
+	float plane_px;
+	float anchor;
+	float frame_inset_px;
 	int mode;       /* 0 = splat, 1 = warp */
 	bool window;    /* floating window instead of edge taper */
 	int fill;       /* micro-fill width px (0 = off) */
@@ -103,8 +117,31 @@ static const char *splat_get_name(void *unused)
 static void splat_update(void *data, obs_data_t *settings)
 {
 	struct stereo_splat *s = data;
-	s->depth = (float)obs_data_get_double(settings, "depth");
-	s->convergence = (float)obs_data_get_double(settings, "convergence");
+	/* One-time migration from the legacy depth/convergence pair
+	   (f0 = depth^2 * MAX_PARALLAX, disparity = 2*(dt - c)*f0/span):
+	   the picture is unchanged on first load of an old scene. */
+	if (!obs_data_has_user_value(settings, "thickness_px") &&
+	    obs_data_has_user_value(settings, "depth")) {
+		double depth = obs_data_get_double(settings, "depth");
+		double c = obs_data_get_double(settings, "convergence");
+		double f0 = depth * depth * MAX_PARALLAX;
+		double span = (PIC_HI - f0) - (PIC_LO + f0);
+		double t = 2.0 * f0 / span * FIELD_EYE_PX;
+		double a = c < 0.0 ? 0.0 : (c > 1.0 ? 1.0 : c);
+		obs_data_set_double(settings, "thickness_px", t);
+		obs_data_set_double(settings, "anchor", a);
+		obs_data_set_double(settings, "plane_px", t * (a - c));
+		obs_data_set_double(settings, "frame_inset_px",
+				    f0 / span * FIELD_EYE_PX);
+		obs_log(LOG_INFO,
+			"stereo splat: migrated depth %.3f conv %.3f -> thickness %.1f px, plane %+.1f px, anchor %.2f, inset %.1f px",
+			depth, c, t, t * (a - c), a, f0 / span * FIELD_EYE_PX);
+	}
+	s->thickness_px = (float)obs_data_get_double(settings, "thickness_px");
+	s->plane_px = (float)obs_data_get_double(settings, "plane_px");
+	s->anchor = (float)obs_data_get_double(settings, "anchor");
+	s->frame_inset_px =
+		(float)obs_data_get_double(settings, "frame_inset_px");
 	s->mode = (int)obs_data_get_int(settings, "mode");
 	s->window = obs_data_get_bool(settings, "window");
 	s->fill = (int)obs_data_get_int(settings, "fill");
@@ -116,8 +153,10 @@ static void splat_update(void *data, obs_data_t *settings)
 
 static void splat_defaults(obs_data_t *settings)
 {
-	obs_data_set_default_double(settings, "depth", 0.3);
-	obs_data_set_default_double(settings, "convergence", 0.0);
+	obs_data_set_default_double(settings, "thickness_px", 30.0);
+	obs_data_set_default_double(settings, "plane_px", 0.0);
+	obs_data_set_default_double(settings, "anchor", 1.0);
+	obs_data_set_default_double(settings, "frame_inset_px", 48.0);
 	obs_data_set_default_int(settings, "mode", 0);
 	obs_data_set_default_bool(settings, "window", false);
 	obs_data_set_default_int(settings, "fill", 3);
@@ -131,12 +170,18 @@ static obs_properties_t *splat_properties(void *data)
 {
 	UNUSED_PARAMETER(data);
 	obs_properties_t *props = obs_properties_create();
-	obs_properties_add_float_slider(props, "depth",
-					obs_module_text("Depth"), 0.0, 1.0,
-					0.001);
-	obs_properties_add_float_slider(props, "convergence",
-					obs_module_text("Convergence"), 0.0,
-					1.0, 0.001);
+	obs_properties_add_float_slider(props, "plane_px",
+					obs_module_text("Plane"), -150.0,
+					150.0, 0.5);
+	obs_properties_add_float_slider(props, "thickness_px",
+					obs_module_text("Thickness"), 0.0,
+					240.0, 0.5);
+	obs_properties_add_float_slider(props, "anchor",
+					obs_module_text("Anchor"), 0.0, 1.0,
+					0.01);
+	obs_properties_add_float_slider(props, "frame_inset_px",
+					obs_module_text("FrameInset"), 0.0,
+					120.0, 1.0);
 	obs_property_t *m = obs_properties_add_list(
 		props, "mode", obs_module_text("Mode"), OBS_COMBO_TYPE_LIST,
 		OBS_COMBO_FORMAT_INT);
@@ -212,8 +257,9 @@ static void *splat_create(obs_data_t *settings, obs_source_t *context)
 	s->p_window_on = gs_effect_get_param_by_name(s->effect, "window_on");
 	s->p_fill_px = gs_effect_get_param_by_name(s->effect, "fill_px");
 	s->p_mlaa_on = gs_effect_get_param_by_name(s->effect, "mlaa_on");
-	s->p_convergence = gs_effect_get_param_by_name(s->effect,
-						       "convergence");
+	s->p_convergence =
+		gs_effect_get_param_by_name(s->effect, "shift0");
+	s->p_inset = gs_effect_get_param_by_name(s->effect, "inset");
 
 	splat_update(s, settings);
 	return s;
@@ -439,7 +485,16 @@ static void splat_render(void *data, gs_effect_t *unused_effect)
 
 	/* ---- pass 1b: stage the input and stream the COLOR attribute
 	   (vertex texture fetch is broken on Apple GL — see header) ---- */
-	float f0 = s->depth * s->depth * MAX_PARALLAX;
+	/* fi = frame inset in source-u units: fi/span = inset_px/eye. With
+	   span = (PIC_HI - PIC_LO) - 2*fi  ->  fi = r*(PIC_HI-PIC_LO)/(1+2r).
+	   k  = per-eye displacement per unit depth (source u),
+	   s0 = per-eye constant shift, both from the px controls. */
+	float r_in = s->frame_inset_px / FIELD_EYE_PX;
+	float f0 = r_in * (PIC_HI - PIC_LO) / (1.0f + 2.0f * r_in);
+	float span_f = (PIC_HI - f0) - (PIC_LO + f0);
+	float disp_k = s->thickness_px * span_f / (2.0f * FIELD_EYE_PX);
+	float disp_s0 = (s->anchor * s->thickness_px - s->plane_px) * span_f /
+			(2.0f * FIELD_EYE_PX);
 	bool warp_mode = (s->mode == 1 && s->debug == 0);
 	if (s->debug < 2 || s->debug == 5) {
 		gs_stage_texture(s->stage[s->stage_idx], input_tex);
@@ -535,14 +590,14 @@ static void splat_render(void *data, gs_effect_t *unused_effect)
 			   (measured: warp R eye rendered black fragments). */
 			gs_effect_set_texture(s->p_image, input_tex);
 			gs_effect_set_vec2(s->p_dims, &dims);
-			gs_effect_set_float(s->p_f0, f0);
+			gs_effect_set_float(s->p_f0, disp_k);
+			gs_effect_set_float(s->p_inset, f0);
 			gs_effect_set_float(s->p_vis_lo, vis_lo);
 			gs_effect_set_float(s->p_span, span);
 			gs_effect_set_float(s->p_eye_w, eye_w);
 			gs_effect_set_float(s->p_window_on,
 					    s->window ? 1.0f : 0.0f);
-			gs_effect_set_float(s->p_convergence,
-					    s->convergence);
+			gs_effect_set_float(s->p_convergence, disp_s0);
 			gs_effect_set_float(s->p_eye_sign,
 					    eye == 0 ? 1.0f : -1.0f);
 			gs_effect_set_float(s->p_eye_base,

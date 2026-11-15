@@ -376,7 +376,7 @@ async def main():
         if r.responseData:
             s = r.responseData['filterSettings']
             scale = args.grab_width / float(args.align_source_width)
-            dx = (s.get('right_x', 0.0) - s.get('left_x', 0.0)) * scale
+            dx = (s.get('right_x', 0.0) - s.get('left_x', 0.0) - s.get('convergence', 0.0)) * scale
             dy = (s.get('right_y', 0.0) - s.get('left_y', 0.0)) * scale
         engine = SgbmEngine(dx=dx, dy=dy,
                             size=(args.grab_width // 2, int(args.grab_width * 1080 / 1920)))
@@ -400,7 +400,7 @@ async def main():
         if r.responseData and hasattr(engine, 'stereo'):
             a = r.responseData['filterSettings']
             scale = args.grab_width / float(args.align_source_width)
-            engine.stereo.dx = (a.get('right_x', 0.0) - a.get('left_x', 0.0)) * scale
+            engine.stereo.dx = (a.get('right_x', 0.0) - a.get('left_x', 0.0) - a.get('convergence', 0.0)) * scale
             engine.stereo.dy = (a.get('right_y', 0.0) - a.get('left_y', 0.0)) * scale
     ema = None
     guide_ema = None

@@ -37,7 +37,7 @@ import numpy as np
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).parent))
-from stereo_oracle import pattern, render_eyes, render_eyes_warp  # noqa: E402
+from stereo_oracle import pattern, render_eyes, render_eyes_warp, legacy_to_field  # noqa: E402
 
 import simpleobsws  # noqa: E402
 
@@ -106,9 +106,9 @@ async def run(configs):
         # long false debugging hunts (cw=0, sigma=4, convergence=0.3)
         await ws.call(simpleobsws.Request("SetSourceFilterSettings", {
             "sourceName": SOURCE, "filterName": FILTER,
-            "filterSettings": {"depth": depth, "mode": mode,
+            "filterSettings": {**legacy_to_field(depth, 0.0), "mode": mode,
                                "fill": 3, "ssaa": False, "mlaa": True,
-                               "convergence": 0.0, "window": False,
+                               "window": False,
                                "sync": True, "debug": 0}}))
         # regional-depth smoothing: both separable passes get the same sigma
         for fname in ("field smooth h", "field smooth v"):

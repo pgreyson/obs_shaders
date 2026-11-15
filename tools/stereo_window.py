@@ -58,7 +58,8 @@ async def main():
             continue
         wnd = await filt(lay, "camera out") or {}      # window/vignette moved here 2026-11-14
         g = lambda k, d=0.0: float(wnd.get(k, al.get(k, d)) if k.startswith(("window_", "mask_")) else al.get(k, d))
-        lx, rx, ly, ry = g("left_x"), g("right_x"), g("left_y"), g("right_y")
+        cv = g("convergence")
+        lx, rx, ly, ry = g("left_x") + cv / 2, g("right_x") - cv / 2, g("left_y"), g("right_y")
         x0 = max(0.0, lx, rx); x1 = EYE_W + min(0.0, lx, rx)
         L, Rw = [x0, x1], [x0, x1]
         if g("window_width") > 0.5:

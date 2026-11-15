@@ -35,40 +35,19 @@ cv:
 #   ch3 → palette / size     (number of hue likelihood peaks N, 1..16)
 mappings:
   - cv_channel: 0
-    name: depth
+    name: thickness
     cv_range:  [-1.0, 1.0]
-    out_range: [ 0.0, 1.0]
-    # Camera alignment (2026-11-07): while depth_sidecar publishes the StereoPi's
-    # live displayed-disparity percentiles, the splat is scaled so the synth's
-    # depth range spans the SAME screen disparity as the camera (convergence set
-    # where the camera scene crosses the screen plane), and this knob becomes the
-    # fraction of that range (0 flat .. 1 exact match). Zooming the camera changes
-    # its disparities -> the splat follows. Stats stale (>6 s) -> knob = depth, as before.
-    camera_align:
-      stats_file: /tmp/stereopi_depth_stats.json
-      control_file: /tmp/camera_align_ctl.json   # live overrides, written by tools/synth_plane.py
-      offset_file: /tmp/camera_align_offset.json # user convergence offset (the splat slider adds to the solved value)
-      mode: behind             # behind | front | match | off  (see tools/synth_plane.py)
-      gap_px: 2.0              # behind: synth front plane this far (source px) behind the camera's far plane
-      front_px: -10.0          # front: absolute front-plane disparity (source px; negative = behind screen)
-      max_age_s: 6.0
-      canvas_scale: 2.0        # camera source 1920 px stretched to the 3840 canvas
-      eye_px: 1920             # canvas px per eye
-      max_parallax: 0.08       # MAX_PARALLAX in plugin/src/stereo-splat.c
-      convergence_targets:
-        - instance: viture
-          source: "Video Capture Device"
-          filter: "stereo splat"
-          property: convergence
+    # Stereo THICKNESS of the synth field: total depth range in canvas px (1920 per
+    # eye), linear. The knob only opens/closes the field; WHERE it sits is the splat's
+    # plane_px / anchor (OBS filter panel, or tools/stereo_field.py snap|set), which the
+    # bridge never writes. out_range is the performance budget: 58 px = 3 % of the eye
+    # width is a comfortable total for the whole program, cameras included.
+    out_range: [ 0.0, 80.0]
     targets:
       - instance: viture
         source: "Video Capture Device"
         filter: "stereo splat"
-        property: depth
-      - instance: projector
-        source: "Video Capture Device"
-        filter: "stereo splat"
-        property: depth
+        property: thickness_px
 
   - cv_channel: 1
     name: hue_rotation

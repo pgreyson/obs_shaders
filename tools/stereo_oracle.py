@@ -18,6 +18,22 @@ import numpy as np
 W, H = 1920, 1080
 MAX_PARALLAX = 0.08
 PIC_LO, PIC_HI = 0.010, 0.985
+FIELD_EYE_PX = 1920.0
+
+
+def legacy_to_field(depth_slider, convergence=0.0):
+    """The plugin's controls are now plane_px / thickness_px / anchor / frame_inset_px
+    (displayed disparity L-R in px at 1920 per eye: plane + thickness*(dt - anchor)).
+    The oracle keeps the legacy (depth_slider, convergence) form, which is the SAME
+    geometry: f0 = depth^2*MAX_PARALLAX is both the frame inset and the per-eye
+    displacement per unit depth. This returns the plugin settings that reproduce an
+    oracle render exactly (it is also the plugin's own one-time settings migration)."""
+    f0 = depth_slider * depth_slider * MAX_PARALLAX
+    span = (PIC_HI - f0) - (PIC_LO + f0)
+    t = 2.0 * f0 / span * FIELD_EYE_PX
+    a = min(1.0, max(0.0, convergence))
+    return {"thickness_px": t, "anchor": a, "plane_px": t * (a - convergence),
+            "frame_inset_px": f0 / span * FIELD_EYE_PX}
 
 # ---- pattern spec (mirrored in test_pattern.shader) ----
 RECTS = [  # x0,y0,x1,y1, r,g,b
