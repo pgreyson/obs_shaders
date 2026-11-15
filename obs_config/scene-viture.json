@@ -233,8 +233,8 @@
                         "luma_levels": 0.05,
                         "shimmer": 0.57,
                         "size": 6.0,
-                        "rotation": 0.06295359134674072,
-                        "hue_pull": 0.5123881148174405,
+                        "rotation": 0.06292074918746948,
+                        "hue_pull": 0.5126401139423251,
                         "skew": 0.0,
                         "luma_pull": 0.0,
                         "chroma_pull": 0.0
@@ -266,7 +266,7 @@
                         "from_file": true,
                         "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/chromadepth_bake.shader",
                         "room_depth_source": "StereoPi Depth",
-                        "hue_rotation": 0.4698508642613888,
+                        "hue_rotation": 0.4697658345103264,
                         "color_weight": 0.9999902248382568,
                         "wheel_shape": 0.0,
                         "room_mix": 0.0,
@@ -364,7 +364,11 @@
                         "ssaa": false,
                         "mlaa": true,
                         "sync": false,
-                        "debug": 0
+                        "debug": 0,
+                        "thickness_px": 54.992971420288086,
+                        "anchor": 1.0,
+                        "plane_px": -28,
+                        "frame_inset_px": 80.65621540305648
                     },
                     "mixers": 0,
                     "sync": 0,
@@ -666,7 +670,11 @@
                         "ssaa": false,
                         "mlaa": true,
                         "sync": true,
-                        "debug": 0
+                        "debug": 0,
+                        "thickness_px": 167.88756848322328,
+                        "anchor": 0.3,
+                        "plane_px": 0.0,
+                        "frame_inset_px": 83.94378424161164
                     },
                     "mixers": 0,
                     "sync": 0,
@@ -1528,8 +1536,8 @@
                         "left_y": -5.25,
                         "right_x": 97.75,
                         "right_y": 37.75,
-                        "mask_common": false,
-                        "convergence": -65.5
+                        "convergence": -65.5,
+                        "mask_common": false
                     },
                     "mixers": 0,
                     "sync": 0,
@@ -1736,8 +1744,8 @@
                         "left_y": 101.75,
                         "right_x": 53.25,
                         "right_y": -51.25,
-                        "mask_common": true,
-                        "convergence": -98.0
+                        "convergence": -98.0,
+                        "mask_common": true
                     },
                     "mixers": 0,
                     "sync": 0,
@@ -1888,14 +1896,7 @@
             "fade_to_black": true
         }
     ],
-    "saved_projectors": [
-        {
-            "monitor": 2,
-            "type": 2,
-            "geometry": "AdnQywADAAAAAApAAAAAAAAAGT8AAAQ3AAAKQAAAAAAAABk/AAAENwAAAAIABAAADwAAAApAAAAAAAAAGT8AAAQ3",
-            "alwaysOnTopOverridden": false
-        }
-    ],
+    "saved_projectors": [],
     "preview_locked": false,
     "scaling_enabled": true,
     "scaling_level": -20,

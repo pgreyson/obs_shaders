@@ -144,8 +144,9 @@ def strip(lo, hi, vmin, vmax, width=61, ch="█"):
     z = f(0.0)
     if 0 <= z < width:
         cells[z] = "│"
-    for i in range(max(0, f(lo)), min(width - 1, f(hi)) + 1):
-        cells[i] = ch
+    if hi >= lo:
+        for i in range(max(0, f(lo)), min(width - 1, f(hi)) + 1):
+            cells[i] = ch
     return "".join(cells)
 
 
