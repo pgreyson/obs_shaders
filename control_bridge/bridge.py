@@ -185,7 +185,10 @@ async def cv_writer_loop(
                     continue
                 prop_key = (inst, target["source"], target["filter"], target["property"])
                 prev = last_written.get(prop_key)
-                if prev is not None and abs(prev - val) < write_threshold:
+                # threshold is a fraction of the mapping's output span (a px-valued
+                # property like thickness_px 0..80 must not be rewritten on CV noise)
+                span = abs(out_range[1] - out_range[0]) or 1.0
+                if prev is not None and abs(prev - val) < write_threshold * span:
                     continue
                 last_written[prop_key] = val
                 group_key = (inst, target["source"], target["filter"])
