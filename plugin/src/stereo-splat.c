@@ -101,6 +101,13 @@ struct stereo_splat {
 	float anchor;
 	float frame_inset_px;
 	float vignette_pct; /* depth vignette ramp width, % of frame */
+	/* PERSPECTIVE coupling (0 = off): px from the scale's 0 back to optical
+	   infinity. A rigid object's front-to-back disparity grows with the
+	   square of its disparity measured from infinity, so
+	       effective thickness = thickness_px * (1 + plane_px/E)^2
+	   (thickness_px is the value AT plane 0). Coming forward deepens the
+	   field, going back flattens it, flat at plane <= -E. Capped at 4x. */
+	float perspective_px;
 	int mode;       /* 0 = splat, 1 = warp */
 	bool window;    /* floating window instead of edge taper */
 	int fill;       /* micro-fill width px (0 = off) */
@@ -149,6 +156,8 @@ static void splat_update(void *data, obs_data_t *settings)
 	s->mode = (int)obs_data_get_int(settings, "mode");
 	s->vignette_pct =
 		(float)obs_data_get_double(settings, "vignette_pct");
+	s->perspective_px =
+		(float)obs_data_get_double(settings, "perspective_px");
 	s->window = obs_data_get_bool(settings, "window");
 	s->fill = (int)obs_data_get_int(settings, "fill");
 	s->ssaa = obs_data_get_bool(settings, "ssaa");
@@ -164,6 +173,7 @@ static void splat_defaults(obs_data_t *settings)
 	obs_data_set_default_double(settings, "anchor", 1.0);
 	obs_data_set_default_double(settings, "frame_inset_px", 48.0);
 	obs_data_set_default_double(settings, "vignette_pct", 0.0);
+	obs_data_set_default_double(settings, "perspective_px", 0.0);
 	obs_data_set_default_int(settings, "mode", 0);
 	obs_data_set_default_bool(settings, "window", false);
 	obs_data_set_default_int(settings, "fill", 3);
@@ -189,6 +199,9 @@ static obs_properties_t *splat_properties(void *data)
 	obs_properties_add_float_slider(props, "vignette_pct",
 					obs_module_text("DepthVignette"), 0.0,
 					50.0, 0.5);
+	obs_properties_add_float_slider(props, "perspective_px",
+					obs_module_text("Perspective"), 0.0,
+					300.0, 1.0);
 	obs_properties_add_float_slider(props, "frame_inset_px",
 					obs_module_text("FrameInset"), 0.0,
 					120.0, 1.0);
@@ -505,8 +518,18 @@ static void splat_render(void *data, gs_effect_t *unused_effect)
 	float r_in = s->frame_inset_px / FIELD_EYE_PX;
 	float f0 = r_in * (PIC_HI - PIC_LO) / (1.0f + 2.0f * r_in);
 	float span_f = (PIC_HI - f0) - (PIC_LO + f0);
-	float disp_k = s->thickness_px * span_f / (2.0f * FIELD_EYE_PX);
-	float disp_s0 = (s->anchor * s->thickness_px - s->plane_px) * span_f /
+	float thick = s->thickness_px;
+	if (s->perspective_px >= 1.0f) {
+		float g = 1.0f + s->plane_px / s->perspective_px;
+		if (g < 0.0f)
+			g = 0.0f;
+		g *= g;
+		if (g > 4.0f)
+			g = 4.0f;
+		thick *= g;
+	}
+	float disp_k = thick * span_f / (2.0f * FIELD_EYE_PX);
+	float disp_s0 = (s->anchor * thick - s->plane_px) * span_f /
 			(2.0f * FIELD_EYE_PX);
 	bool warp_mode = (s->mode == 1 && s->debug == 0);
 	if (s->debug < 2 || s->debug == 5) {
