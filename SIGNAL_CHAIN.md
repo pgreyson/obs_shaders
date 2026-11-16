@@ -94,6 +94,13 @@ disparity = x_left − x_right in CANVAS px (1920 per eye), **+ = in front of th
   the centre can carry more thickness; 0 = off. Slider ranges: plane ±300, thickness 0…600.
   COMFORT ZERO IS NOT 0 PX in the Viture glasses: Paul finds anything below about +35 px painful at any
   thickness, and runs synth and cameras at roughly +70…+170. Treat ~+35 as the far limit, not 0.
+  DISPLAY ZERO (2026-11-15): `display zero` (`display_zero.shader`) on main's PROGRAM scene `Scene` adds
+  `zero_px` to the displayed disparity of every layer at once (left eye right by zero/2, right eye left
+  by zero/2) and is baked into vcam, so Twitch/YouTube/projector carry it; Viture is the reference.
+  With it set to the glasses' relaxed value, 0 on plane/convergence/window means the relaxed plane.
+  `tools/stereo_field.py zero [N] [--keep]` reads/sets it; `--keep` subtracts the change from the splat
+  plane and both camera convergences so the picture does not move. `status` measures the layer scenes,
+  i.e. BEFORE this offset.
   `tools/relaunch_main.sh` restarts main alone (relays keep their streams) to load a rebuilt plugin.
   These replace `depth` (squared budget) + `convergence` (in units of that budget), which moved both
   planes at once; an old scene is migrated to the identical picture on first load. The bridge writes

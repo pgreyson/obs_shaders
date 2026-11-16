@@ -256,6 +256,33 @@ async def cmd_set(args):
         await o.nudge_save()
 
 
+PROGRAM, ZERO = "Scene", "display zero"
+
+
+async def cmd_zero(args):
+    """Global display zero (display_zero.shader on the program scene): every layer's displayed
+    disparity rises by zero_px. --keep subtracts the change from the synth plane and both camera
+    convergences so the picture does not move; only the meaning of 0 does."""
+    async with OBS() as o:
+        cur = float((await o.filt(PROGRAM, ZERO)).get("zero_px", 0.0))
+        if args.value is None:
+            print(f"display zero {cur:+.1f} px")
+            return
+        d = args.value - cur
+        await o.setf(PROGRAM, ZERO, {"zero_px": args.value})
+        print(f"display zero {cur:+.1f} → {args.value:+.1f} px")
+        if args.keep and abs(d) > 0.01:
+            pl = float((await o.filt(SYNTH, SPLAT)).get("plane_px", 0.0))
+            await o.setf(SYNTH, SPLAT, {"plane_px": pl - d})
+            print(f"  synth plane {pl:+.1f} → {pl - d:+.1f}")
+            for cam in CAMERAS:
+                cv = float((await o.filt(cam, ALIGN)).get("convergence", 0.0))
+                nv = max(-300.0, min(300.0, cv - d))
+                await o.setf(cam, ALIGN, {"convergence": nv})
+                print(f"  {cam} convergence {cv:+.1f} → {nv:+.1f}")
+        await o.nudge_save()
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -267,8 +294,9 @@ def main():
     n.add_argument("--gap", type=float, default=6.0); n.add_argument("--side", choices=("behind", "front"), default="behind")
     n.add_argument("--dry-run", action="store_true")
     t = sub.add_parser("set"); t.add_argument("what", choices=("plane", "thickness", "anchor")); t.add_argument("value", type=float)
+    z = sub.add_parser("zero"); z.add_argument("value", type=float, nargs="?"); z.add_argument("--keep", action="store_true")
     args = ap.parse_args()
-    asyncio.run({"status": cmd_status, "converge": cmd_converge, "snap": cmd_snap, "set": cmd_set}[args.cmd](args))
+    asyncio.run({"zero": cmd_zero, "status": cmd_status, "converge": cmd_converge, "snap": cmd_snap, "set": cmd_set}[args.cmd](args))
 
 
 if __name__ == "__main__":
