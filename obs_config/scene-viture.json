@@ -233,8 +233,8 @@
                         "luma_levels": 0.05,
                         "shimmer": 0.57,
                         "size": 6.0,
-                        "rotation": 0.06292074918746948,
-                        "hue_pull": 0.5126401139423251,
+                        "rotation": 0.9594534635543823,
+                        "hue_pull": 0.30932803452014923,
                         "skew": 0.0,
                         "luma_pull": 0.0,
                         "chroma_pull": 0.0
@@ -266,7 +266,7 @@
                         "from_file": true,
                         "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/chromadepth_bake.shader",
                         "room_depth_source": "StereoPi Depth",
-                        "hue_rotation": 0.4697658345103264,
+                        "hue_rotation": 0.06315070390701294,
                         "color_weight": 0.9999902248382568,
                         "wheel_shape": 0.0,
                         "room_mix": 0.0,
@@ -358,6 +358,10 @@
                     "settings": {
                         "depth": 0.6872386932373047,
                         "convergence": 0.522,
+                        "thickness_px": 0.0,
+                        "plane_px": -38.5,
+                        "anchor": 0.0,
+                        "frame_inset_px": 0.0,
                         "mode": 0,
                         "window": true,
                         "fill": 0,
@@ -365,10 +369,7 @@
                         "mlaa": true,
                         "sync": false,
                         "debug": 0,
-                        "thickness_px": 54.992971420288086,
-                        "anchor": 1.0,
-                        "plane_px": -28,
-                        "frame_inset_px": 80.65621540305648
+                        "vignette_pct": 0.0
                     },
                     "mixers": 0,
                     "sync": 0,
@@ -396,7 +397,7 @@
                     "settings": {
                         "from_file": true,
                         "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/stereo_soften.shader",
-                        "soften": 1.0
+                        "soften": 0.55
                     },
                     "mixers": 0,
                     "sync": 0,
@@ -488,7 +489,7 @@
             "id": "image_source",
             "versioned_id": "image_source",
             "settings": {
-                "file": "/tmp/oracle_real_microfill14.png"
+                "file": ""
             },
             "mixers": 0,
             "sync": 0,
@@ -514,7 +515,7 @@
             "id": "image_source",
             "versioned_id": "image_source",
             "settings": {
-                "file": "/tmp/live_frame_now.png"
+                "file": ""
             },
             "mixers": 0,
             "sync": 0,
@@ -664,17 +665,17 @@
                     "settings": {
                         "depth": 0.7,
                         "convergence": 0.3,
+                        "thickness_px": 167.88756848322328,
+                        "plane_px": 0.0,
+                        "anchor": 0.3,
+                        "frame_inset_px": 83.94378424161164,
                         "mode": 0,
                         "window": false,
                         "fill": 3,
                         "ssaa": false,
                         "mlaa": true,
                         "sync": true,
-                        "debug": 0,
-                        "thickness_px": 167.88756848322328,
-                        "anchor": 0.3,
-                        "plane_px": 0.0,
-                        "frame_inset_px": 83.94378424161164
+                        "debug": 0
                     },
                     "mixers": 0,
                     "sync": 0,
@@ -1026,7 +1027,7 @@
                     {
                         "name": "room",
                         "source_uuid": "217aa652-c049-4862-9dc0-980e39069c55",
-                        "visible": true,
+                        "visible": false,
                         "locked": false,
                         "rot": 0.0,
                         "scale_ref": {
@@ -1081,7 +1082,7 @@
                     {
                         "name": "stage",
                         "source_uuid": "3dfa2df3-c1a3-48df-8b5a-69db9a9f202b",
-                        "visible": true,
+                        "visible": false,
                         "locked": false,
                         "rot": 0.0,
                         "scale_ref": {
@@ -1186,6 +1187,34 @@
                     "volume": 1.0,
                     "balance": 0.5,
                     "enabled": false,
+                    "muted": false,
+                    "push-to-mute": false,
+                    "push-to-mute-delay": 0,
+                    "push-to-talk": false,
+                    "push-to-talk-delay": 0,
+                    "hotkeys": {},
+                    "deinterlace_mode": 0,
+                    "deinterlace_field_order": 0,
+                    "monitoring_type": 0,
+                    "private_settings": {}
+                },
+                {
+                    "prev_ver": 536936450,
+                    "name": "display zero",
+                    "uuid": "87ec98db-ab17-4ae1-8005-4ddf16cc3a14",
+                    "id": "shader_filter",
+                    "versioned_id": "shader_filter",
+                    "settings": {
+                        "from_file": true,
+                        "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/display_zero.shader",
+                        "zero_px": 0.0
+                    },
+                    "mixers": 0,
+                    "sync": 0,
+                    "flags": 0,
+                    "volume": 1.0,
+                    "balance": 0.5,
+                    "enabled": true,
                     "muted": false,
                     "push-to-mute": false,
                     "push-to-mute-delay": 0,
@@ -1532,11 +1561,11 @@
                     "settings": {
                         "from_file": true,
                         "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/sbs_align.shader",
-                        "left_x": 53.25,
-                        "left_y": -5.25,
+                        "left_x": 202.75,
+                        "left_y": -17.0,
                         "right_x": 97.75,
                         "right_y": 37.75,
-                        "convergence": -65.5,
+                        "convergence": -160.5,
                         "mask_common": false
                     },
                     "mixers": 0,
@@ -1621,7 +1650,7 @@
                         "hue_peaks": 6.1,
                         "hue_pull": 0.74,
                         "hue_phase": 0.4,
-                        "opacity": 0.66
+                        "opacity": 0.6
                     },
                     "mixers": 0,
                     "sync": 0,
@@ -1740,9 +1769,9 @@
                     "settings": {
                         "from_file": true,
                         "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/sbs_align.shader",
-                        "left_x": -44.5,
-                        "left_y": 101.75,
-                        "right_x": 53.25,
+                        "left_x": 56.25,
+                        "left_y": 90.25,
+                        "right_x": -5.75,
                         "right_y": -51.25,
                         "convergence": -98.0,
                         "mask_common": true
@@ -1896,7 +1925,14 @@
             "fade_to_black": true
         }
     ],
-    "saved_projectors": [],
+    "saved_projectors": [
+        {
+            "monitor": 1,
+            "type": 2,
+            "geometry": "AdnQywADAAAAAApAAAAAAAAAGT8AAAQ3AAAKQAAAAAAAABk/AAAENwAAAAEABAAADwAAAApAAAAAAAAAGT8AAAQ3",
+            "alwaysOnTopOverridden": false
+        }
+    ],
     "preview_locked": false,
     "scaling_enabled": true,
     "scaling_level": -20,
