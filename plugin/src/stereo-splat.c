@@ -56,6 +56,9 @@ struct stereo_splat {
 	gs_eparam_t *p_mlaa_on;
 	gs_eparam_t *p_convergence; /* effect param "shift0" */
 	gs_eparam_t *p_inset;
+	gs_eparam_t *p_anchor_d;
+	gs_eparam_t *p_vig_w;
+	gs_eparam_t *p_out_rows;
 
 	gs_texrender_t *input_rt;
 	gs_texrender_t *output_rt;
@@ -97,6 +100,7 @@ struct stereo_splat {
 	float plane_px;
 	float anchor;
 	float frame_inset_px;
+	float vignette_pct; /* depth vignette ramp width, % of frame */
 	int mode;       /* 0 = splat, 1 = warp */
 	bool window;    /* floating window instead of edge taper */
 	int fill;       /* micro-fill width px (0 = off) */
@@ -143,6 +147,8 @@ static void splat_update(void *data, obs_data_t *settings)
 	s->frame_inset_px =
 		(float)obs_data_get_double(settings, "frame_inset_px");
 	s->mode = (int)obs_data_get_int(settings, "mode");
+	s->vignette_pct =
+		(float)obs_data_get_double(settings, "vignette_pct");
 	s->window = obs_data_get_bool(settings, "window");
 	s->fill = (int)obs_data_get_int(settings, "fill");
 	s->ssaa = obs_data_get_bool(settings, "ssaa");
@@ -157,6 +163,7 @@ static void splat_defaults(obs_data_t *settings)
 	obs_data_set_default_double(settings, "plane_px", 0.0);
 	obs_data_set_default_double(settings, "anchor", 1.0);
 	obs_data_set_default_double(settings, "frame_inset_px", 48.0);
+	obs_data_set_default_double(settings, "vignette_pct", 0.0);
 	obs_data_set_default_int(settings, "mode", 0);
 	obs_data_set_default_bool(settings, "window", false);
 	obs_data_set_default_int(settings, "fill", 3);
@@ -171,14 +178,17 @@ static obs_properties_t *splat_properties(void *data)
 	UNUSED_PARAMETER(data);
 	obs_properties_t *props = obs_properties_create();
 	obs_properties_add_float_slider(props, "plane_px",
-					obs_module_text("Plane"), -150.0,
-					150.0, 0.5);
+					obs_module_text("Plane"), -300.0,
+					300.0, 0.5);
 	obs_properties_add_float_slider(props, "thickness_px",
 					obs_module_text("Thickness"), 0.0,
-					240.0, 0.5);
+					600.0, 0.5);
 	obs_properties_add_float_slider(props, "anchor",
 					obs_module_text("Anchor"), 0.0, 1.0,
 					0.01);
+	obs_properties_add_float_slider(props, "vignette_pct",
+					obs_module_text("DepthVignette"), 0.0,
+					50.0, 0.5);
 	obs_properties_add_float_slider(props, "frame_inset_px",
 					obs_module_text("FrameInset"), 0.0,
 					120.0, 1.0);
@@ -260,6 +270,9 @@ static void *splat_create(obs_data_t *settings, obs_source_t *context)
 	s->p_convergence =
 		gs_effect_get_param_by_name(s->effect, "shift0");
 	s->p_inset = gs_effect_get_param_by_name(s->effect, "inset");
+	s->p_anchor_d = gs_effect_get_param_by_name(s->effect, "anchor_d");
+	s->p_vig_w = gs_effect_get_param_by_name(s->effect, "vig_w");
+	s->p_out_rows = gs_effect_get_param_by_name(s->effect, "out_rows");
 
 	splat_update(s, settings);
 	return s;
@@ -598,6 +611,10 @@ static void splat_render(void *data, gs_effect_t *unused_effect)
 			gs_effect_set_float(s->p_window_on,
 					    s->window ? 1.0f : 0.0f);
 			gs_effect_set_float(s->p_convergence, disp_s0);
+			gs_effect_set_float(s->p_anchor_d, s->anchor);
+			gs_effect_set_float(s->p_vig_w,
+					    s->vignette_pct * 0.01f);
+			gs_effect_set_float(s->p_out_rows, (float)out_h);
 			gs_effect_set_float(s->p_eye_sign,
 					    eye == 0 ? 1.0f : -1.0f);
 			gs_effect_set_float(s->p_eye_base,

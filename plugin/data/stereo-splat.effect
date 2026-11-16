@@ -46,6 +46,10 @@ uniform float shift0;    // per-eye constant shift (source u)
 			 // displayed disparity (L-R, px at 1920/eye) of depth dt:
 			 //   plane_px + thickness_px * (dt - anchor)
 
+uniform float anchor_d;  // anchor depth (0 back .. 1 front): what the vignette flattens to
+uniform float vig_w;     // depth vignette ramp width, fraction of the visible frame (0 = off)
+uniform float out_rows;  // rows in the vertex grid (output height incl. supersampling)
+
 sampler_state pointSampler {
 	Filter    = Point;
 	AddressU  = Clamp;
@@ -88,6 +92,28 @@ float edge_taper(float x)
 	return t * t * (3.0 - 2.0 * t);
 }
 
+// DEPTH VIGNETTE (not in the oracle; 0 = off = oracle-identical): depth
+// relative to the anchor is scaled by a smoothstep that is 0 at the frame
+// edge and 1 once vig_w of the frame inward, on all four sides. At the
+// edges the field is flat at plane_px, so the frame never fights the
+// depth and the centre can carry more thickness.
+float vignette(float u, float row)
+{
+	if (vig_w <= 0.0)
+		return 1.0;
+	float hx = min(u - vis_lo, (vis_lo + span) - u) / span;
+	float hy = min(row + 0.5, out_rows - (row + 0.5)) / out_rows;
+	float a = clamp(hx / vig_w, 0.0, 1.0);
+	float b = clamp(hy / vig_w, 0.0, 1.0);
+	a = a * a * (3.0 - 2.0 * a);
+	b = b * b * (3.0 - 2.0 * b);
+	return a * b;
+}
+float shape(float d, float u, float row)
+{
+	return anchor_d + (d * edge_taper(u) - anchor_d) * vignette(u, row);
+}
+
 // Oracle vertical crop (needed only for the warp fragment uv; the splat
 // COLOR stream already had it applied CPU-side).
 float src_row(float out_row)
@@ -109,7 +135,7 @@ SplatOut VSSplat(VertIn v_in)
 	float u_edge = v_in.pos.x;
 	float u_c = v_in.pos.z;
 	float d = clamp(2.0 * (v_in.col.a - 0.5), 0.0, 1.0);
-	float dt_e = d * edge_taper(u_edge);
+	float dt_e = shape(d, u_edge, v_in.pos.y);
 	float dest = u_edge + eye_sign * (dt_e * f0 - shift0);
 	float q = (dest - vis_lo) / span;
 	// +5e-4 px epsilon inside the floor: shared bin-boundary
@@ -122,7 +148,7 @@ SplatOut VSSplat(VertIn v_in)
 	bool ok = (u_c >= PIC_LO) && (u_c <= PIC_HI);
 	// z-buffer key = depth tapered at the pixel CENTER (constant along
 	// the line, matching the oracle's scalar per-pixel sort key).
-	float dt_c = d * edge_taper(u_c);
+	float dt_c = shape(d, u_c, v_in.pos.y);
 	float zw = ok ? (-100.0 + dt_c * 200.0) : 10000.0;
 	v_out.pos = mul(float4(out_x, out_y, zw, 1.0), ViewProj);
 	v_out.col = float4(v_in.col.rgb, 1.0);
@@ -147,7 +173,7 @@ WarpOut VSWarp(VertIn v_in)
 	float u = clamp(v_in.pos.x, PIC_LO, PIC_HI);
 	float out_row = v_in.pos.y;
 	float d = clamp(2.0 * (v_in.col.a - 0.5), 0.0, 1.0);
-	float dt = d * edge_taper(u);
+	float dt = shape(d, u, out_row);
 	float dest = u + eye_sign * (dt * f0 - shift0);
 	float q = (dest - vis_lo) / span;
 	float out_x = eye_base + clamp(q, 0.0, 1.0) * eye_w;
@@ -167,7 +193,7 @@ SplatOut VSDebugQ(VertIn v_in)
 	SplatOut v_out;
 	float u_sub = v_in.pos.x;
 	float d = clamp(2.0 * (v_in.col.a - 0.5), 0.0, 1.0);
-	float dt = d * edge_taper(u_sub);
+	float dt = shape(d, u_sub, v_in.pos.y);
 	float dest = u_sub + eye_sign * (dt * f0 - shift0);
 	float q = (dest - vis_lo) / span;
 	float v = q * eye_w; // the value under test

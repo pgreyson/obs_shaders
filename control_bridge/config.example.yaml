@@ -42,7 +42,7 @@ mappings:
     # plane_px / anchor (OBS filter panel, or tools/stereo_field.py snap|set), which the
     # bridge never writes. out_range is the performance budget: 58 px = 3 % of the eye
     # width is a comfortable total for the whole program, cameras included.
-    out_range: [ 0.0, 80.0]
+    out_range: [ 0.0, 160.0]
     targets:
       - instance: viture
         source: "Video Capture Device"

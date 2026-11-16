@@ -86,9 +86,15 @@ Virtual Camera for the relays. Scene `Scene`, bottom to top:
 disparity = x_left − x_right in CANVAS px (1920 per eye), **+ = in front of the screen, − = behind**.
 - **Synth** (`stereo splat` plugin): disparity of bake depth dt (1 = near) is
   `plane_px + thickness_px · (dt − anchor)`. `thickness_px` = total depth range, linear, driven by CV
-  ch0 (bridge `out_range` 0…80 px = the performance budget); `plane_px` = where the anchor depth sits;
+  ch0 (bridge `out_range` 0…160 px); `plane_px` = where the anchor depth sits;
   `anchor` = what holds still when thickness moves (1 front, 0.5 middle, 0 back);
   `frame_inset_px` = fixed crop margin per side, so the picture no longer zooms with the depth knob.
+  `vignette_pct` (2026-11-15) = DEPTH VIGNETTE: depth relative to the anchor ramps (smoothstep) from 0 at
+  all four frame edges to full once that % of the frame inward, so the edges sit flat at `plane_px` and
+  the centre can carry more thickness; 0 = off. Slider ranges: plane ±300, thickness 0…600.
+  COMFORT ZERO IS NOT 0 PX in the Viture glasses: Paul finds anything below about +35 px painful at any
+  thickness, and runs synth and cameras at roughly +70…+170. Treat ~+35 as the far limit, not 0.
+  `tools/relaunch_main.sh` restarts main alone (relays keep their streams) to load a rebuilt plugin.
   These replace `depth` (squared budget) + `convergence` (in units of that budget), which moved both
   planes at once; an old scene is migrated to the identical picture on first load. The bridge writes
   thickness only: the `CameraAlign` solver, its offset files and `tools/synth_plane.py` are gone.
