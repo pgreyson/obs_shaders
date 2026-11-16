@@ -130,12 +130,7 @@ def synth_config_range(st):
     """(far_px, near_px, description) of the splat as configured."""
     if "thickness_px" in st:
         t, p, a = float(st["thickness_px"]), float(st.get("plane_px", 0.0)), float(st.get("anchor", 1.0))
-        e = float(st.get("perspective_px", 0.0))
-        note = ""
-        if e >= 1.0:   # plugin: effective thickness = t * clamp(1 + plane/E, 0)^2, capped 4x
-            t0, t = t, t * min(4.0, max(0.0, 1.0 + p / e) ** 2)
-            note = f"  (perspective {e:.0f}: thickness {t0:.0f} → {t:.0f})"
-        return p - t * a, p + t * (1.0 - a), f"plane {p:+.0f}  thickness {t:.0f}  anchor {a:.2f}" + note
+        return p - t * a, p + t * (1.0 - a), f"plane {p:+.0f}  thickness {t:.0f}  anchor {a:.2f}"
     depth, c = float(st.get("depth", 0.0)), float(st.get("convergence", 0.0))
     f0 = depth * depth * MAX_PARALLAX
     span = (PIC_HI - f0) - (PIC_LO + f0)
