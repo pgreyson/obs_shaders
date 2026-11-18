@@ -38,8 +38,12 @@ CFG = yaml.safe_load(open(os.path.join(HERE, "..", "control_bridge", "config.yam
 URL = f"ws://{CFG.get('host', 'localhost')}:{CFG['port']}"
 
 PIS = {  # OBS input name -> Pi web console host
-    "StereoPi stage": "10.0.1.38",
-    "StereoPi room": "10.0.1.45",
+    # WiFi "rofo" since 2026-11-17 (192.168.50.x, DHCP: addresses can drift without a router
+    # reservation). Old network: stage 10.0.1.38, room 10.0.1.45.
+    "StereoPi stage": "192.168.50.19",     # MAC dc:a6:32:ff:13:9c
+    # room: picture is live but the Pi had not joined "rofo" when checked (no address found);
+    # put its address here once it shows up. Until then it cannot be rebooted from here.
+    "StereoPi room": "192.168.50.0",
 }
 POLL_S = 5.0
 STALL_S = 30.0        # identical frames for this long -> suspect
