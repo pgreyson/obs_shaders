@@ -141,6 +141,23 @@ That brings up four OBS processes: main `elegato->full_sbs` on ws :4455, Twitch 
 
 **One-time setup** before running the script for the first time: enable obs-websocket in OBS (Tools → WebSocket Server Settings → "Enable WebSocket server"). This flips `server_enabled` to `true` in `~/Library/Application Support/obs-studio/plugin_config/obs-websocket/config.json` — the config is shared by both instances, but each binds its own port via the `--websocket_port` launch flag. Note the auto-generated password there; the control bridge needs it.
 
+## Touch control surface (`control_surface/`)
+
+One web page with every filter parameter of main, for an iPad on the same WiFi:
+`http://<mac address>:8080/` (also `http://Pauls-Mac-mini.local:8080/`). Started by
+`launch_dual.sh`; by hand:
+`nohup control_bridge/.venv/bin/python3 control_surface/server.py > /tmp/control_surface.log 2>&1 &`
+
+- The page is built from the LIVE filter list (every filter, enabled or not) and the slider
+  ranges from the shader files, so a new uniform or filter appears after "Reload".
+- `control_surface/info.yaml` holds the grouping (tabs, stages, sections), short labels and the
+  text of the info overlays. Keep it in step with the shaders; anything it does not describe
+  still shows, with the shader's own label and comment.
+- Values moved by the CV bridge or the OBS filter panel are read back while a page is open
+  (obs-websocket sends no event for filter settings). CV-driven controls carry a "CV n" tag.
+- Changes are saved into the scene collection a few seconds after the last touch.
+- No login: anyone on the network can move the controls.
+
 ## Analog control via the OWL-ACDC
 
 The Rebel Technology **OWL-ACDC** is a DC-coupled USB audio interface (4 in, 4 out, 48 kHz). With it patched into the synth rack, modular CV can drive OBS shader parameters in real time, the same way it already drives Structure's onboard shaders.

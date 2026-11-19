@@ -136,6 +136,14 @@ if ! pgrep -f tools/pi_watchdog.py >/dev/null; then
   echo "pi watchdog started (log: /tmp/pi_watchdog.log)"
 fi
 
+# Touch control surface for the iPad (control_surface/server.py): every filter parameter of
+# main on one page, http://<this mac>:8080/. Detached; skipped if already running. It
+# reconnects to main by itself, so it does not care about launch order.
+if ! pgrep -f control_surface/server.py >/dev/null; then
+  nohup "$HERE/control_bridge/.venv/bin/python3" "$HERE/control_surface/server.py" > /tmp/control_surface.log 2>&1 &
+  echo "control surface started (log: /tmp/control_surface.log)"
+fi
+
 echo
 echo "All four OBS instances launched."
 echo "Viture instance  : profile=$VITURE_PROFILE, collection=$VITURE_COLLECTION, ws=:$VITURE_WS_PORT"

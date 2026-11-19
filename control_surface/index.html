@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="OBS surface">
+<title>OBS surface</title>
+<style>
+:root {
+  --bg: #0e1013; --panel: #171a1f; --panel2: #1e2228; --line: #2a2f37;
+  --text: #e8eaed; --dim: #8b929c; --accent: #5cc8ff; --accent-dim: #1d4a63;
+  --on: #58d68d; --warn: #f5b041; --bad: #ec7063; --cv: #c39bd3;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.35 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  -webkit-user-select: none; user-select: none; -webkit-text-size-adjust: 100%; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+
+header { position: sticky; top: 0; z-index: 10; background: rgba(14,16,19,.96);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line); padding: env(safe-area-inset-top) 12px 0; }
+.bar { display: flex; align-items: center; gap: 8px; padding: 8px 0 6px; flex-wrap: wrap; }
+.pill { font-size: 12px; padding: 4px 9px; border-radius: 999px; background: var(--panel2);
+  color: var(--dim); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pill b { color: var(--text); font-weight: 600; }
+.pill.ok { color: var(--on); } .pill.bad { color: var(--bad); } .pill.warn { color: var(--warn); }
+.grow { flex: 1; }
+.tabs { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab { padding: 10px 14px; border-radius: 10px 10px 0 0; color: var(--dim); white-space: nowrap;
+  font-weight: 600; border-bottom: 3px solid transparent; }
+.tab.sel { color: var(--text); border-bottom-color: var(--accent); background: var(--panel); }
+
+main { padding: 12px 12px calc(40px + env(safe-area-inset-bottom)); max-width: 1500px; margin: 0 auto; }
+.tabhead { display: flex; align-items: center; gap: 10px; margin: 2px 2px 10px; color: var(--dim); font-size: 13px; }
+.stage { margin-bottom: 18px; }
+.stage > h2 { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim);
+  margin: 0 2px 8px; font-weight: 600; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 10px; align-items: start; }
+
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.card.off { border-style: dashed; }
+.card.off .body { opacity: .55; }
+.chead { display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 12px; background: var(--panel2); }
+.chead .name { font-weight: 650; font-size: 16px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chead .pos { font-size: 11px; color: var(--dim); font-variant-numeric: tabular-nums; }
+.card.off .chead .name { color: var(--dim); }
+.body { padding: 4px 12px 10px; }
+.card.closed .body { display: none; }
+.section { font-size: 11px; letter-spacing: .07em; text-transform: uppercase; color: var(--dim);
+  margin: 12px 0 2px; padding-top: 8px; border-top: 1px solid var(--line); }
+.section:first-child { border-top: 0; padding-top: 0; margin-top: 8px; }
+
+.ibtn { width: 30px; height: 30px; border-radius: 50%; border: 1.5px solid var(--line); color: var(--dim);
+  font: italic 600 15px Georgia, serif; flex: none; display: grid; place-items: center; }
+.ibtn:active { background: var(--accent-dim); color: var(--text); }
+.chev { width: 30px; height: 30px; color: var(--dim); flex: none; font-size: 13px; }
+
+.sw { width: 50px; height: 30px; border-radius: 15px; background: #3a4049; position: relative; flex: none; transition: background .12s; }
+.sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%;
+  background: #cfd3d8; transition: transform .12s; }
+.sw.on { background: var(--on); } .sw.on::after { transform: translateX(20px); background: #fff; }
+
+.row { padding: 9px 0 3px; }
+.rtop { display: flex; align-items: center; gap: 8px; min-height: 30px; }
+.rtop .label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rtop .val { font-variant-numeric: tabular-nums; font-weight: 600; padding: 3px 8px; border-radius: 7px;
+  background: var(--panel2); min-width: 64px; text-align: right; }
+.rtop .val.mod { color: var(--accent); }
+.cvtag { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 5px; background: rgba(195,155,211,.18);
+  color: var(--cv); flex: none; }
+.rbot { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.nudge { width: 38px; height: 38px; border-radius: 9px; background: var(--panel2); font-size: 20px; color: var(--dim); flex: none; }
+.nudge:active { background: var(--accent-dim); color: var(--text); }
+.track { flex: 1; height: 38px; position: relative; touch-action: pan-y; cursor: ew-resize; }
+.track .rail { position: absolute; left: 0; right: 0; top: 15px; height: 8px; border-radius: 4px; background: #2c323b; }
+.track .fill { position: absolute; top: 15px; height: 8px; border-radius: 4px; background: var(--accent-dim); }
+.track .def { position: absolute; top: 10px; width: 2px; height: 18px; background: #5b636e; margin-left: -1px; }
+.track .thumb { position: absolute; top: 5px; width: 12px; height: 28px; margin-left: -6px; border-radius: 4px; background: var(--accent); }
+.track.drag .thumb { background: #fff; box-shadow: 0 0 0 6px rgba(92,200,255,.25); }
+.track.drag .fill { background: var(--accent); }
+.seg { display: flex; flex: 1; background: var(--panel2); border-radius: 9px; padding: 3px; gap: 3px; }
+.seg button { flex: 1; padding: 8px 6px; border-radius: 7px; color: var(--dim); font-weight: 600; font-size: 14px; }
+.seg button.sel { background: var(--accent-dim); color: #fff; }
+
+.layers .lrow { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); }
+.layers .lrow:first-child { border-top: 0; }
+.layers .lname { flex: 1; font-weight: 600; }
+.layers .lhint { font-size: 11px; color: var(--dim); }
+
+#sheet { position: fixed; inset: 0; z-index: 50; display: none; background: rgba(0,0,0,.55); }
+#sheet.open { display: flex; align-items: flex-end; justify-content: center; }
+#sheet .box { background: var(--panel); border: 1px solid var(--line); border-radius: 16px 16px 0 0; width: min(760px, 100%);
+  max-height: 86vh; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 18px 20px calc(22px + env(safe-area-inset-bottom));
+  -webkit-user-select: text; user-select: text; }
+@media (min-width: 800px) { #sheet.open { align-items: center; } #sheet .box { border-radius: 16px; } }
+#sheet h3 { margin: 0 0 2px; font-size: 20px; }
+#sheet .where { color: var(--dim); font-size: 13px; margin-bottom: 12px; }
+#sheet p { margin: 0 0 10px; white-space: pre-wrap; font-size: 16px; line-height: 1.45; }
+#sheet .note { border-left: 3px solid var(--warn); padding: 6px 0 6px 12px; margin: 0 0 12px; }
+#sheet .cvnote { border-left: 3px solid var(--cv); padding: 6px 0 6px 12px; margin: 0 0 12px; }
+#sheet table { border-collapse: collapse; margin: 6px 0 12px; font-size: 14px; }
+#sheet td { padding: 3px 14px 3px 0; vertical-align: top; }
+#sheet td:first-child { color: var(--dim); white-space: nowrap; }
+#sheet details { margin-top: 8px; color: var(--dim); }
+#sheet summary { padding: 6px 0; font-size: 13px; }
+#sheet pre { white-space: pre-wrap; font: 12px/1.45 ui-monospace, Menlo, monospace; color: #b8bec7; margin: 4px 0 0; }
+#sheet .acts { display: flex; gap: 10px; margin-top: 14px; }
+.btn { padding: 11px 16px; border-radius: 10px; background: var(--panel2); font-weight: 600; }
+.btn.pri { background: var(--accent-dim); }
+.btn:active { filter: brightness(1.4); }
+#empty { color: var(--dim); padding: 40px 10px; text-align: center; }
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <span class="pill" id="link">connecting…</span>
+    <span class="pill" id="perf" style="display:none"></span>
+    <span id="relays" style="display:contents"></span>
+    <span class="grow"></span>
+    <span class="pill" id="saved" style="visibility:hidden">saved in OBS</span>
+    <button class="pill" id="reload">Reload</button>
+  </div>
+  <div class="tabs" id="tabs"></div>
+</header>
+<main id="main"><div id="empty">Waiting for OBS…</div></main>
+<div id="sheet"><div class="box" id="box"></div></div>
+
+<script>
+"use strict";
+const $ = (s) => document.querySelector(s);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const store = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+                set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
+
+let ws, model = null, curTab = store.get("tab", null);
+const ctl = new Map();      // "source\x01filter\x01key" -> control {set(v), busy}
+const cards = new Map();    // "source\x01filter" -> {setOn}
+const filt = new Map();     // "source\x01filter" -> filter object of the model (all tabs)
+const layerSw = new Map();  // "scene\x01id" -> setOn
+const closed = new Set(store.get("closed", []));
+const K = (...a) => a.join("\x01");
+
+function send(m) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); }
+
+function connect() {
+  ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws");
+  ws.onopen = () => {};
+  ws.onclose = () => { setLink(null); setTimeout(connect, 1500); };
+  ws.onmessage = (ev) => {
+    const m = JSON.parse(ev.data);
+    if (m.t === "model") { model = m; filt.clear();
+      for (const t of m.tabs) for (const s of t.stages) for (const f of s.filters) filt.set(K(t.source, f.name), f);
+      render(); }
+    else if (m.t === "v") { const f = filt.get(K(m.s, m.f));
+      for (const k in m.k) { const c = ctl.get(K(m.s, m.f, k)); if (c) c.remote(m.k[k]); else if (f) f.values[k] = m.k[k]; } }
+    else if (m.t === "en") { const f = filt.get(K(m.s, m.f)); if (f) f.on = m.on; const c = cards.get(K(m.s, m.f)); if (c) c.setOn(m.on); }
+    else if (m.t === "item") { const c = layerSw.get(K(m.scene, m.id)); if (c) c(m.on); }
+    else if (m.t === "status") setLink(m);
+    else if (m.t === "saved") flashSaved();
+    else if (m.t === "err") console.warn(m.msg);
+  };
+}
+
+function setLink(st) {
+  const link = $("#link"), perf = $("#perf"), rel = $("#relays");
+  if (!st) { link.textContent = "surface offline"; link.className = "pill bad"; perf.style.display = "none"; rel.textContent = ""; return; }
+  if (!st.obs) { link.textContent = "OBS main not answering"; link.className = "pill bad"; perf.style.display = "none"; }
+  else {
+    link.textContent = "OBS main"; link.className = "pill ok";
+    if (st.fps != null) {
+      perf.style.display = ""; perf.innerHTML = "";
+      const b1 = el("b", null, st.ms.toFixed(1) + " ms"), b2 = el("b", null, st.fps.toFixed(1) + " fps");
+      perf.append("render ", b1, " · ", b2);
+      perf.className = "pill" + (st.ms > 36 ? " warn" : "");
+    }
+  }
+  rel.textContent = "";
+  for (const name in (st.relays || {})) {
+    const s = st.relays[name];
+    const p = el("span", "pill " + (s === "live" || s === "up" ? "ok" : s === "idle" ? "" : s === "reconnecting" ? "warn" : "bad"), name + " " + s);
+    rel.append(p);
+  }
+}
+let savedT;
+function flashSaved() { const s = $("#saved"); s.style.visibility = "visible"; clearTimeout(savedT); savedT = setTimeout(() => s.style.visibility = "hidden", 2500); }
+
+// ---------------------------------------------------------------- formatting
+function decimals(step) { const s = String(step); const i = s.indexOf("."); return i < 0 ? 0 : Math.min(4, s.length - i - 1); }
+function fmt(p, v) {
+  if (p.type === "bool") return v ? "on" : "off";
+  if (p.options && p.options[Math.round(v)] != null) return p.options[Math.round(v)];
+  return Number(v).toFixed(p.type === "int" ? 0 : Math.max(decimals(p.step), 0));
+}
+function snap(p, v) {
+  const st = p.step || 0.01;
+  v = Math.round((v - p.min) / st) * st + p.min;
+  v = Math.min(p.max, Math.max(p.min, v));
+  return +v.toFixed(6);
+}
+
+// ---------------------------------------------------------------- controls
+function makeRow(src, f, p) {
+  const row = el("div", "row"), top = el("div", "rtop");
+  const label = el("div", "label", p.label);
+  top.append(label);
+  if (p.cv) top.append(el("span", "cvtag", "CV " + p.cv.ch));
+  let value = f.values[p.key];
+  let lastLocal = 0, dragging = false, sendT = 0, queued = null;
+  const push = (v) => {            // throttle to ~30 Hz, always deliver the last value
+    queued = v; lastLocal = Date.now(); f.values[p.key] = v;
+    if (sendT) return;
+    const go = () => { if (queued != null) { send({ t: "set", s: src, f: f.name, k: p.key, v: queued }); queued = null; sendT = setTimeout(go, 33); } else sendT = 0; };
+    go();
+  };
+  const c = { p, src, f, get value() { return value; } };
+
+  if (p.type === "bool") {
+    const sw = el("button", "sw" + (value ? " on" : ""));
+    const paint = () => sw.classList.toggle("on", !!value);
+    sw.onclick = () => { value = !value; paint(); push(value); };
+    c.remote = (v) => { value = !!v; paint(); };
+    c.reset = () => { value = !!p.default; paint(); push(value); };
+    top.append(sw, infoBtn(() => paramInfo(c)));
+    row.append(top);
+  } else if (p.options && (p.max - p.min) <= 6) {
+    top.append(infoBtn(() => paramInfo(c)));
+    const seg = el("div", "seg"), btns = [];
+    const paint = () => btns.forEach((b, i) => b.classList.toggle("sel", Math.round(value) === p.min + i));
+    for (let i = p.min; i <= p.max; i++) {
+      const b = el("button", null, p.options[i] != null ? p.options[i] : String(i));
+      b.onclick = () => { value = i; paint(); push(value); };
+      btns.push(b); seg.append(b);
+    }
+    paint();
+    c.remote = (v) => { value = v; paint(); };
+    c.reset = () => { value = p.default; paint(); push(value); };
+    const bot = el("div", "rbot"); bot.append(seg);
+    row.append(top, bot);
+  } else {
+    const val = el("button", "val");
+    top.append(val, infoBtn(() => paramInfo(c)));
+    const bot = el("div", "rbot");
+    const minus = el("button", "nudge", "−"), plus = el("button", "nudge", "+");
+    const track = el("div", "track"), rail = el("div", "rail"), fill = el("div", "fill"), def = el("div", "def"), thumb = el("div", "thumb");
+    track.append(rail, fill, def, thumb);
+    const frac = (v) => (p.max > p.min ? (Math.min(p.max, Math.max(p.min, v)) - p.min) / (p.max - p.min) : 0);
+    def.style.left = (frac(p.default) * 100) + "%";
+    const paint = () => {
+      const a = frac(value), d = frac(p.default);
+      thumb.style.left = (a * 100) + "%";
+      fill.style.left = (Math.min(a, d) * 100) + "%"; fill.style.width = (Math.abs(a - d) * 100) + "%";
+      val.textContent = fmt(p, value);
+      val.classList.toggle("mod", Math.abs(value - p.default) > (p.step || 0.01) / 2);
+    };
+    const setLocal = (v) => { v = snap(p, v); if (v !== value) { value = v; paint(); push(v); } };
+    // Relative drag: a horizontal swipe anywhere on the track moves the value from where it
+    // is (no jump to the finger); a vertical swipe scrolls the page.
+    let sx = 0, sy = 0, sv = 0, armed = false, pid = null;
+    track.addEventListener("pointerdown", (e) => { sx = e.clientX; sy = e.clientY; sv = value; armed = true; pid = e.pointerId;
+      if (e.pointerType === "mouse") { dragging = true; track.classList.add("drag"); track.setPointerCapture(pid); } });
+    track.addEventListener("pointermove", (e) => {
+      if (!armed || e.pointerId !== pid) return;
+      const dx = e.clientX - sx, dy = e.clientY - sy;
+      if (!dragging) {
+        if (Math.abs(dx) < 6 || Math.abs(dx) < Math.abs(dy)) return;
+        dragging = true; track.classList.add("drag"); sx = e.clientX; sv = value;
+        try { track.setPointerCapture(pid); } catch (err) {}
+        return;
+      }
+      e.preventDefault();
+      setLocal(sv + dx / track.clientWidth * (p.max - p.min));
+    });
+    const end = () => { armed = false; dragging = false; lastLocal = Date.now(); track.classList.remove("drag"); };
+    track.addEventListener("pointerup", end); track.addEventListener("pointercancel", end);
+    const hold = (btn, dir) => {           // tap = one step, hold = repeat
+      let t1, t2;
+      const step = () => setLocal(value + dir * (p.step || 0.01));
+      const stop = () => { clearTimeout(t1); clearInterval(t2); };
+      btn.addEventListener("pointerdown", (e) => { e.preventDefault(); step(); t1 = setTimeout(() => t2 = setInterval(step, 50), 380); });
+      for (const ev of ["pointerup", "pointercancel", "pointerleave"]) btn.addEventListener(ev, stop);
+    };
+    hold(minus, -1); hold(plus, +1);
+    val.onclick = () => {
+      const s = prompt(p.label + "  (" + p.min + " … " + p.max + ")", String(value));
+      if (s == null) return; const v = parseFloat(s.replace(",", "."));
+      if (!isNaN(v)) setLocal(v);
+    };
+    c.remote = (v) => { if (dragging || Date.now() - lastLocal < 400) return; value = v; paint(); };
+    c.reset = () => setLocal(p.default);
+    paint();
+    bot.append(minus, track, plus);
+    row.append(top, bot);
+  }
+  const isSlider = p.type !== "bool" && !(p.options && (p.max - p.min) <= 6);
+  const r = c.remote;
+  c.remote = (v) => { if (!isSlider && Date.now() - lastLocal < 400) return; r(v); f.values[p.key] = c.value; };
+  ctl.set(K(src, f.name, p.key), c);
+  return row;
+}
+
+function infoBtn(fn) { const b = el("button", "ibtn", "i"); b.onclick = (e) => { e.stopPropagation(); fn(); }; return b; }
+
+function makeCard(tab, f) {
+  const key = K(tab.source, f.name);
+  const card = el("div", "card" + (f.on ? "" : " off") + (closed.has(key) ? " closed" : ""));
+  const head = el("div", "chead");
+  const sw = el("button", "sw" + (f.on ? " on" : ""));
+  const name = el("div", "name", f.name);
+  const pos = el("div", "pos", f.pos + "/" + f.of);
+  const chev = el("button", "chev", closed.has(key) ? "▸" : "▾");
+  sw.onclick = (e) => { e.stopPropagation(); f.on = !f.on; paint(); send({ t: "en", s: tab.source, f: f.name, on: f.on }); };
+  const paint = () => { sw.classList.toggle("on", f.on); card.classList.toggle("off", !f.on); };
+  const toggle = () => { const c = card.classList.toggle("closed"); chev.textContent = c ? "▸" : "▾";
+    c ? closed.add(key) : closed.delete(key); store.set("closed", [...closed]); };
+  name.onclick = toggle; chev.onclick = toggle;
+  head.append(sw, name, pos, infoBtn(() => filterInfo(tab, f)), chev);
+  const body = el("div", "body");
+  let sec = null;
+  if (!f.params.length) body.append(el("div", "lhint", "No adjustable controls."));
+  for (const p of f.params) {
+    if ((p.section || null) !== sec) { sec = p.section || null; if (sec) body.append(el("div", "section", sec)); }
+    body.append(makeRow(tab.source, f, p));
+  }
+  card.append(head, body);
+  cards.set(key, { setOn(on) { f.on = on; paint(); } });
+  return card;
+}
+
+function makeLayers(tab) {
+  const card = el("div", "card"), head = el("div", "chead"), body = el("div", "body layers");
+  head.append(el("div", "name", "Layers"), el("div", "pos", "top of stack first"),
+    infoBtn(() => sheet("Layers", "Program scene “" + model.program + "”",
+      [["p", "The layers that are mixed into the program, top of the stack first. A switch here shows or hides the whole layer (the same as the eye icon in OBS's Sources list). A hidden layer's filters do not run, so hiding a layer also frees its render time."]])));
+  for (const l of [...tab.layers].reverse()) {
+    const r = el("div", "lrow"), sw = el("button", "sw" + (l.on ? " on" : ""));
+    sw.onclick = () => { l.on = !l.on; sw.classList.toggle("on", l.on); send({ t: "item", scene: l.scene, id: l.id, on: l.on }); };
+    layerSw.set(K(l.scene, l.id), (on) => { l.on = on; sw.classList.toggle("on", on); });
+    r.append(sw, el("div", "lname", l.name), infoBtn(() => sheet(l.name, "Layer in “" + l.scene + "”", [["p", l.info || "No description yet (add one under layers: in info.yaml)."]])));
+    body.append(r);
+  }
+  card.append(head, body);
+  return card;
+}
+
+// ---------------------------------------------------------------- info sheet
+function sheet(title, where, parts, acts) {
+  const box = $("#box"); box.textContent = "";
+  box.append(el("h3", null, title), el("div", "where", where));
+  for (const [kind, a, b] of parts) {
+    if (!a || (Array.isArray(a) && !a.length)) continue;
+    if (kind === "p") for (const para of String(a).trim().split(/\n\s*\n/)) box.append(el("p", null, para));
+    else if (kind === "note" || kind === "cvnote") { const d = el("div", kind); d.append(el("p", null, a)); d.lastChild.style.margin = 0; box.append(d); }
+    else if (kind === "table") { const t = el("table"); for (const [k, v] of a) { const tr = el("tr"); tr.append(el("td", null, k), el("td", null, v)); t.append(tr); } box.append(t); }
+    else if (kind === "more") { const d = el("details"); d.append(el("summary", null, a), el("pre", null, b)); box.append(d); }
+  }
+  const row = el("div", "acts");
+  for (const [text, fn, pri] of (acts || [])) { const b = el("button", "btn" + (pri ? " pri" : ""), text); b.onclick = () => { fn(); closeSheet(); }; row.append(b); }
+  const done = el("button", "btn", "Close"); done.onclick = closeSheet; row.append(done);
+  box.append(row);
+  $("#sheet").classList.add("open"); box.scrollTop = 0;
+}
+function closeSheet() { $("#sheet").classList.remove("open"); }
+$("#sheet").addEventListener("click", (e) => { if (e.target.id === "sheet") closeSheet(); });
+
+function chainLine(tab, f) {
+  const all = tab.stages.flatMap((s) => s.filters).sort((a, b) => a.pos - b.pos);
+  return all.map((x) => (x.name === f.name ? "【" + x.name + "】" : x.name) + (x.on ? "" : " (off)")).join("  →  ");
+}
+function filterInfo(tab, f) {
+  sheet(f.name, tab.title + " · filter " + f.pos + " of " + f.of + " on “" + tab.source + "” · " + (f.on ? "enabled" : "disabled"), [
+    ["note", f.note], ["p", f.info || "No description yet (add one in info.yaml)."],
+    ["table", [["Chain", chainLine(tab, f)], ["File", f.file || f.kind], ["Controls", String(f.params.length)]]],
+    ["more", "Notes from the shader source", f.header],
+  ], [["Reset all to defaults", () => { for (const p of f.params) { const c = ctl.get(K(tab.source, f.name, p.key)); if (c && !p.cv) c.reset(); } }]]);
+}
+function paramInfo(c) {
+  const p = c.p, rows = [];
+  if (p.type !== "bool") rows.push(["Range", p.min + " … " + p.max + "   (step " + p.step + ")"]);
+  rows.push(["Default", fmt(p, p.default)], ["Now", fmt(p, c.value)], ["OBS name", (p.shader_label && p.shader_label !== p.label ? p.shader_label + "  ·  " : "") + p.key]);
+  const cv = p.cv ? "Driven by CV channel " + p.cv.ch + (p.cv.name ? " (“" + p.cv.name + "”)" : "") + " through the control bridge, over " + p.cv.range[0] + " … " + p.cv.range[1] +
+    ". While the bridge is running it overwrites this value whenever the CV moves, so a change made here only holds until then." : "";
+  sheet(p.label, c.f.name + " on “" + c.src + "”", [["cvnote", cv], ["p", p.info || p.comment || "No description yet (add one in info.yaml)."], ["table", rows],
+    ["more", "Note from the shader source", p.info ? p.comment : ""]],
+    [["Reset to default (" + fmt(p, p.default) + ")", () => c.reset(), true]]);
+}
+
+// ---------------------------------------------------------------- render
+function render() {
+  ctl.clear(); cards.clear(); layerSw.clear();
+  const tabs = $("#tabs"), main = $("#main");
+  tabs.textContent = ""; main.textContent = "";
+  if (!model.tabs.length) { main.append(el("div", null, "OBS reported no filters.")); return; }
+  if (!model.tabs.some((t) => t.id === curTab)) curTab = model.tabs[0].id;
+  for (const t of model.tabs) {
+    const b = el("button", "tab" + (t.id === curTab ? " sel" : ""), t.title);
+    b.onclick = () => { curTab = t.id; store.set("tab", curTab); render(); window.scrollTo(0, 0); };
+    tabs.append(b);
+  }
+  const tab = model.tabs.find((t) => t.id === curTab);
+  const n = tab.stages.reduce((a, s) => a + s.filters.length, 0), on = tab.stages.reduce((a, s) => a + s.filters.filter((f) => f.on).length, 0);
+  const th = el("div", "tabhead");
+  th.append(infoBtn(() => sheet(tab.title, "Source “" + tab.source + "”", [["p", tab.info]])),
+    el("span", null, "“" + tab.source + "” · " + n + " filters, " + on + " enabled · runs top to bottom"));
+  main.append(th);
+  if (tab.layers) { const st = el("div", "stage"); st.append(el("h2", null, "Mix")); const g = el("div", "cards"); g.append(makeLayers(tab)); st.append(g); main.append(st); }
+  for (const s of tab.stages) {
+    const st = el("div", "stage"), g = el("div", "cards");
+    st.append(el("h2", null, s.title));
+    for (const f of s.filters) g.append(makeCard(tab, f));
+    st.append(g); main.append(st);
+  }
+}
+$("#reload").onclick = () => send({ t: "reload" });
+connect();
+</script>
+</body>
+</html>

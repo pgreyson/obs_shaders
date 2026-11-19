@@ -171,6 +171,7 @@ relay and pushed the 8 GB M2 into swap.
 | control bridge | `control_bridge/.venv/bin/python3 control_bridge/bridge.py` | `/tmp/owl_bridge.log` (`camera_align:` lines) |
 | depth sidecar (stats-only, stage camera) | `depth_sidecar/.venv/bin/python3 depth_sidecar/depth_sidecar.py --engine sgbm --fps 1.5 --cv-threads 2 --grab-width 1920 --align-source stage --align-source-width 3840` | `/tmp/depth_sidecar.log` |
 | YouTube watchdog | `youtube_live/.venv/bin/python3 youtube_live/yt_live.py watch` | `/tmp/yt_live.log` |
+| touch control surface (iPad, `http://<mac>:8080/`) | `control_bridge/.venv/bin/python3 control_surface/server.py` (started by `launch_dual.sh`) | `/tmp/control_surface.log` |
 
 ## Dormant
 

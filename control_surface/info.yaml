@@ -1,0 +1,644 @@
+# control_surface/info.yaml — layout and explanatory text for the touch surface.
+#
+# The server reads the LIVE filter list from main (ws :4455) and the control
+# ranges from the shader files themselves; this file only adds grouping, short
+# labels and the text of the info overlays. Anything not listed here still
+# appears (under "Other" / its own tab) with the shader's own label and comment.
+# Edit freely and press "Reload" on the surface.
+#
+#   tabs      one page per source, stages group that source's filters
+#   shaders   text per shader file (key = file name without .shader)
+#   native    schema + text for non-shader filters (key = OBS filter kind)
+#   instances extra note for one filter on one source ("source/filter")
+#   layers    text for the scene items of the program scene
+
+tabs:
+  - id: synth
+    title: Synth
+    source: Video Capture Device
+    info: |
+      The video synth arrives over HDMI on the Elgato 4K S as one flat (mono) 4:3 picture, stretched to the 3840x1080 canvas. This chain turns it into stereo: colour is conditioned, colour is converted to a depth value per pixel, and the splat plugin renders a left and a right eye from that depth.
+
+      In this rig colour IS depth. Every colour control before the depth bake also changes the depth field.
+
+      Filters run top to bottom in the order shown. Each enabled shader pass costs roughly 4 ms of the 33 ms frame, so unused filters should be switched off, not left neutral. Watch the render time in the top bar while toggling.
+    stages:
+      - title: Input
+        filters: [test pattern, sbs align]
+      - title: Colour (also shapes depth)
+        filters: [synth color, palette]
+      - title: Depth field
+        filters: [depth bake, field smooth h, field smooth v]
+      - title: Stereo render
+        filters: [stereo splat, stereo displace]
+      - title: After the stereo render
+        filters: [stereo soften, pillar box]
+
+  - id: stage
+    title: Stage camera
+    source: stage
+    info: |
+      Nested scene "stage": the stage StereoPi (real stereo camera, side-by-side, via a Blackmagic UltraStudio) stretched to the canvas. It sits ABOVE the synth and the room camera in the program, blend mode normal, so whatever the key keeps covers the layers beneath.
+
+      Three filters, split by what a control affects: sbs align (is the stereo correct), camera key (what is kept), camera out (how it looks). No depth synthesis here; the camera already carries real stereo.
+    stages:
+      - title: Alignment
+        filters: [sbs align]
+      - title: Key
+        filters: [camera key]
+      - title: Look
+        filters: [camera out]
+
+  - id: room
+    title: Room camera
+    source: room
+    info: |
+      Nested scene "room": the room StereoPi stretched to the canvas. It sits above the synth and BELOW the stage camera. The rig is mounted upside down; the source inside the scene is turned 180 degrees, which rights each eye and swaps the eye halves back.
+
+      Same three filters as the stage camera: sbs align (is the stereo correct), camera key (what is kept), camera out (how it looks).
+    stages:
+      - title: Alignment
+        filters: [sbs align]
+      - title: Key
+        filters: [camera key]
+      - title: Look
+        filters: [camera out]
+
+  - id: program
+    title: Program
+    source: Scene
+    layers: true
+    info: |
+      The program scene "Scene" is the mix of all layers. Its output feeds the Viture glasses and the OBS Virtual Camera, which the Twitch, YouTube and projector instances pick up. Filters here act on the finished mix, after every layer, and are carried by all outputs.
+    stages:
+      - title: Whole-program stereo
+        filters: [display zero, stereo window]
+
+  - id: audio
+    title: Audio
+    source: Mic/Aux
+    info: |
+      Mic/Aux on main captures the Elgato's audio (the synth) and sends it to the monitoring device, which is the Viture glasses. These two filters only shape what you hear in the glasses and what main passes on; each relay instance captures the Elgato itself for its stream.
+    stages:
+      - title: Monitor to the glasses
+        filters: [Monitor Gain, Monitor Limiter]
+
+  - id: bench
+    title: Test bench
+    source: Test Pattern
+    info: |
+      "Test Pattern" is a still image layer in the program scene (normally hidden, see Program > Layers) with its own copy of the synth depth chain. It is the bench for checking the depth and splat stages against the reference renderer on a known picture, without the live synth.
+
+      It also holds the two retired stereo renderers (chromadepth march, lumadepth), both off. Only one stereo renderer may be enabled at a time: each one expects a flat picture and outputs a stereo pair.
+    stages:
+      - title: Colour
+        filters: [synth color]
+      - title: Depth field
+        filters: [depth bake, field smooth h, field smooth v]
+      - title: Stereo render
+        filters: [stereo splat, chromadepth, lumadepth OLD]
+
+layers:
+  Video Capture Device: "The synth layer (Elgato capture and its whole chain, see the Synth tab). Bottom of the stack."
+  Oracle Preview: "Still image from the reference renderer (tools/stereo_oracle.py), for comparing against the live splat. Normally hidden."
+  Test Pattern: "Still test image with its own copy of the depth chain (see the Test bench tab). Normally hidden."
+  room: "Room camera layer (nested scene, see the Room camera tab). Above the synth, below the stage camera."
+  stage: "Stage camera layer (nested scene, see the Stage camera tab). Top of the stack."
+
+instances:
+  "Video Capture Device/sbs align": "On the synth this filter is only for the case where a side-by-side stereo signal arrives on the Elgato (tools/sbs_mode.py on). With the normal mono synth it must stay off: it would shift the two halves of a flat picture against each other."
+  "Video Capture Device/stereo displace": "Retired renderer, kept for comparison. Never enable it together with stereo splat: it would displace an image that is already a stereo pair."
+  "Video Capture Device/pillar box": "Off since 2026-11-08: the 4:3 synth is deliberately stretched to the 16:9 eye so it matches the cameras and fills the projector."
+  "Video Capture Device/stereo soften": "Off at the moment; its value is parked."
+  "Video Capture Device/field smooth h": "Horizontal half of the blur. Keep its sigma equal to field smooth v."
+  "Video Capture Device/field smooth v": "Vertical half of the blur. Keep its sigma equal to field smooth h."
+  "Test Pattern/chromadepth": "Retired fragment-shader renderer on the bench layer. Enable only with stereo splat off."
+  "Test Pattern/lumadepth OLD": "The first renderer (depth from brightness only), kept for reference. Enable only with the other renderers off."
+  "Scene/stereo window": "Off since 2026-11-08: every layer already masks its own eyes, so this only narrowed the frame and cost a pass."
+
+shaders:
+  test_pattern:
+    info: |
+      First in the synth chain. When enabled it REPLACES the live Elgato picture with a generated test frame, so everything after it (colour, palette, depth bake, splat) works on a fully known input. Disabled, it does nothing and costs nothing.
+
+      Colour-band frame: hue sweep with a brightness ramp on top, a clean rainbow, a saturation ramp, and a grey ramp that must come through every stage untinted. Random dots are the classic stereo test: any disparity field is unambiguous on them.
+    params:
+      noise_mode:
+        label: Pattern
+        options: {0: Colour bands, 1: Random dots}
+        info: "Which test frame to generate. Colour bands test the colour-to-depth mapping; random dots make the shape of the depth field visible without any colour cue."
+      dot_size:
+        label: Dot size (px)
+        info: "Size of the random dots in source pixels. Only used in random-dot mode. Larger dots are easier to fuse; smaller dots show finer depth detail."
+
+  sbs_align:
+    info: |
+      First in a camera chain. Shifts each eye's picture inside its own half so the two eyes line up, and sets how near or far the whole camera scene sits. This filter is about stereo CORRECTNESS only; how the layer looks is in camera out.
+
+      Units are canvas px (1920 per eye, which is 2x camera px). Positive x moves that eye's image right, positive y moves it down. Vertical mismatch between the eyes is what makes a stereo image hurt, so the y trims matter most.
+
+      tools/stereo_field.py converge measures the scene and sets convergence (and with --fix-vertical the y trims) automatically.
+    params:
+      left_x:
+        label: Left eye X (px)
+        section: Per-eye trim
+        info: "Moves the left eye's picture horizontally. A per-eye trim underneath Convergence; normally set once by measurement and left alone. Use Convergence to move the scene in depth."
+      left_y:
+        label: Left eye Y (px)
+        section: Per-eye trim
+        info: "Moves the left eye's picture vertically (+ = down). Use with Right eye Y to remove vertical offset between the eyes: if the left image sits higher, raise this or lower Right eye Y until rows match."
+      right_x:
+        label: Right eye X (px)
+        section: Per-eye trim
+        info: "Moves the right eye's picture horizontally. See Left eye X."
+      right_y:
+        label: Right eye Y (px)
+        section: Per-eye trim
+        info: "Moves the right eye's picture vertically (+ = down). See Left eye Y."
+      convergence:
+        label: Convergence (px)
+        section: Depth placement
+        info: "Where the camera scene sits in depth. Adds half this value to the left eye's x shift and subtracts half from the right eye's, so the displayed disparity of everything in this layer changes by exactly this many px. + brings the scene toward you, - pushes it away. Same unit as the splat's Plane and Display zero."
+      mask_common:
+        label: Mask to common region
+        section: Depth placement
+        info: "After shifting, each eye has a strip the other eye cannot see. On: both eyes are cropped (hard edge) to the region both can see, so nothing is visible to one eye only. The window in camera out normally sits inside this crop."
+
+  camera_key:
+    info: |
+      Second in a camera chain. Decides which pixels of the camera layer are kept (opaque) and which are dropped (transparent, showing the layers beneath). It does this and nothing else: the colour leaving this filter is exactly the colour that entered.
+
+      Steps: build a key signal from the pixel (brightness, saturation, or both), optionally condition that private signal, compare it to the threshold, then fill holes inside the kept shape (dark pockets in a bright object would otherwise be punched out).
+
+      Switch the filter off, or set Key amount to 0, for a plain unkeyed layer (a lit room has no black background to key).
+    params:
+      key_amount:
+        label: Key amount
+        section: Key
+        info: "How much of the key is applied. 0 = no key, the whole frame is kept (plain mix). 1 = full key. In between, the background is only partly removed."
+      key_source:
+        label: Key on
+        section: Key
+        options: {0: Luma, 1: Chroma, 2: Max}
+        info: "What the key measures. Luma = brightness (bright subject on a dark background). Chroma = saturation (coloured subject on a grey or black background). Max = whichever is larger, so bright OR colourful pixels are kept."
+      luma_min:
+        label: Threshold
+        section: Key
+        info: "Key signal below this value counts as background and is dropped. Raise it to remove more of the dark background; lower it to keep darker parts of the subject."
+      luma_smooth:
+        label: Edge ramp
+        section: Key
+        info: "Width of the soft transition above the threshold. 0 = hard edge. Larger values fade the edge of the kept shape in gradually."
+      key_gain:
+        label: Key gain
+        section: Key signal conditioning
+        info: "Multiplies the private copy of the picture that only the key measures. Boost a dark source to get a decisive key. Does not change the picture's brightness."
+      key_gamma:
+        label: Key gamma
+        section: Key signal conditioning
+        info: "Gamma on the key signal only. Above 1 lifts shadows into the key, so darker parts of the subject survive. Does not change the picture."
+      key_contrast:
+        label: Key contrast
+        section: Key signal conditioning
+        info: "Contrast of the key signal around mid grey. Higher separates subject and background more sharply before the threshold. Does not change the picture."
+      key_brightness:
+        label: Key brightness
+        section: Key signal conditioning
+        info: "Offset added to the key signal. Shifts everything toward (+) or away from (-) the threshold. Does not change the picture."
+      fill_radius:
+        label: Fill radius (px)
+        section: Hole fill
+        info: "Largest hole half-width that gets filled. A dropped pixel is kept after all when kept pixels are found within this distance in enough directions. 0 = no fill. The search never crosses from one eye into the other."
+      fill_cover:
+        label: Fill cover
+        section: Hole fill
+        info: "Fraction of the 16 search directions that must hit kept pixels before a hole is filled. High values fill only true pockets fully surrounded by the subject; lower values also fill notches at the outline."
+      fill_steps:
+        label: Fill samples
+        section: Hole fill
+        info: "Samples taken along each search ray. More finds thin surrounding edges more reliably but costs GPU time (16 rays x this many texture reads per pixel)."
+
+  camera_out:
+    info: |
+      Last in a camera chain: everything about how the layer LOOKS. It cannot change what the key decided; transparency from the key is only multiplied by the window feather and Opacity.
+
+      Order inside the filter: stereo window (crop and feather) > soften > black level > gain > contrast > gamma > brightness > saturation > hue shift > hue concentration > opacity. Natural units: 1.0 or 0 is neutral, and every control at its default passes the picture through unchanged.
+    params:
+      bypass:
+        label: Bypass
+        info: "Shows the signal exactly as it arrives from the key: no window, feather, grading, hue work or opacity. For checking what this stage is being given."
+      window_width:
+        label: Window width (px)
+        section: Stereo window
+        info: "Width of the visible window, the same in both eyes, in canvas px (1920 = full eye). 0 = no window. Narrow it to crop a camera with a smaller useful field of view."
+      window_shift:
+        label: Window shift (px)
+        section: Stereo window
+        info: "Moves the window left or right in both eyes together (+ = right). Changes what part of the camera picture is shown, not its depth."
+      window_offset:
+        label: Window depth (px)
+        section: Stereo window
+        info: "Slides the two eyes' windows apart: left window right by half, right window left by half. This sets the depth of the window FRAME itself. + = the frame floats in front of the screen, - = behind. A frame in front of its content avoids edge conflicts when the subject comes forward."
+      mask_top:
+        label: Crop top (px)
+        section: Stereo window
+        info: "Crops the same number of px from the top of both eyes."
+      mask_bottom:
+        label: Crop bottom (px)
+        section: Stereo window
+        info: "Crops the same number of px from the bottom of both eyes."
+      vignette:
+        label: Edge feather (px)
+        section: Stereo window
+        info: "Fades the window edges to TRANSPARENT over this many px, so the camera blends into the layer beneath instead of ending at a hard edge. 0 = hard edge."
+      soften:
+        label: Soften
+        section: Grading
+        info: "Blends toward a small blur. 0 = off. Applied identically to both eyes after alignment, so it does not disturb the stereo."
+      black_level:
+        label: Black crush
+        section: Grading
+        info: "Pulls dark values down to black and rescales so white stays white. 0 = off. Hides sensor noise in the shadows."
+      gain:
+        label: Gain
+        section: Grading
+        info: "Multiplies the picture. 1 = neutral."
+      contrast:
+        label: Contrast
+        section: Grading
+        info: "Contrast around mid grey. 1 = neutral."
+      gamma:
+        label: Gamma
+        section: Grading
+        info: "Midtone brightness. 1 = neutral, above 1 brightens the mids without moving black or white."
+      brightness:
+        label: Brightness
+        section: Grading
+        info: "Offset added to the picture. 0 = neutral."
+      saturation:
+        label: Saturation
+        section: Grading
+        info: "Colour intensity. 1 = neutral, 0 = monochrome."
+      hue_shift:
+        label: Hue shift (deg)
+        section: Grading
+        info: "Rotates all colours around the wheel, in degrees. 0 = neutral. Use it to move the camera's colours toward or away from the synth's palette."
+      hue_peaks:
+        label: Hue peaks
+        section: Hue concentration
+        info: "Number of preferred hues around the wheel (may be fractional). Only has an effect when Hue pull is above 0."
+      hue_pull:
+        label: Hue pull
+        section: Hue concentration
+        info: "How strongly every colour is drawn toward the nearest preferred hue. 0 = off, 1 = colours collapse onto the peaks (a posterised, discrete palette). Same idea as the synth's palette filter, hue only."
+      hue_phase:
+        label: Hue phase
+        section: Hue concentration
+        info: "Rotates where the preferred hues sit on the wheel. 0 to 1 is one full turn."
+      opacity:
+        label: Opacity
+        section: Output
+        info: "Final strength of the camera layer over the layers beneath. 0 = invisible, 1 = whatever the key kept is fully opaque."
+
+  synth_color:
+    info: |
+      Colour conditioning for the analog synth, before any depth is computed. Because depth is derived from colour later in the chain, every control here also changes the depth field.
+
+      Order inside the filter: soften > chroma smooth > black level > contrast > gamma > saturation > hue rotate. All sliders run 0 to 1; contrast, gamma, saturation and hue are neutral at 0.5, the others at 0. With everything neutral the picture passes through unchanged.
+    params:
+      black_level:
+        label: Black crush
+        info: "Subtracts up to 30 % and rescales so white stays white. Pushes the analog noise floor to true black, below the depth bake's 'lit' gates, so dark areas read as empty backdrop (far plane) instead of flickering depth."
+      contrast:
+        label: Contrast
+        info: "Contrast around mid grey. 0.5 = neutral, 0 = half, 1 = double. More contrast spreads brightness, and through the bake's brightness baseline, spreads depth."
+      gamma:
+        label: Gamma
+        info: "Midtone brightness. 0.5 = neutral, higher brightens the mids. The bake's baseline depth follows brightness cubed, so this moves how much mid-bright content comes forward."
+      saturation:
+        label: Saturation
+        info: "0.5 = neutral, 0 = monochrome, 1 = double. Decides how much of the picture is vivid enough to take its depth from hue (the colour wheel) rather than from brightness."
+      hue_shift:
+        label: Hue rotate
+        info: "Rotates the colours themselves around the wheel. 0.5 = neutral, the ends are half a turn either way. This re-colours AND re-depths, unlike the depth bake's Hue rotation, which changes depth while leaving colours alone."
+      chroma_smooth:
+        label: Chroma smooth
+        info: "Blurs colour while keeping brightness sharp. Steadies hue (and so depth) on a noisy analog feed without softening the picture. 0 = off."
+      soften:
+        label: Soften
+        info: "Small blur of the whole picture BEFORE depth. Keep at 0 in normal use: blurred colour edges become depth ramps that the splat smears differently per eye. Use stereo soften (after the splat) for visual softness."
+
+  palette_quantize:
+    info: |
+      Sits between synth color and the depth bake. Concentrates the picture's hues toward N evenly spaced preferred hues, smoothly (colours flow toward the peaks; nothing is rounded until Hue pull reaches the top of its range). Because hue becomes depth in the next filter, N hue peaks become N depth layers: this is a colour instrument and a depth-structure instrument.
+
+      The same idea is applied to brightness (Luma peaks / pull) and saturation (Chroma pull / target). With every pull at 0 the filter passes the picture through unchanged.
+    params:
+      size:
+        label: Hue peaks
+        section: Hue
+        info: "Number of preferred hues N around the wheel, continuous (a fractional value fades a peak in or out). Sets how many colour bands, and so how many depth layers, the field collapses toward."
+      rotation:
+        label: Rotation
+        section: Hue
+        info: "Where the preferred hues sit on the wheel (0 to 1 = one full turn of the wheel). Sweeps the whole palette, and through the bake changes which hues sit forward. Driven by CV channel 2."
+      hue_pull:
+        label: Hue pull
+        section: Hue
+        info: "Strength of the concentration. 0 = off (smooth full colour), toward 1 = colours gather tightly on the peaks; above 0.75 a hard snap blends in, giving fully discrete colour bands at 1. Driven by CV channel 3, inverted: lowest CV = 1 (banded), highest = 0 (smooth)."
+      skew:
+        label: Skew
+        section: Hue
+        info: "Makes the pull asymmetric around each peak. 0 = symmetric basins; higher leans each band so colours on one side of a peak travel further than the other."
+      luma_peaks:
+        label: Luma peaks
+        section: Brightness
+        info: "Number of preferred brightness levels. Only has an effect when Luma pull is above 0."
+      luma_pull:
+        label: Luma pull
+        section: Brightness
+        info: "Draws brightness toward the luma peaks, forming tonal steps. 0 = off. Tonal steps become depth steps for content that takes its depth from brightness."
+      black_floor:
+        label: Black floor
+        section: Brightness
+        info: "Crushes the tonal field downward so the darkest content falls to black, and with it to the far plane."
+      chroma_pull:
+        label: Chroma pull
+        section: Saturation
+        info: "Draws saturation toward the Chroma target. 0 = off."
+      chroma_target:
+        label: Chroma target
+        section: Saturation
+        info: "The saturation that Chroma pull moves toward. 1 = fully vivid, 0 = grey."
+
+  chromadepth_bake:
+    info: |
+      Computes the depth field. For every source pixel it works out one depth value (0 far to 1 near) from the pixel's colour and writes it into the picture's alpha channel; the colours pass through untouched. The filters after it (field smooth, stereo splat) read that value.
+
+      How depth is derived: a baseline from brightness (cubed, so only bright content comes forward), a hue wheel for vivid pixels (one hue is nearest, the opposite hue farthest), and a set of rules that stop anti-aliased edges and analog noise from producing stray depth. Black is always the far plane.
+
+      Nothing visible changes when this filter is toggled alone, except that the splat loses its depth input: keep it on whenever stereo splat is on.
+    params:
+      hue_rotation:
+        label: Hue rotation
+        section: Colour to depth
+        info: "Which hue sits at the near plane. Sweeping it re-layers the picture in depth without changing any colour. Driven by CV channel 1."
+      color_weight:
+        label: Colour weight
+        section: Colour to depth
+        info: "0 = depth from brightness only (bright = near). 1 = vivid pixels take their depth from the hue wheel. In between blends the two."
+      wheel_shape:
+        label: Wheel shape
+        section: Colour to depth
+        info: "0 = smooth cosine wheel: seamless, but two hues share each depth, and which hues pair up changes with rotation. 1 = sawtooth wheel: every hue has its own depth and rotation is a pure cyclic shift, at the cost of one seam where neighbouring hues jump from near to far."
+      room_mix:
+        label: Room mix
+        section: Room depth (unused)
+        info: "Blends the synth's own depth with a measured depth map of the physical room from the depth sidecar (source 'StereoPi Depth'). 0 = synth depth only. The sidecar is stopped at present, so leave at 0."
+      room_mode:
+        label: Room coupling
+        section: Room depth (unused)
+        info: "How the room map combines with the synth depth when Room mix is up. 0 = crossfade (room replaces synth depth), 1 = sculpt (synth forms only come forward on near room surfaces), 2 = relief (near room surfaces bulge out of the synth field). Fractions blend neighbours."
+      room_gain:
+        label: Room gain
+        section: Room depth (unused)
+        info: "Scale of the room map against the synth depth. Above 1 exaggerates the room's relief. No effect while Room mix is 0."
+      debug_mode:
+        label: Debug
+        section: Debug
+        options: {0: "Off", 1: Show field}
+        info: "Show field renders the baked depth as a grey picture (white = near) instead of colour. Note the splat still runs after this filter and will displace that grey picture."
+
+  chromadepth_smooth:
+    info: |
+      Blurs ONLY the depth value (alpha) written by the depth bake; colours are untouched. Sharp depth cliffs become ramps, so the splat opens fewer black gaps beside bright detail and sloped edges stop tearing into steps.
+
+      Two copies of this filter run back to back, one horizontal and one vertical, which together make one round blur. Keep both at the same sigma.
+    params:
+      smoothing:
+        label: Sigma (px)
+        info: "Blur radius of the depth field in source px. 0 = off (exact passthrough). Small values (2-5) remove pepper holes; large values (10-24) turn object edges into broad ramps and make the depth softer and more pillowy. Set the h and v filters to the same value."
+      direction:
+        label: Direction
+        options: {0: Horizontal, 1: Vertical}
+        info: "Which axis this copy blurs. Fixed by the filter's role: 'field smooth h' is Horizontal, 'field smooth v' is Vertical. Do not change."
+
+  chromadepth_march:
+    info: |
+      The retired stereo renderer: a fragment shader that searches, for every output pixel, for the source pixel that lands there. It reads the same baked depth as the splat and outputs half-width eyes side by side. Replaced by the native stereo splat plugin, which is much faster. Kept for comparison only.
+    params:
+      depth:
+        label: Depth
+        info: "Parallax amount, on a squared curve, up to 8 % of the eye width at 1. This renderer has no separate plane or anchor."
+      debug_mode:
+        label: Debug
+        options: {0: "Off", 1: Field, 2: Path trace, 3: "3", 4: "4"}
+        info: "Test-harness views. Field shows the baked depth as grey; Path trace colours each pixel by the branch of the search that produced it. Leave Off."
+
+  lumadepth:
+    info: |
+      The original stereo renderer: depth from brightness only, no colour wheel, no depth bake needed. Kept for reference on the bench layer.
+    params:
+      depth:
+        label: Depth
+        info: "Parallax amount, linear, up to about 12 % of the canvas width at 1."
+      luma_anchor:
+        label: Luma anchor
+        info: "Which brightness sits on the screen plane. 1 = highlights on the screen and everything else behind; 0.5 = midtones on the screen, brights forward, darks back; 0 = darks on the screen, brights well forward."
+      falloff:
+        label: Falloff
+        info: "Steepness of the brightness-to-depth curve around the anchor. 0.5 = linear, lower flattens the field, higher spreads it."
+
+  stereo_soften:
+    info: |
+      Visual softness AFTER the stereo render. Both eyes get exactly the same blur and the depth stays crisp, which is why softness belongs here and not in synth color (a blur before the bake turns colour edges into depth ramps that differ per eye). The blur never crosses the seam between the eyes.
+    params:
+      soften:
+        label: Soften
+        info: "Blur strength. 0 = off (and then the filter should be disabled to save its pass)."
+
+  halfsbs_pillarbox:
+    info: |
+      Squeezes each eye back to a narrower aspect with black bars left and right (undoing the 4:3 to 16:9 stretch of the synth), and can draw a small marker that only the right eye sees, to check that left and right are routed correctly.
+    params:
+      aspect_correction:
+        label: Aspect
+        info: "Width of the picture inside each eye. 1 = full width (no bars), 0.75 = true 4:3 inside a 16:9 eye."
+      half_sbs:
+        label: Half-SBS marker
+        info: "Draws the marker at half width so it comes out square when the picture is later stretched 2x horizontally. Only affects the sync marker."
+      sync_indicator:
+        label: Right-eye marker
+        info: "Shows nested squares in the top-right corner of the RIGHT eye only. If you see it with your left eye, the eyes are swapped somewhere downstream."
+
+  display_zero:
+    info: |
+      One global depth offset for the whole program, applied to the finished mix. The Viture glasses (the reference display) are not comfortable when the two eyes show identical pictures: a flat picture needs a crossed offset before the eyes relax. This filter adds that offset to every layer at once, so 0 on the other depth controls (splat Plane, camera Convergence, window depth) means the relaxed plane.
+
+      It is part of the program output, so the Twitch, YouTube and projector feeds carry the same offset. The strip each eye loses at its outer edge is black.
+    params:
+      zero_px:
+        label: Display zero (px)
+        info: "Shifts the left eye right by half and the right eye left by half: the displayed disparity of everything rises by exactly this many px (+ = toward you). To find the value: splat Thickness 0, Plane 0, then sweep until the flat picture is relaxed to look at. 0 = exact passthrough."
+
+  stereo_window:
+    info: |
+      One common window for the whole program: blacks out the same bands in both eyes, over all layers, so every layer ends at one shared frame. Sits on the program scene with display zero.
+    params:
+      window_width:
+        label: Window width (px)
+        info: "Width of the visible window, the same in both eyes (1920 = full eye)."
+      window_shift:
+        label: Window shift (px)
+        info: "Moves the window left or right in both eyes together (+ = right)."
+      window_offset:
+        label: Window depth (px)
+        info: "Slides the two eyes' windows apart, which sets the depth of the frame itself. + = the frame floats in front of the screen."
+      margin_top:
+        label: Crop top (px)
+        info: "Black band at the top of both eyes."
+      margin_bottom:
+        label: Crop bottom (px)
+        info: "Black band at the bottom of both eyes."
+
+native:
+  stereo_splat_filter:
+    info: |
+      The stereo renderer (native plugin). Takes the flat synth picture with the baked depth in its alpha channel and draws the left and right eye by moving every source pixel sideways according to its depth. Output is full side-by-side, one eye per 1920 px half.
+
+      Displayed disparity of a pixel with depth d (1 = near, 0 = far):
+          plane + thickness x (d - anchor)
+      in canvas px, + = in front of the screen. Plane moves the whole field as one; Thickness is the depth range inside it; Anchor is the depth that stays put when Thickness changes. Display zero (Program tab) is added on top of all of this.
+    params:
+      - key: plane_px
+        type: float
+        min: -300
+        max: 300
+        step: 0.5
+        default: 0
+        label: Plane (px)
+        section: Stereo field
+        info: "Where the anchor depth sits, in canvas px of disparity. + = in front of the screen, - = behind. A pure sideways shift of the two eyes against each other: it moves the whole synth field nearer or farther without changing its shape. Same unit as camera Convergence."
+      - key: thickness_px
+        type: float
+        min: 0
+        max: 600
+        step: 0.5
+        default: 30
+        label: Thickness (px)
+        section: Stereo field
+        info: "Total depth range of the synth field: the disparity difference between the nearest and farthest depth. 0 = flat picture at the plane. Driven by CV channel 0 over 0-80 px; above about 80 the two eyes differ too much to fuse."
+      - key: anchor
+        type: float
+        min: 0
+        max: 1
+        step: 0.01
+        default: 1
+        label: Anchor
+        section: Stereo field
+        info: "Which depth holds still when Thickness changes. 1 = the front of the field stays at the plane and everything recedes behind it; 0 = the back stays and everything comes forward; 0.5 = the field opens equally both ways."
+      - key: vignette_pct
+        type: float
+        min: 0
+        max: 50
+        step: 0.5
+        default: 0
+        label: Depth vignette (%)
+        section: Stereo field
+        info: "Flattens depth toward the frame edges. Depth relative to the anchor ramps from zero at all four edges to full once this percentage of the frame inward. The edges sit flat at the plane (no conflict with the frame) and the centre can carry more thickness. 0 = off."
+      - key: frame_inset_px
+        type: float
+        min: 0
+        max: 120
+        step: 1
+        default: 48
+        label: Frame margin (px)
+        section: Framing
+        info: "Fixed crop margin on each side, which gives pixels room to move sideways. Content displaced further than this margin shows black at that edge. Fixed, so the picture does not zoom when Thickness moves."
+      - key: window
+        type: bool
+        default: false
+        label: Floating window
+        section: Framing
+        info: "Off: depth is tapered to zero near the left and right edges so nothing pokes through the frame. On: full depth right to the edge, and instead a black strip is drawn at the left eye's left edge and the right eye's right edge, which makes the frame itself float in front."
+      - key: mode
+        type: int
+        min: 0
+        max: 1
+        step: 1
+        default: 0
+        label: Reveal mode
+        section: Rendering
+        options: {0: Splat, 1: Warp}
+        info: "Splat: every pixel moves rigidly; where a near object uncovers background that the flat source never recorded, a black gap (reveal) opens beside it. Warp: the picture is stretched like a rubber sheet instead, so there are no black gaps, but edges between near and far smear."
+      - key: fill
+        type: int
+        min: 0
+        max: 5
+        step: 1
+        default: 3
+        label: Micro-fill (px)
+        section: Rendering
+        info: "Splat mode: closes reveal gaps up to this many px wide. 0 = off. Removes pepper-like black specks beside fine detail without touching real, wide reveals."
+      - key: ssaa
+        type: bool
+        default: true
+        label: 2x vertical SSAA
+        section: Rendering
+        info: "Splat mode: renders at double height and scales down, smoothing stair-steps on sloped edges. Costs GPU time. No effect in Warp mode."
+      - key: mlaa
+        type: bool
+        default: false
+        label: Reveal-edge AA
+        section: Rendering
+        info: "Smooths the jagged edges of reveal gaps in the final pass, at normal resolution. A cheaper alternative to SSAA."
+      - key: sync
+        type: bool
+        default: true
+        label: Sync readback
+        section: Rendering
+        info: "On: depth is read back from the GPU in the same frame (exact, but the GPU has to wait, which costs frame time). Off: uses the depth staged during the previous frame, so depth lags colour by one frame but nothing stalls. Off is the setting for live use."
+      - key: debug
+        type: int
+        min: 0
+        max: 5
+        step: 1
+        default: 0
+        label: Debug view
+        section: Debug
+        options: {0: "Off", 1: Depth, 2: RGB in, 3: Alpha in, 4: "4", 5: "5"}
+        info: "Diagnostic views: Depth shows the depth points the splat received, RGB in / Alpha in show its raw input. Leave Off."
+
+  gain_filter:
+    info: |
+      Boosts the monitor signal. The Viture glasses have no volume control in macOS and the OBS fader tops out at 0 dB, so the level for the glasses is set here.
+    params:
+      - key: db
+        type: float
+        min: -30
+        max: 30
+        step: 0.5
+        default: 0
+        label: Gain (dB)
+        info: "Gain applied to Mic/Aux before the limiter. Normally +15 dB. This is the volume in the glasses: raise it carefully."
+
+  limiter_filter:
+    info: |
+      Safety limiter after the monitor gain, so the +15 dB boost cannot clip or blast.
+    params:
+      - key: threshold
+        type: float
+        min: -60
+        max: 0
+        step: 0.5
+        default: -6
+        label: Threshold (dB)
+        info: "Level above which the limiter holds the signal down. Normally -3 dB."
+      - key: release_time
+        type: int
+        min: 1
+        max: 1000
+        step: 1
+        default: 60
+        label: Release (ms)
+        info: "How quickly the limiter lets go after a peak."
