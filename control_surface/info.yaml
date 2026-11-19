@@ -123,6 +123,11 @@ instances:
   "Test Pattern/lumadepth OLD": "The first renderer (depth from brightness only), kept for reference. Enable only with the other renderers off."
   "Scene/stereo window": "Off since 2026-11-08: every layer already masks its own eyes, so this only narrowed the frame and cost a pass."
 
+# Shader files that ARE a layer's processing. Switching such a filter off shows the raw source
+# (for a camera: both eyes unaligned, opaque, covering the layers beneath), so the surface hides
+# its enable switch while it is on. Hide the LAYER instead (switch at the top of the tab).
+essential: [camera]
+
 virtual:
   - tab: program
     name: global zero

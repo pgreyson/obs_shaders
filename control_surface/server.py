@@ -286,12 +286,14 @@ class Surface:
             if rest:
                 stages.append({"title": "Other", "filters": rest})
             tabs.append({"id": t["id"], "title": t["title"], "source": src, "info": t.get("info", ""),
-                         "stages": stages, "layers": layers if t.get("layers") else None})
+                         "stages": stages, "layers": bool(t.get("layers")),
+                         "layer": next((l["id"] for l in layers if l["name"] == src), None)})
         for src, fl in by_source.items():
             if src not in used:
                 tabs.append({"id": "src-" + src, "title": src, "source": src,
                              "info": "A source with filters that info.yaml does not describe yet.",
-                             "stages": [{"title": "Filters", "filters": fl}], "layers": None})
+                             "stages": [{"title": "Filters", "filters": fl}], "layers": False,
+                             "layer": next((l["id"] for l in layers if l["name"] == src), None)})
         # virtual controls: one slider that moves several real ones together
         self.virtual = {}
         for v in info.get("virtual") or []:
@@ -315,7 +317,13 @@ class Surface:
                 tab["stages"].append({"title": "Whole program", "filters": [card]})
         self.schema, self.values = schema, values
         self.fast = {k for k, sch in schema.items() if any("cv" in p for p in sch.values())}
-        self.model = {"t": "model", "program": program, "tabs": tabs}
+        essential = set(info.get("essential") or [])   # filters whose OFF state shows the raw source
+        for tab in tabs:
+            for stg in tab["stages"]:
+                for f in stg["filters"]:
+                    if Path(f.get("file") or "").stem in essential:
+                        f["essential"] = True
+        self.model = {"t": "model", "program": program, "tabs": tabs, "layers": layers}
         log(f"model: {sum(len(v) for v in by_source.values())} filters on {len(by_source)} sources, "
             f"{sum(len(s) for s in schema.values())} controls")
 
@@ -329,10 +337,9 @@ class Surface:
         elif typ == "SceneItemEnableStateChanged":
             await self.send_all({"t": "item", "scene": data["sceneName"], "id": data["sceneItemId"],
                                  "on": data["sceneItemEnabled"]})
-            for tab in (self.model or {}).get("tabs", []):
-                for l in tab.get("layers") or []:
-                    if l["scene"] == data["sceneName"] and l["id"] == data["sceneItemId"]:
-                        l["on"] = data["sceneItemEnabled"]
+            for l in (self.model or {}).get("layers", []):
+                if l["scene"] == data["sceneName"] and l["id"] == data["sceneItemId"]:
+                    l["on"] = data["sceneItemEnabled"]
         elif typ in ("SourceFilterCreated", "SourceFilterRemoved", "SourceFilterNameChanged",
                      "SourceFilterListReindexed", "SceneItemCreated", "SceneItemRemoved",
                      "CurrentProgramSceneChanged", "SceneCollectionChanged"):

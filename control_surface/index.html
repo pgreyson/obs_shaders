@@ -159,7 +159,8 @@ function connect() {
     else if (m.t === "v") { const f = filt.get(K(m.s, m.f));
       for (const k in m.k) { const c = ctl.get(K(m.s, m.f, k)); if (c) c.remote(m.k[k]); else if (f) f.values[k] = m.k[k]; } }
     else if (m.t === "en") { const f = filt.get(K(m.s, m.f)); if (f) f.on = m.on; const c = cards.get(K(m.s, m.f)); if (c) c.setOn(m.on); }
-    else if (m.t === "item") { const c = layerSw.get(K(m.scene, m.id)); if (c) c(m.on); }
+    else if (m.t === "item") { const l = (model ? model.layers : []).find((x) => x.scene === m.scene && x.id === m.id); if (l) l.on = m.on;
+      const c = layerSw.get(K(m.scene, m.id)); if (c) c(m.on); }
     else if (m.t === "status") setLink(m);
     else if (m.t === "saved") flashSaved();
     else if (m.t === "err") console.warn(m.msg);
@@ -314,11 +315,15 @@ function makeCard(tab, f) {
   const pos = el("div", "pos", f.pos + "/" + f.of);
   const chev = el("button", "chev", closed.has(key) ? "▸" : "▾");
   sw.onclick = (e) => { e.stopPropagation(); f.on = !f.on; paint(); send({ t: "en", s: tab.source, f: f.name, on: f.on }); };
-  const paint = () => { sw.classList.toggle("on", f.on); card.classList.toggle("off", !f.on); };
+  const paint = () => { sw.classList.toggle("on", f.on); card.classList.toggle("off", !f.on); if (f.essential) sw.style.display = f.on ? "none" : ""; };
   const toggle = () => { const c = card.classList.toggle("closed"); chev.textContent = c ? "▸" : "▾";
     c ? closed.add(key) : closed.delete(key); store.set("closed", [...closed]); };
   name.onclick = toggle; chev.onclick = toggle;
   if (f.virtual) { sw.style.display = "none"; pos.textContent = "linked"; }
+  // A filter that IS the layer's processing: off would show the raw source, so the switch only
+  // appears when it is off (to turn it back on). Hide the layer with the switch at the top.
+  const paintEss = () => { if (f.essential) sw.style.display = f.on ? "none" : ""; };
+  paintEss();
   head.append(sw, name, pos, infoBtn(() => filterInfo(tab, f)), chev);
   const body = el("div", "body");
   let sec = null;
@@ -337,7 +342,7 @@ function makeLayers(tab) {
   head.append(el("div", "name", "Layers"), el("div", "pos", "top of stack first"),
     infoBtn(() => sheet("Layers", "Program scene “" + model.program + "”",
       [["p", "The layers that are mixed into the program, top of the stack first. A switch here shows or hides the whole layer (the same as the eye icon in OBS's Sources list). A hidden layer's filters do not run, so hiding a layer also frees its render time."]])));
-  for (const l of [...tab.layers].reverse()) {
+  for (const l of [...model.layers].reverse()) {
     const r = el("div", "lrow"), sw = el("button", "sw" + (l.on ? " on" : ""));
     sw.onclick = () => { l.on = !l.on; sw.classList.toggle("on", l.on); send({ t: "item", scene: l.scene, id: l.id, on: l.on }); };
     layerSw.set(K(l.scene, l.id), (on) => { l.on = on; sw.classList.toggle("on", on); });
@@ -408,8 +413,16 @@ function render() {
   const tab = model.tabs.find((t) => t.id === curTab);
   const real = tab.stages.flatMap((s) => s.filters).filter((f) => !f.virtual), n = real.length, on = real.filter((f) => f.on).length;
   const th = el("div", "tabhead");
-  th.append(infoBtn(() => sheet(tab.title, "Source “" + tab.source + "”", [["p", tab.info]])),
-    el("span", null, "“" + tab.source + "” · " + n + " filters, " + on + " enabled · runs top to bottom"));
+  th.append(infoBtn(() => sheet(tab.title, "Source “" + tab.source + "”", [["p", tab.info]])));
+  const lay = tab.layer != null ? model.layers.find((x) => x.id === tab.layer) : null;
+  if (lay) {      // show / hide this whole layer in the program
+    const sw = el("button", "sw" + (lay.on ? " on" : "")), txt = el("b", null);
+    const paintL = () => { sw.classList.toggle("on", lay.on); txt.textContent = lay.on ? "Layer ON in program" : "Layer OFF (hidden)"; txt.style.color = lay.on ? "var(--on)" : "var(--bad)"; };
+    sw.onclick = () => { lay.on = !lay.on; paintL(); send({ t: "item", scene: lay.scene, id: lay.id, on: lay.on }); };
+    layerSw.set(K(lay.scene, lay.id), (v) => { lay.on = v; paintL(); });
+    paintL(); th.append(sw, txt);
+  }
+  th.append(el("span", null, "“" + tab.source + "” · " + n + " filters, " + on + " enabled · runs top to bottom"));
   main.append(th);
   if (tab.layers) { const st = el("div", "stage"); st.append(el("h2", null, "Mix")); const g = el("div", "cards"); g.append(makeLayers(tab)); st.append(g); main.append(st); }
   for (const s of tab.stages) {
