@@ -73,11 +73,11 @@ mappings:
     targets:
       - instance: viture
         source: "Video Capture Device"
-        filter: "palette"
+        filter: "synth color"
         property: rotation
       - instance: projector
         source: "Video Capture Device"
-        filter: "palette"
+        filter: "synth color"
         property: rotation
 
   - cv_channel: 3
@@ -88,11 +88,11 @@ mappings:
     targets:
       - instance: viture
         source: "Video Capture Device"
-        filter: "palette"
+        filter: "synth color"
         property: size
       - instance: projector
         source: "Video Capture Device"
-        filter: "palette"
+        filter: "synth color"
         property: size
 
 # Bidirectional mirroring (planned v2.5): when a property changes in one

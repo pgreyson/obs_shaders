@@ -372,7 +372,7 @@ async def main():
         # 1920-wide source; scale to grab size)
         dx = dy = 0.0
         r = await ws.call(simpleobsws.Request('GetSourceFilter',
-            {'sourceName': args.align_source or args.source, 'filterName': 'sbs align'}))
+            {'sourceName': args.align_source or args.source, 'filterName': 'camera'}))
         if r.responseData:
             s = r.responseData['filterSettings']
             scale = args.grab_width / float(args.align_source_width)
@@ -396,7 +396,7 @@ async def main():
     async def refresh_align():
         """Follow live 'sbs align' edits: the DISPLAYED disparity depends on them."""
         r = await ws.call(simpleobsws.Request('GetSourceFilter',
-            {'sourceName': align_src, 'filterName': 'sbs align'}))
+            {'sourceName': align_src, 'filterName': 'camera'}))
         if r.responseData and hasattr(engine, 'stereo'):
             a = r.responseData['filterSettings']
             scale = args.grab_width / float(args.align_source_width)

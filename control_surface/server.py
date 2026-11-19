@@ -197,7 +197,14 @@ class Surface:
                 sh = parse_shader(path)
             except Exception as e:
                 return [], f"Shader file could not be read: {e}", "", Path(path).name
-            cur = text.get("params") or {}
+            cur = {}
+            for inc in text.get("include") or []:      # reuse another shader's control text
+                for k, v in ((info["shaders"].get(inc["from"]) or {}).get("params") or {}).items():
+                    v = dict(v)
+                    if inc.get("section") and "section" not in v:
+                        v["section"] = inc["section"]
+                    cur[k] = v
+            cur.update(text.get("params") or {})
             params = []
             for p in sh["params"]:
                 c = cur.get(p["key"], {})
@@ -285,6 +292,27 @@ class Surface:
                 tabs.append({"id": "src-" + src, "title": src, "source": src,
                              "info": "A source with filters that info.yaml does not describe yet.",
                              "stages": [{"title": "Filters", "filters": fl}], "layers": None})
+        # virtual controls: one slider that moves several real ones together
+        self.virtual = {}
+        for v in info.get("virtual") or []:
+            tab = next((t for t in tabs if t["id"] == v["tab"]), None)
+            if not tab:
+                continue
+            p = dict(v["param"])
+            try:
+                val = float(json.loads((HERE / v["state"]).read_text())[p["key"]])
+            except Exception:
+                val = p["default"]
+            key = (tab["source"], v["name"])
+            schema[key], values[key] = {p["key"]: p}, {p["key"]: val}
+            self.virtual[key] = v
+            card = {"name": v["name"], "kind": "virtual", "virtual": True, "on": True, "pos": 0, "of": 0,
+                    "file": "", "info": v.get("info", ""), "note": "", "header": "", "params": [p],
+                    "values": values[key]}
+            if tab["stages"]:
+                tab["stages"][0]["filters"].insert(0, card)
+            else:
+                tab["stages"].append({"title": "Whole program", "filters": [card]})
         self.schema, self.values = schema, values
         self.fast = {k for k, sch in schema.items() if any("cv" in p for p in sch.values())}
         self.model = {"t": "model", "program": program, "tabs": tabs}
@@ -411,6 +439,9 @@ class Surface:
             key = (m["s"], m["f"])
             p = self.schema[key][m["k"]]
             v = self.coerce(p, m["v"])
+            if key in self.virtual:
+                await self.set_virtual(key, m["k"], v, conn)
+                return
             self.pending.setdefault(key, {})[m["k"]] = v
             self.values[key][m["k"]] = v
             self.wrote[(key, m["k"])] = time.monotonic()
@@ -430,6 +461,27 @@ class Surface:
                 self.to_bridge({"source": m["s"], "filter": m["f"], "property": m["k"], "clear": True})
         elif t == "reload":
             self.rebuild.set()
+
+    async def set_virtual(self, key, k, v, conn):
+        """Move every target by the change of the virtual control, then remember its value."""
+        spec, d = self.virtual[key], v - self.values[key][k]
+        self.values[key][k] = v
+        await self.send_all({"t": "v", "s": key[0], "f": key[1], "k": {k: v}}, skip=conn)
+        now = time.monotonic()
+        for src, flt, prop in spec["targets"]:
+            tk = (src, flt)
+            p = self.schema.get(tk, {}).get(prop)
+            if not p:
+                continue
+            nv = self.coerce(p, self.values[tk][prop] + d)
+            self.values[tk][prop] = nv
+            self.pending.setdefault(tk, {})[prop] = nv
+            self.wrote[(tk, prop)] = now
+            await self.send_all({"t": "v", "s": src, "f": flt, "k": {prop: nv}})
+        try:
+            (HERE / spec["state"]).write_text(json.dumps({k: v}))
+        except Exception as e:
+            log("virtual state not saved:", e)
 
     def to_bridge(self, msg):
         try:

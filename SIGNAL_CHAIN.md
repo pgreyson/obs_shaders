@@ -32,6 +32,25 @@ StereoPi (stereo lens) ─HDMI─► Blackmagic UltraStudio ─┐      ▼
 
 ## Main instance — `elegato->full_sbs` (ws :4455, canvas 3840×1080)
 
+> **Pass merge, 2026-11-18 (supersedes the filter lists below where they differ).** Main was at
+> 45 ms a frame (22 fps). Measured by switching each filter off: EVERY shader pass on the
+> 3840×1080 canvas costs 2–4 ms whatever it computes, so passes were merged, controls unchanged:
+> - each camera scene: `sbs align` + `camera key` + `camera out` → ONE filter **`camera`**
+>   ([`camera.shader`](camera.shader); `key_enable` replaces switching the key filter off).
+>   `tools/camera_chain.py merge | drop-old | reload`.
+> - synth: `synth color` + `palette` → ONE filter **`synth color`**
+>   ([`synth_color_palette.shader`](synth_color_palette.shader)); the bridge's palette knobs now
+>   target filter `synth color`. `tools/synth_merge.py merge | drop-old | reload`.
+> - `display zero` is OFF and at 0: its offset (93 px) is FOLDED into the splat plane, both camera
+>   convergences and both camera window offsets. The running total is
+>   `control_surface/.display_zero.json`; move it with the surface's "global zero" or
+>   `tools/stereo_field.py zero N` (both shift all five values together).
+> - the projector relay is stopped while no projector is attached (−4 ms on main; start it with
+>   `tools/relaunch_projector.sh`).
+> Result: 45 → ~34 ms (29–30 fps). The old filters are still present, DISABLED, for rollback
+> (dumps in `obs_config/*_before_2026-11-18.json`) until `drop-old` is run. Next lever if more
+> margin is needed: `field smooth h` + `v` (6 ms) into the splat plugin.
+
 The only instance that runs shaders. Streams nowhere; its program feeds the OBS
 Virtual Camera for the relays. Scene `Scene`, bottom to top:
 

@@ -1,0 +1,43 @@
+{
+ "palette": {
+  "enabled": true,
+  "index": 3,
+  "kind": "shader_filter",
+  "settings": {
+   "chroma_amount": 0.0,
+   "chroma_pull": 0.0,
+   "dither": 0.0,
+   "from_file": true,
+   "hue_amount": 0.64,
+   "hue_pull": 0.01962319016456604,
+   "jitter": 0.67,
+   "luma_amount": 0.29,
+   "luma_levels": 0.05,
+   "luma_pull": 0.0,
+   "rotation": 0.1629841923713684,
+   "seed": 1.0,
+   "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/palette_quantize.shader",
+   "shimmer": 0.57,
+   "size": 6.0,
+   "skew": 0.0,
+   "spread": 0.11,
+   "temperature": 0.84
+  }
+ },
+ "synth color": {
+  "enabled": true,
+  "index": 2,
+  "kind": "shader_filter",
+  "settings": {
+   "black_level": 0.11,
+   "chroma_smooth": 0.0,
+   "contrast": 0.53,
+   "from_file": true,
+   "gamma": 0.77,
+   "hue_shift": 0.46,
+   "saturation": 0.46,
+   "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/synth_color.shader",
+   "soften": 0.0
+  }
+ }
+}

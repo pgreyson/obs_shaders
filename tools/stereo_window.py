@@ -53,10 +53,10 @@ async def main():
         pbm = (1.0 - float(pb.get("aspect_correction", 0.75))) / 2.0 * EYE_W
         needs.append((SYNTH, [pbm, EYE_W - pbm], [pbm, EYE_W - pbm], 0.0, 0.0, enabled.get(SYNTH)))
     for lay in CAMERA_LAYERS:
-        al = await filt(lay, "sbs align")
+        al = await filt(lay, "camera")   # merged camera filter (was sbs align + camera out)
         if al is None:
             continue
-        wnd = await filt(lay, "camera out") or {}      # window/vignette moved here 2026-11-14
+        wnd = al or {}      # window/vignette moved here 2026-11-14
         g = lambda k, d=0.0: float(wnd.get(k, al.get(k, d)) if k.startswith(("window_", "mask_")) else al.get(k, d))
         cv = g("convergence")
         lx, rx, ly, ry = g("left_x") + cv / 2, g("right_x") - cv / 2, g("left_y"), g("right_y")

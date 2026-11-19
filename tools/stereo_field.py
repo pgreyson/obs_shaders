@@ -26,6 +26,7 @@ Nothing runs continuously: re-run converge / snap after re-zooming or moving a c
 import argparse
 import asyncio
 import base64
+import json
 import os
 import sys
 
@@ -40,7 +41,7 @@ URL = f"ws://{CFG.get('host', 'localhost')}:{CFG['port']}"
 
 SYNTH, SPLAT = "Video Capture Device", "stereo splat"
 CAMERAS = ("stage", "room")
-ALIGN = "sbs align"
+ALIGN = "camera"   # one merged filter per camera scene since 2026-11-18 (was "sbs align")
 EYE_W = 1920.0
 MAX_PARALLAX, PIC_LO, PIC_HI = 0.08, 0.010, 0.985   # legacy splat constants (pre plane/thickness)
 
@@ -259,28 +260,37 @@ async def cmd_set(args):
 PROGRAM, ZERO = "Scene", "display zero"
 
 
+ZERO_STATE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "control_surface", ".display_zero.json")
+
+
 async def cmd_zero(args):
-    """Global display zero (display_zero.shader on the program scene): every layer's displayed
-    disparity rises by zero_px. --keep subtracts the change from the synth plane and both camera
-    convergences so the picture does not move; only the meaning of 0 does."""
-    async with OBS() as o:
-        cur = float((await o.filt(PROGRAM, ZERO)).get("zero_px", 0.0))
-        if args.value is None:
-            print(f"display zero {cur:+.1f} px")
-            return
-        d = args.value - cur
-        await o.setf(PROGRAM, ZERO, {"zero_px": args.value})
-        print(f"display zero {cur:+.1f} → {args.value:+.1f} px")
-        if args.keep and abs(d) > 0.01:
+    """Global zero: one depth offset for the whole program. Since 2026-11-18 it is FOLDED into the
+    layers (the display_zero filter cost a render pass): changing it moves the synth plane, both
+    camera convergences and both camera window offsets by the same amount. The running total
+    lives in control_surface/.display_zero.json, shared with the touch surface's "global zero".
+    --keep only re-labels the total (nothing moves): use it after trimming the layers by hand."""
+    try:
+        cur = float(json.load(open(ZERO_STATE))["zero_px"])
+    except Exception:
+        cur = 0.0
+    if args.value is None:
+        print(f"global zero {cur:+.1f} px (folded into splat plane, camera convergence + window offset)")
+        return
+    d = args.value - cur
+    print(f"global zero {cur:+.1f} → {args.value:+.1f} px")
+    if not args.keep and abs(d) > 0.01:
+        async with OBS() as o:
             pl = float((await o.filt(SYNTH, SPLAT)).get("plane_px", 0.0))
-            await o.setf(SYNTH, SPLAT, {"plane_px": pl - d})
-            print(f"  synth plane {pl:+.1f} → {pl - d:+.1f}")
+            await o.setf(SYNTH, SPLAT, {"plane_px": pl + d})
+            print(f"  synth plane {pl:+.1f} → {pl + d:+.1f}")
             for cam in CAMERAS:
-                cv = float((await o.filt(cam, ALIGN)).get("convergence", 0.0))
-                nv = max(-300.0, min(300.0, cv - d))
-                await o.setf(cam, ALIGN, {"convergence": nv})
-                print(f"  {cam} convergence {cv:+.1f} → {nv:+.1f}")
-        await o.nudge_save()
+                st = await o.filt(cam, ALIGN)
+                cv, wo = float(st.get("convergence", 0.0)), float(st.get("window_offset", 0.0))
+                await o.setf(cam, ALIGN, {"convergence": max(-300.0, min(300.0, cv + d)),
+                                          "window_offset": max(-400.0, min(400.0, wo + d))})
+                print(f"  {cam} convergence {cv:+.1f} → {cv + d:+.1f}, window offset {wo:+.1f} → {wo + d:+.1f}")
+            await o.nudge_save()
+    json.dump({"zero_px": args.value}, open(ZERO_STATE, "w"))
 
 
 def main():

@@ -26,13 +26,15 @@ tabs:
       - title: Input
         filters: [test pattern, sbs align]
       - title: Colour (also shapes depth)
-        filters: [synth color, palette]
+        filters: [synth color]
       - title: Depth field
         filters: [depth bake, field smooth h, field smooth v]
       - title: Stereo render
         filters: [stereo splat, stereo displace]
       - title: After the stereo render
         filters: [stereo soften, pillar box]
+      - title: Replaced (kept off for rollback)
+        filters: [synth color OLD, palette]
 
   - id: stage
     title: Stage camera
@@ -40,14 +42,12 @@ tabs:
     info: |
       Nested scene "stage": the stage StereoPi (real stereo camera, side-by-side, via a Blackmagic UltraStudio) stretched to the canvas. It sits ABOVE the synth and the room camera in the program, blend mode normal, so whatever the key keeps covers the layers beneath.
 
-      Three filters, split by what a control affects: sbs align (is the stereo correct), camera key (what is kept), camera out (how it looks). No depth synthesis here; the camera already carries real stereo.
+      One filter, "camera", does three things in order: alignment (is the stereo correct), key (what is kept), look (how it appears). They were three separate filters until 2026-11-18 and were merged to save render time; the controls are the same. No depth synthesis here; the camera already carries real stereo.
     stages:
-      - title: Alignment
-        filters: [sbs align]
-      - title: Key
-        filters: [camera key]
-      - title: Look
-        filters: [camera out]
+      - title: Camera (alignment, key and look in one pass)
+        filters: [camera]
+      - title: Replaced (kept off for rollback)
+        filters: [sbs align, camera key, camera out]
 
   - id: room
     title: Room camera
@@ -55,14 +55,12 @@ tabs:
     info: |
       Nested scene "room": the room StereoPi stretched to the canvas. It sits above the synth and BELOW the stage camera. The rig is mounted upside down; the source inside the scene is turned 180 degrees, which rights each eye and swaps the eye halves back.
 
-      Same three filters as the stage camera: sbs align (is the stereo correct), camera key (what is kept), camera out (how it looks).
+      Same single "camera" filter as the stage camera: alignment (is the stereo correct), key (what is kept), look (how it appears).
     stages:
-      - title: Alignment
-        filters: [sbs align]
-      - title: Key
-        filters: [camera key]
-      - title: Look
-        filters: [camera out]
+      - title: Camera (alignment, key and look in one pass)
+        filters: [camera]
+      - title: Replaced (kept off for rollback)
+        filters: [sbs align, camera key, camera out]
 
   - id: program
     title: Program
@@ -106,6 +104,15 @@ layers:
   stage: "Stage camera layer (nested scene, see the Stage camera tab). Top of the stack."
 
 instances:
+  "Video Capture Device/synth color OLD": "Replaced by the merged synth color filter on 2026-11-18. Kept off for rollback; do not enable alongside it."
+  "Video Capture Device/palette": "Replaced by the merged synth color filter on 2026-11-18 (its controls are there now, and the CV knobs drive those). Kept off for rollback."
+  "stage/sbs align": "Replaced by the merged camera filter on 2026-11-18. Kept off for rollback; do not enable alongside it."
+  "stage/camera key": "Replaced by the merged camera filter on 2026-11-18. Kept off for rollback."
+  "stage/camera out": "Replaced by the merged camera filter on 2026-11-18. Kept off for rollback."
+  "room/sbs align": "Replaced by the merged camera filter on 2026-11-18. Kept off for rollback; do not enable alongside it."
+  "room/camera key": "Replaced by the merged camera filter on 2026-11-18. Kept off for rollback."
+  "room/camera out": "Replaced by the merged camera filter on 2026-11-18. Kept off for rollback."
+  "Scene/display zero": "Off since 2026-11-18: its offset is folded into the layers (see Global zero above) to save a render pass. Leave at 0 and off, or the offset is applied twice."
   "Video Capture Device/sbs align": "On the synth this filter is only for the case where a side-by-side stereo signal arrives on the Elgato (tools/sbs_mode.py on). With the normal mono synth it must stay off: it would shift the two halves of a flat picture against each other."
   "Video Capture Device/stereo displace": "Retired renderer, kept for comparison. Never enable it together with stereo splat: it would displace an image that is already a stereo pair."
   "Video Capture Device/pillar box": "Off since 2026-11-08: the 4:3 synth is deliberately stretched to the 16:9 eye so it matches the cameras and fills the projector."
@@ -116,7 +123,62 @@ instances:
   "Test Pattern/lumadepth OLD": "The first renderer (depth from brightness only), kept for reference. Enable only with the other renderers off."
   "Scene/stereo window": "Off since 2026-11-08: every layer already masks its own eyes, so this only narrowed the frame and cost a pass."
 
+virtual:
+  - tab: program
+    name: global zero
+    state: .display_zero.json
+    info: |
+      One depth offset for the whole program, the successor of the "display zero" filter. The Viture glasses are not comfortable when both eyes show identical pictures; this offset is what makes 0 on the other depth controls mean the relaxed plane.
+
+      It is not a filter. Since 2026-11-18 the offset is folded into the layers to save a render pass: moving this slider moves the splat's Plane, both cameras' Convergence and both cameras' Window depth by the same amount, so the whole picture (frames included) shifts in depth together. Its value is the total offset applied so far. If you change one of those controls directly, this slider does not follow.
+    param:
+      key: zero_px
+      type: float
+      min: -100
+      max: 300
+      step: 0.5
+      default: 0
+      label: Global zero (px)
+      info: "Total depth offset folded into every layer, in canvas px of disparity (+ = toward you). Moving it shifts the synth plane, both camera convergences and both camera window depths together."
+    targets:
+      - [Video Capture Device, stereo splat, plane_px]
+      - [stage, camera, convergence]
+      - [stage, camera, window_offset]
+      - [room, camera, convergence]
+      - [room, camera, window_offset]
+
 shaders:
+  camera:
+    include:
+      - {from: sbs_align}
+      - {from: camera_key}
+      - {from: camera_out}
+    info: |
+      The whole camera layer in one pass: the camera's side-by-side frame goes in, the finished, positioned, keyed and graded layer comes out. Three stages run in this order inside the filter, and the sections below follow them.
+
+      1. Alignment: shifts each eye so the pair lines up, sets how near or far the scene sits (Convergence), and crops both eyes to what both can see. Stereo correctness only.
+      2. Key: decides which pixels are kept and which become transparent. Never changes colour. "Key enabled" off keeps the whole frame.
+      3. Look: the stereo window and its feather, grading, hue concentration, opacity. It cannot change what the key decided.
+
+      Units are canvas px (1920 per eye, 2x camera px); disparity is left minus right, + = in front. These were three filters (sbs align, camera key, camera out) until 2026-11-18; each pass costs 3-4 ms on this machine, so they were merged with the same controls.
+    params:
+      key_enable:
+        label: Key enabled
+        section: Key
+        info: "Off: no key, the whole aligned frame is kept (use for a lit room with no black background). The other key controls keep their values while it is off. This replaces switching the old camera key filter off."
+
+  synth_color_palette:
+    include:
+      - {from: synth_color, section: Conditioning}
+      - {from: palette_quantize}
+    info: |
+      First active filter of the synth chain: colour conditioning, then the palette, in one pass. Because depth is derived from colour in the next filter, every control here also changes the depth field.
+
+      1. Conditioning: soften > chroma smooth > black level > contrast > gamma > saturation > hue rotate. Sliders run 0 to 1; contrast, gamma, saturation and hue are neutral at 0.5, the others at 0.
+      2. Palette: concentrates hues toward N evenly spaced preferred hues (N hue peaks become N depth layers), and can do the same for brightness and saturation. With every pull at 0 and Rotation at 0 the palette does nothing.
+
+      These were two filters (synth color, palette) until 2026-11-18, merged with the same controls to save a render pass.
+
   test_pattern:
     info: |
       First in the synth chain. When enabled it REPLACES the live Elgato picture with a generated test frame, so everything after it (colour, palette, depth bake, splat) works on a fully known input. Disabled, it does nothing and costs nothing.
