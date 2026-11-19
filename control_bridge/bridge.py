@@ -139,6 +139,93 @@ async def _write_filter_batch(
         log.error(f"[{name}] batch write error: {exc}")
 
 
+OFFSETS_FILE = Path(__file__).parent / ".cv_offsets.json"
+REBASE_PORT = 9456  # UDP, loopback only
+
+
+def mapping_key(mapping: dict) -> str:
+    return mapping.get("name") or f"ch{mapping['cv_channel']}"
+
+
+def mapping_limits(mapping: dict) -> tuple[float, float]:
+    lim = mapping.get("limits") or mapping.get("out_range", [0.0, 1.0])
+    return (min(lim), max(lim))
+
+
+class Rebase:
+    """RELATIVE knobs. Each mapping carries an offset: value = remap(cv) + offset, clamped to
+    the mapping's `limits`. When another controller (the touch surface) sets a CV-driven
+    property it tells the bridge over UDP; the bridge then picks the offset that makes the
+    hardware's CURRENT position mean exactly that value, so returning to the knob continues
+    from where the surface left the parameter instead of snapping back. Offsets persist in
+    .cv_offsets.json across restarts; {"clear": true} returns a mapping to the plain range.
+
+    Datagram (JSON): {"source": .., "filter": .., "property": .., "value": 12.5}
+                  or {"source": .., "filter": .., "property": .., "clear": true}
+    """
+
+    def __init__(self, mappings, main_instances, latest_means, latest_lock):
+        self.mappings, self.main = mappings, main_instances
+        self.means, self.lock = latest_means, latest_lock
+        self.offsets: dict[str, float] = {}
+        self.force: set[str] = set()   # mappings to rewrite on the next pass
+        try:
+            saved = json.loads(OFFSETS_FILE.read_text())
+            keys = {mapping_key(m) for m in mappings}
+            self.offsets = {k: float(v) for k, v in saved.items() if k in keys}
+            if self.offsets:
+                log.info(f"CV offsets restored: {self.offsets}")
+        except FileNotFoundError:
+            pass
+        except Exception as exc:
+            log.warning(f"could not read {OFFSETS_FILE.name}: {exc}")
+
+    def find(self, source, filter_name, prop):
+        for m in self.mappings:
+            for t in m.get("targets", []):
+                if (t["instance"] in self.main and t["source"] == source
+                        and t["filter"] == filter_name and t["property"] == prop):
+                    return m
+        return None
+
+    def datagram_received(self, data, addr):
+        try:
+            msg = json.loads(data)
+            m = self.find(msg["source"], msg["filter"], msg["property"])
+            if m is None:
+                return
+            key = mapping_key(m)
+            if msg.get("clear"):
+                self.offsets.pop(key, None)
+                log.info(f"CV offset cleared: {key}")
+            else:
+                with self.lock:
+                    cv = float(self.means[m["cv_channel"]])
+                base = clamp_and_remap(cv, tuple(m.get("cv_range", [0.0, 1.0])),
+                                       tuple(m.get("out_range", [0.0, 1.0])))
+                lo, hi = mapping_limits(m)
+                self.offsets[key] = max(lo, min(hi, float(msg["value"]))) - base
+            self.force.add(key)
+            self.save()
+        except Exception as exc:
+            log.warning(f"bad rebase datagram {data[:120]!r}: {exc}")
+
+    def save(self):
+        if getattr(self, "_save_handle", None):
+            self._save_handle.cancel()
+        def write():
+            try:
+                OFFSETS_FILE.write_text(json.dumps(self.offsets, indent=1))
+            except Exception as exc:
+                log.warning(f"could not write {OFFSETS_FILE.name}: {exc}")
+        self._save_handle = asyncio.get_running_loop().call_later(1.0, write)
+
+    # asyncio.DatagramProtocol
+    def connection_made(self, transport): pass
+    def error_received(self, exc): pass
+    def connection_lost(self, exc): pass
+
+
 async def cv_writer_loop(
     latest_means: np.ndarray,
     latest_lock: threading.Lock,
@@ -147,6 +234,7 @@ async def cv_writer_loop(
     write_hz: float,
     write_threshold: float,
     stop_event: asyncio.Event,
+    rebase: Rebase,
 ) -> None:
     """Periodically push the latest CV value of each mapped channel to OBS.
 
@@ -178,6 +266,13 @@ async def cv_writer_loop(
             cv_range = tuple(mapping.get("cv_range", [0.0, 1.0]))
             out_range = tuple(mapping.get("out_range", [0.0, 1.0]))
             v = clamp_and_remap(float(means[ch]), cv_range, out_range)
+            mkey = mapping_key(mapping)
+            off = rebase.offsets.get(mkey, 0.0)
+            if off:
+                lo, hi = mapping_limits(mapping)
+                v = max(lo, min(hi, v + off))
+            forced = mkey in rebase.force
+            rebase.force.discard(mkey)
             writes = [(t, v) for t in mapping.get("targets", [])]
             for target, val in writes:
                 inst = target["instance"]
@@ -188,7 +283,7 @@ async def cv_writer_loop(
                 # threshold is a fraction of the mapping's output span (a px-valued
                 # property like thickness_px 0..80 must not be rewritten on CV noise)
                 span = abs(out_range[1] - out_range[0]) or 1.0
-                if prev is not None and abs(prev - val) < write_threshold * span:
+                if not forced and prev is not None and abs(prev - val) < write_threshold * span:
                     continue
                 last_written[prop_key] = val
                 group_key = (inst, target["source"], target["filter"])
@@ -278,6 +373,15 @@ async def main_async(config: dict) -> None:
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, stop_event.set)
 
+    main_port = 4455
+    main_instances = {n for n, c in config.get("obs_instances", {}).items() if c.get("port") == main_port}
+    rebase = Rebase(config.get("mappings", []), main_instances, latest_means, latest_lock)
+    try:
+        await loop.create_datagram_endpoint(lambda: rebase, local_addr=("127.0.0.1", REBASE_PORT))
+        log.info(f"relative knobs: listening for re-base messages on udp 127.0.0.1:{REBASE_PORT}")
+    except Exception as exc:
+        log.warning(f"re-base listener not started ({exc}); knobs stay absolute")
+
     writer_task = asyncio.create_task(
         cv_writer_loop(
             latest_means,
@@ -287,6 +391,7 @@ async def main_async(config: dict) -> None:
             write_hz,
             write_threshold,
             stop_event,
+            rebase,
         )
     )
 

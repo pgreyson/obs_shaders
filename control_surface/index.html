@@ -383,10 +383,12 @@ function paramInfo(c) {
   if (p.type !== "bool") rows.push(["Range", p.min + " … " + p.max + "   (step " + p.step + ")"]);
   rows.push(["Default", fmt(p, p.default)], ["Now", fmt(p, c.value)], ["OBS name", (p.shader_label && p.shader_label !== p.label ? p.shader_label + "  ·  " : "") + p.key]);
   const cv = p.cv ? "Driven by CV channel " + p.cv.ch + (p.cv.name ? " (“" + p.cv.name + "”)" : "") + " through the control bridge, over " + p.cv.range[0] + " … " + p.cv.range[1] +
-    ". While the bridge is running it overwrites this value whenever the CV moves, so a change made here only holds until then." : "";
+    ". The knob is relative: a value set here stays, and the hardware's present position now stands for that value. Moving the knob afterwards adds to or subtracts from it, within " +
+    p.cv.limits[0] + " … " + p.cv.limits[1] + ". “Clear knob offset” returns the knob to its plain range." : "";
   sheet(p.label, c.f.name + " on “" + c.src + "”", [["cvnote", cv], ["p", p.info || p.comment || "No description yet (add one in info.yaml)."], ["table", rows],
     ["more", "Note from the shader source", p.info ? p.comment : ""]],
-    [["Reset to default (" + fmt(p, p.default) + ")", () => c.reset(), true]]);
+    p.cv ? [["Clear knob offset", () => send({ t: "cvclear", s: c.src, f: c.f.name, k: p.key }), true]]
+         : [["Reset to default (" + fmt(p, p.default) + ")", () => c.reset(), true]]);
 }
 
 // ---------------------------------------------------------------- render

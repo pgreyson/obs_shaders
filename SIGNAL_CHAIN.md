@@ -122,7 +122,7 @@ Audio: `Mic/Aux` unmuted, *monitor and output*, monitoring device = system defau
 (the VITURE has no macOS volume control and the fader tops out at 0 dB).
 
 ### Live control
-- `control_bridge` writes CV → filter properties every pass. Launch detached with
+- `control_bridge` writes CV → filter properties every pass. Knobs are relative to the touch surface (2026-11-18): a value set on the surface becomes the meaning of the knob's current position (`remap(cv) + offset`, clamped to the mapping's `limits`); offsets persist in `control_bridge/.cv_offsets.json`, cleared from the surface. Launch detached with
   nohup and **its `.venv` python** (system python lacks numpy).
 - **Camera alignment** (`camera_align` on the ch0 mapping): `depth_sidecar` publishes
   the camera's displayed-disparity percentiles (p5/p50/p95, source px) to

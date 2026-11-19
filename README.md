@@ -155,6 +155,12 @@ One web page with every filter parameter of main, for an iPad on the same WiFi:
   still shows, with the shader's own label and comment.
 - Values moved by the CV bridge or the OBS filter panel are read back while a page is open
   (obs-websocket sends no event for filter settings). CV-driven controls carry a "CV n" tag.
+- CV-driven controls are RELATIVE: setting one on the surface tells the bridge (UDP
+  127.0.0.1:9456), which keeps an offset so the knob's present position stands for the new
+  value and the knob moves it from there (`value = remap(cv) + offset`, clamped to the
+  mapping's `limits` in `control_bridge/config.yaml`; offsets persist in
+  `control_bridge/.cv_offsets.json`). "Clear knob offset" in the control's info overlay
+  returns it to the plain `out_range`.
 - Changes are saved into the scene collection a few seconds after the last touch.
 - No login: anyone on the network can move the controls.
 

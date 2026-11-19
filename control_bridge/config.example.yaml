@@ -43,6 +43,7 @@ mappings:
     # bridge never writes. out_range is the performance budget: 58 px = 3 % of the eye
     # width is a comfortable total for the whole program, cameras included.
     out_range: [ 0.0, 80.0]
+    limits:    [ 0.0, 600.0]   # clamp for value = cv + offset (relative knobs)
     targets:
       - instance: viture
         source: "Video Capture Device"
@@ -53,6 +54,7 @@ mappings:
     name: hue_rotation
     cv_range:  [-1.0, 1.0]
     out_range: [ 0.0, 1.0]
+    limits:    [ 0.0, 1.0]   # clamp for value = cv + offset (relative knobs)
     targets:
       - instance: viture
         source: "Video Capture Device"
@@ -67,6 +69,7 @@ mappings:
     name: palette_rotation
     cv_range:  [-1.0, 1.0]
     out_range: [ 0.0, 1.0]
+    limits:    [ 0.0, 1.0]   # clamp for value = cv + offset (relative knobs)
     targets:
       - instance: viture
         source: "Video Capture Device"
@@ -81,6 +84,7 @@ mappings:
     name: palette_size
     cv_range:  [-1.0, 1.0]
     out_range: [ 1.0, 16.0]
+    limits:    [ 1.0, 16.0]   # clamp for value = cv + offset (relative knobs)
     targets:
       - instance: viture
         source: "Video Capture Device"

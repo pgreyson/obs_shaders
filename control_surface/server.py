@@ -35,6 +35,7 @@ from websockets.http11 import Response
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent
 BRIDGE_CFG = REPO / "control_bridge" / "config.yaml"
+BRIDGE_REBASE = ("127.0.0.1", 9456)   # control_bridge listens here (see bridge.py Rebase)
 RELAYS = {"Twitch": 4456, "YouTube": 4457, "Projector": 4458}
 SKIP_SOURCES = {"zz_save_nudge"}
 
@@ -180,7 +181,8 @@ class Surface:
                     if inst.get("port") == main_port:
                         cv[(t["source"], t["filter"], t["property"])] = {
                             "ch": m["cv_channel"], "name": m.get("name", ""),
-                            "range": m.get("out_range")}
+                            "range": m.get("out_range"),
+                            "limits": m.get("limits") or sorted(m.get("out_range", [0, 1]))}
         except Exception as e:
             log("bridge config not read:", e)
         return info, cv
@@ -412,6 +414,9 @@ class Surface:
             self.pending.setdefault(key, {})[m["k"]] = v
             self.values[key][m["k"]] = v
             self.wrote[(key, m["k"])] = time.monotonic()
+            if "cv" in p:
+                # tell the bridge, so the knob continues from this value instead of snapping back
+                self.to_bridge({"source": m["s"], "filter": m["f"], "property": m["k"], "value": v})
             await self.send_all({"t": "v", "s": m["s"], "f": m["f"], "k": {m["k"]: v}}, skip=conn)
         elif t == "en":
             await self.obs.call("SetSourceFilterEnabled", {"sourceName": m["s"], "filterName": m["f"],
@@ -420,8 +425,19 @@ class Surface:
         elif t == "item":
             await self.obs.call("SetSceneItemEnabled", {"sceneName": m["scene"], "sceneItemId": int(m["id"]),
                                                         "sceneItemEnabled": bool(m["on"])})
+        elif t == "cvclear":
+            if "cv" in self.schema[(m["s"], m["f"])][m["k"]]:
+                self.to_bridge({"source": m["s"], "filter": m["f"], "property": m["k"], "clear": True})
         elif t == "reload":
             self.rebuild.set()
+
+    def to_bridge(self, msg):
+        try:
+            if not hasattr(self, "udp"):
+                self.udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.udp.sendto(json.dumps(msg).encode(), BRIDGE_REBASE)
+        except Exception as e:
+            log("bridge not told:", e)
 
     def touch_save(self):
         self.save_at = time.monotonic() + 4.0
