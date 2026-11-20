@@ -155,7 +155,7 @@ the surface has no login, so reach it from outside through a VPN (e.g. Tailscale
 
 **HTTPS:** the same pages are on `https://Pauls-Mac-mini.local:8443/` (and the IP), for phones with
 Safari's HTTPS-only setting and for Home Screen icons. The certificate comes from a local authority
-in `control_surface/certs/` (gitignored; server certificate valid 820 days, names: the `.local` host
+in `control_surface/certs/` (gitignored; server certificate valid 397 days, names: the `.local` host
 and 192.168.50.181, so reissue it if the Mac's address changes and you use the IP). Each device
 trusts it once: open `http://<mac>:8080/ca.crt` in Safari, Allow, then Settings > General > VPN &
 Device Management > install the profile, then Settings > General > About > Certificate Trust
