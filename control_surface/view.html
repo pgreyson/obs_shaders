@@ -12,11 +12,11 @@
                font: 14px -apple-system, system-ui, sans-serif; -webkit-user-select: none; user-select: none; }
   /* Alignment guides for a clip-on stereo viewer: two vertical lines, symmetric about the screen
      centre, drawn behind the picture so they show only in the black above and below it. */
-  :root { --pw: min(100vw, calc(100vh * 32 / 9)); --gap: 0.5; }
+  :root { --gap: 50px; }
   .guide { position: fixed; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: #808080; display: none; }
   body.guides .guide { display: block; }
-  #gl { left: calc(50% - var(--pw) * var(--gap) / 2); }
-  #gr { left: calc(50% + var(--pw) * var(--gap) / 2); }
+  #gl { left: calc(50% - var(--gap) / 2); }
+  #gr { left: calc(50% + var(--gap) / 2); }
   #pic { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; }
   #bar { position: fixed; left: 0; right: 0; bottom: 0; display: none; gap: 8px; align-items: center;
          padding: 10px max(12px, env(safe-area-inset-left)) calc(10px + env(safe-area-inset-bottom));
@@ -77,23 +77,23 @@ fullBtn.onclick = function () {
 };
 applyUi();
 
-// Guide lines: on/off and spacing (fraction of the picture width; 0.5 = the two eye centres),
-// remembered on this device. - / + move them 0.5 % of the picture width per tap.
-var guides = true, gap = 0.5;
+// Guide lines: on/off and spacing in screen points (50 apart, centred), remembered on this
+// device. - / + change the spacing by 2 points per tap.
+var guides = true, gap = 50;
 try {
   guides = localStorage.getItem('guides') !== '0';
-  gap = parseFloat(localStorage.getItem('gap')) || gap;
+  gap = parseFloat(localStorage.getItem('gappx')) || gap;
 } catch (e) {}
 function applyGuides() {
-  gap = Math.min(1, Math.max(0.02, gap));
+  gap = Math.min(600, Math.max(4, gap));
   document.body.classList.toggle('guides', guides);
-  document.documentElement.style.setProperty('--gap', gap.toFixed(3));
+  document.documentElement.style.setProperty('--gap', gap + 'px');
   document.getElementById('lines').className = guides ? 'on' : '';
-  try { localStorage.setItem('guides', guides ? '1' : '0'); localStorage.setItem('gap', gap.toFixed(3)); } catch (e) {}
+  try { localStorage.setItem('guides', guides ? '1' : '0'); localStorage.setItem('gappx', String(gap)); } catch (e) {}
 }
 document.getElementById('lines').onclick = function () { guides = !guides; applyGuides(); };
-document.getElementById('closer').onclick = function () { guides = true; gap -= 0.005; applyGuides(); };
-document.getElementById('wider').onclick = function () { guides = true; gap += 0.005; applyGuides(); };
+document.getElementById('closer').onclick = function () { guides = true; gap -= 2; applyGuides(); };
+document.getElementById('wider').onclick = function () { guides = true; gap += 2; applyGuides(); };
 applyGuides();
 
 function width() { return sharp ? 2560 : 1280; }
