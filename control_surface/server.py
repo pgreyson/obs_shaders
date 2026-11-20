@@ -21,9 +21,11 @@ There is no login: anyone on the same network can move the controls.
 import argparse
 import asyncio
 import base64
+import contextlib
 import json
 import re
 import socket
+import ssl
 import time
 from pathlib import Path
 
@@ -34,6 +36,7 @@ from websockets.datastructures import Headers
 from websockets.http11 import Response
 
 HERE = Path(__file__).resolve().parent
+CERTS = HERE / "certs"
 REPO = HERE.parent
 BRIDGE_CFG = REPO / "control_bridge" / "config.yaml"
 BRIDGE_REBASE = ("127.0.0.1", 9456)   # control_bridge listens here (see bridge.py Rebase)
@@ -670,6 +673,9 @@ def make_http(preview):
             body, ctype, code, reason = (HERE / "index.html").read_bytes(), "text/html; charset=utf-8", 200, "OK"
         elif path == "/view":
             body, ctype, code, reason = (HERE / "view.html").read_bytes(), "text/html; charset=utf-8", 200, "OK"
+        elif path == "/ca.crt" and (CERTS / "ca.crt").exists():
+            # the local authority's public certificate: install + trust it once per phone/iPad
+            body, ctype, code, reason = (CERTS / "ca.crt").read_bytes(), "application/x-x509-ca-cert", 200, "OK"
         elif path == "/frame.jpg":
             q = dict(kv.split("=", 1) for kv in query.split("&") if "=" in kv)
             try:
@@ -704,12 +710,23 @@ def lan_address():
 async def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--port", type=int, default=8080)
+    ap.add_argument("--tls-port", type=int, default=8443)
     args = ap.parse_args()
     password = yaml.safe_load(BRIDGE_CFG.read_text())["obs_instances"]["viture"]["password"]
     s = Surface(password)
     preview = Preview(s.relays)
-    async with serve(s.handle, "0.0.0.0", args.port, process_request=make_http(preview), ping_interval=20):
+    http = make_http(preview)
+    async with contextlib.AsyncExitStack() as stack:
+        await stack.enter_async_context(serve(s.handle, "0.0.0.0", args.port, process_request=http, ping_interval=20))
         log(f"control surface: http://{lan_address()}:{args.port}/   viewer: /view")
+        if (CERTS / "server.crt").exists():
+            # HTTPS too, for phones with Safari's HTTPS-only setting (certificate from our own
+            # local authority in certs/, which each device has to trust once: see README)
+            ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            ctx.load_cert_chain(CERTS / "server.crt", CERTS / "server.key")
+            await stack.enter_async_context(serve(s.handle, "0.0.0.0", args.tls_port, process_request=http,
+                                                  ping_interval=20, ssl=ctx))
+            log(f"                 https://{lan_address()}:{args.tls_port}/")
         await asyncio.gather(s.keeper(), s.writer(), s.pusher(), s.saver(), s.poller(), preview.run())
 
 

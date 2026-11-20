@@ -153,6 +153,14 @@ well under a second of delay (JPEG frames pulled from a relay instance, so it co
 frames are grabbed only while a viewer is open). Full screen, both eyes, nothing over the picture; tap for the bar (Sharp, Full screen, Controls). LAN only:
 the surface has no login, so reach it from outside through a VPN (e.g. Tailscale), never a port forward.
 
+**HTTPS:** the same pages are on `https://Pauls-Mac-mini.local:8443/` (and the IP), for phones with
+Safari's HTTPS-only setting and for Home Screen icons. The certificate comes from a local authority
+in `control_surface/certs/` (gitignored; server certificate valid 820 days, names: the `.local` host
+and 192.168.50.181, so reissue it if the Mac's address changes and you use the IP). Each device
+trusts it once: open `http://<mac>:8080/ca.crt` in Safari, Allow, then Settings > General > VPN &
+Device Management > install the profile, then Settings > General > About > Certificate Trust
+Settings > switch on "Rig Control Local CA".
+
 - The page is built from the LIVE filter list (every filter, enabled or not) and the slider
   ranges from the shader files, so a new uniform or filter appears after "Reload".
 - `control_surface/info.yaml` holds the grouping (tabs, stages, sections), short labels and the
