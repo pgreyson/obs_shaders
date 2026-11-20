@@ -37,17 +37,15 @@
 <div class="guide" id="gl"></div><div class="guide" id="gr"></div>
 <img id="pic" alt="">
 <div id="bar">
-  <button id="sharp">Sharp</button>
   <button id="full">Full screen</button>
   <a class="btn" href="/">Controls</a>
   <span id="stat">connecting…</span>
 </div>
 <script>
 var pic = document.getElementById('pic'), bar = document.getElementById('bar'),
-    stat = document.getElementById('stat'), sharpBtn = document.getElementById('sharp'),
+    stat = document.getElementById('stat'),
     fullBtn = document.getElementById('full');
-var sharp = false, seq = 0, shown = [], lastUrl = null, hideTimer = null;
-try { sharp = localStorage.getItem('sharp') === '1'; } catch (e) {}
+var seq = 0, shown = [], lastUrl = null, hideTimer = null;
 
 // The picture fills the screen with nothing over it. A tap shows the bar; another tap, or
 // 5 s without touching it, hides it again.
@@ -61,11 +59,6 @@ document.addEventListener('click', function (e) {
 });
 bar.onclick = function () { showUi(true); };
 
-function applyUi() {
-  sharpBtn.className = sharp ? 'on' : '';
-  try { localStorage.setItem('sharp', sharp ? '1' : '0'); } catch (e) {}
-}
-sharpBtn.onclick = function () { sharp = !sharp; applyUi(); };
 var root = document.documentElement;
 var goFull = root.requestFullscreen || root.webkitRequestFullscreen;
 if (!goFull) fullBtn.style.display = 'none';      // iPhone Safari: use Add to Home Screen instead
@@ -76,13 +69,12 @@ fullBtn.onclick = function () {
     try { goFull.call(root); } catch (e) {}
   }
 };
-applyUi();
 
 // Picture width: fixed at 86.5 % of the screen width on a phone (set by eye against a
 // Cardboard-type viewer, 2026-11-20); full width on bigger screens.
 if (Math.max(screen.width, screen.height) < 1000) document.documentElement.style.setProperty('--w', '86.5vw');
 
-function width() { return sharp ? 2560 : 1280; }
+function width() { return 2560; }      // 1280 per eye: about what a phone shows per eye
 
 // Frames arrive over one WebSocket as binary JPEGs. The page asks for the next frame only
 // when the previous one is on screen, so the rate follows what the link and phone can do
