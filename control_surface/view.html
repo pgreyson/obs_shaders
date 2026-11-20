@@ -12,7 +12,7 @@
                font: 14px -apple-system, system-ui, sans-serif; -webkit-user-select: none; user-select: none; }
   /* Alignment guides for a clip-on / Cardboard stereo viewer: two fixed vertical lines either
      side of the screen centre, drawn over the picture. */
-  .guide { position: fixed; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: #4a4a4a;
+  .guide { position: fixed; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: #1c1c1c;
            z-index: 2; pointer-events: none; }
   #gl { left: calc(50% - 8.5px); }
   #gr { left: calc(50% + 8.5px); }
@@ -37,8 +37,6 @@
 <div class="guide" id="gl"></div><div class="guide" id="gr"></div>
 <img id="pic" alt="">
 <div id="bar">
-  <button id="smaller">Size &#8722;</button>
-  <button id="bigger">Size +</button>
   <button id="sharp">Sharp</button>
   <button id="full">Full screen</button>
   <a class="btn" href="/">Controls</a>
@@ -82,24 +80,9 @@ fullBtn.onclick = function () {
 };
 applyUi();
 
-// Picture width in screen points, remembered on this device. A phone starts at 770 (eye centres
-// about 64 mm apart on an iPhone, the usual lens spacing); bigger screens start full width.
-var phone = Math.max(screen.width, screen.height) < 1000, size = phone ? 770 : 0;   // 0 = full
-try { var sv = localStorage.getItem('size'); if (sv !== null) size = parseFloat(sv) || 0; } catch (e) {}
-function applySize() {
-  var full = Math.max(window.innerWidth, 320);
-  if (size >= full) size = 0;
-  if (size && size < 200) size = 200;
-  document.documentElement.style.setProperty('--w', size ? size + 'px' : '100vw');
-  try { localStorage.setItem('size', String(size)); } catch (e) {}
-}
-document.getElementById('smaller').onclick = function () {
-  size = (size || pic.getBoundingClientRect().width) - 10; applySize();
-};
-document.getElementById('bigger').onclick = function () {
-  if (size) { size += 10; applySize(); }
-};
-applySize();
+// Picture width: fixed at 86.5 % of the screen width on a phone (set by eye against a
+// Cardboard-type viewer, 2026-11-20); full width on bigger screens.
+if (Math.max(screen.width, screen.height) < 1000) document.documentElement.style.setProperty('--w', '86.5vw');
 
 function width() { return sharp ? 2560 : 1280; }
 
