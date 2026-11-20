@@ -601,7 +601,7 @@ class Surface:
                 pass
 
 
-PREVIEW_FPS = 15.0
+PREVIEW_FPS = 30.0
 PREVIEW_IDLE_S = 3.0      # stop grabbing this long after the last viewer request
 
 
@@ -651,6 +651,25 @@ class Preview:
                 self.fresh = asyncio.Event()
             await asyncio.sleep(max(0.0, 1.0 / PREVIEW_FPS - (time.monotonic() - t)) if jpg else 1.0)
 
+    async def live(self, conn):
+        """One viewer: each text message is "ready for the next frame" and carries the wanted
+        width; answer with the next new frame as a binary message (or "none")."""
+        seq = 0
+        try:
+            async for msg in conn:
+                try:
+                    width = min(3840, max(320, int(msg)))
+                except (TypeError, ValueError):
+                    width = 1280
+                jpg, new = await self.frame(width, seq)
+                if jpg and new != seq:
+                    seq = new
+                    await conn.send(jpg)
+                else:
+                    await conn.send("none")
+        except Exception:
+            pass
+
     async def frame(self, width, after):
         """Next frame newer than `after` (waits up to 2 s), or None when no relay answers."""
         self.wanted, self.width = time.monotonic(), width
@@ -660,6 +679,16 @@ class Preview:
             except asyncio.TimeoutError:
                 pass
         return self.jpg, self.seq
+
+
+def make_ws(surface, preview):
+    async def ws(conn):
+        """/live = viewer frames; anything else = the control page's connection."""
+        if conn.request.path.split("?")[0] == "/live":
+            await preview.live(conn)
+        else:
+            await surface.handle(conn)
+    return ws
 
 
 def make_http(preview):
@@ -716,15 +745,16 @@ async def main():
     s = Surface(password)
     preview = Preview(s.relays)
     http = make_http(preview)
+    wsh = make_ws(s, preview)
     async with contextlib.AsyncExitStack() as stack:
-        await stack.enter_async_context(serve(s.handle, "0.0.0.0", args.port, process_request=http, ping_interval=20))
+        await stack.enter_async_context(serve(wsh, "0.0.0.0", args.port, process_request=http, ping_interval=20))
         log(f"control surface: http://{lan_address()}:{args.port}/   viewer: /view")
         if (CERTS / "server.crt").exists():
             # HTTPS too, for phones with Safari's HTTPS-only setting (certificate from our own
             # local authority in certs/, which each device has to trust once: see README)
             ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
             ctx.load_cert_chain(CERTS / "server.crt", CERTS / "server.key")
-            await stack.enter_async_context(serve(s.handle, "0.0.0.0", args.tls_port, process_request=http,
+            await stack.enter_async_context(serve(wsh, "0.0.0.0", args.tls_port, process_request=http,
                                                   ping_interval=20, ssl=ctx))
             log(f"                 https://{lan_address()}:{args.tls_port}/")
         await asyncio.gather(s.keeper(), s.writer(), s.pusher(), s.saver(), s.poller(), preview.run())

@@ -43,8 +43,6 @@
   <span id="stat">connecting…</span>
 </div>
 <script>
-// Pulls JPEG frames of the program picture one after another. Each request waits on the
-// server for a frame newer than the last one shown, so the rate follows the link speed.
 var pic = document.getElementById('pic'), bar = document.getElementById('bar'),
     stat = document.getElementById('stat'), sharpBtn = document.getElementById('sharp'),
     fullBtn = document.getElementById('full');
@@ -86,34 +84,54 @@ if (Math.max(screen.width, screen.height) < 1000) document.documentElement.style
 
 function width() { return sharp ? 2560 : 1280; }
 
-function next(delay) { setTimeout(pull, delay); }
+// Frames arrive over one WebSocket as binary JPEGs. The page asks for the next frame only
+// when the previous one is on screen, so the rate follows what the link and phone can do
+// (up to the rig's 30 fps) and frames never queue up behind each other.
+var ws = null, pending = null, waiting = null;
 
-function pull() {
-  if (document.hidden) { next(500); return; }
-  fetch('/frame.jpg?w=' + width() + '&after=' + seq, { cache: 'no-store' }).then(function (r) {
-    if (!r.ok) throw new Error('no picture');
-    var s = parseInt(r.headers.get('X-Seq') || '0', 10);
-    return r.blob().then(function (b) {
-      if (s !== seq) {
-        seq = s;
-        var url = URL.createObjectURL(b);
-        pic.onload = function () { if (lastUrl) URL.revokeObjectURL(lastUrl); lastUrl = url; };
-        pic.src = url;
-        var now = Date.now();
-        shown.push(now);
-        while (shown.length && now - shown[0] > 2000) shown.shift();
-        stat.className = '';
-        stat.textContent = (shown.length / 2).toFixed(0) + ' fps · ' + Math.round(b.size / 1024) + ' KB';
-      }
-      next(0);
-    });
-  }).catch(function () {
-    stat.className = 'bad';
-    stat.textContent = 'no picture, retrying';
-    next(1500);
-  });
+function ask() {
+  if (ws && ws.readyState === 1) {
+    ws.send(String(width()));
+    clearTimeout(waiting);
+    waiting = setTimeout(function () { try { ws.close(); } catch (e) {} }, 5000);
+  }
 }
-pull();
+
+function connect() {
+  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/live');
+  ws.binaryType = 'blob';
+  ws.onopen = ask;
+  ws.onmessage = function (e) {
+    if (typeof e.data === 'string') {            // "none": no relay instance has a picture
+      stat.className = 'bad';
+      stat.textContent = 'no picture, retrying';
+      setTimeout(ask, 1000);
+      return;
+    }
+    var url = URL.createObjectURL(e.data), size = e.data.size;
+    pic.onload = pic.onerror = function () {
+      if (lastUrl) URL.revokeObjectURL(lastUrl);
+      lastUrl = url;
+      var now = Date.now();
+      shown.push(now);
+      while (shown.length && now - shown[0] > 2000) shown.shift();
+      stat.className = '';
+      stat.textContent = (shown.length / 2).toFixed(0) + ' fps · ' + Math.round(size / 1024) + ' KB';
+      if (document.hidden) pending = true; else ask();
+    };
+    pic.src = url;
+  };
+  ws.onclose = function () {
+    clearTimeout(waiting);
+    stat.className = 'bad';
+    stat.textContent = 'reconnecting';
+    setTimeout(connect, 1000);
+  };
+}
+document.addEventListener('visibilitychange', function () {
+  if (!document.hidden && pending) { pending = null; ask(); }
+});
+connect();
 </script>
 </body>
 </html>
