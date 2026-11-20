@@ -10,15 +10,19 @@
 <style>
   html, body { margin: 0; height: 100%; background: #000; color: #ccd; overflow: hidden;
                font: 14px -apple-system, system-ui, sans-serif; -webkit-user-select: none; user-select: none; }
-  /* Alignment guides for a clip-on stereo viewer: two vertical lines, symmetric about the screen
-     centre, drawn behind the picture so they show only in the black above and below it. */
-  :root { --gap: 50px; }
-  .guide { position: fixed; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: #808080; display: none; }
-  body.guides .guide { display: block; }
-  #gl { left: calc(50% - var(--gap) / 2); }
-  #gr { left: calc(50% + var(--gap) / 2); }
-  #pic { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; }
-  #bar { position: fixed; left: 0; right: 0; bottom: 0; display: none; gap: 8px; align-items: center;
+  /* Alignment guides for a clip-on / Cardboard stereo viewer: two fixed vertical lines either
+     side of the screen centre, drawn over the picture. */
+  .guide { position: fixed; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: #4a4a4a;
+           z-index: 2; pointer-events: none; }
+  #gl { left: calc(50% - 8.5px); }
+  #gr { left: calc(50% + 8.5px); }
+  /* The picture is centred and can be smaller than the screen (black on all sides), so that
+     the two eye pictures sit under the lenses of a phone viewer: their centres are half the
+     picture width apart. */
+  :root { --w: 100vw; }
+  #pic { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); display: block;
+         width: min(var(--w), 100vw, calc(100vh * 32 / 9)); aspect-ratio: 32 / 9; }
+  #bar { z-index: 3; position: fixed; left: 0; right: 0; bottom: 0; display: none; gap: 8px; align-items: center;
          padding: 10px max(12px, env(safe-area-inset-left)) calc(10px + env(safe-area-inset-bottom));
          background: rgba(17, 20, 26, .88); }
   body.ui #bar { display: flex; }
@@ -33,9 +37,8 @@
 <div class="guide" id="gl"></div><div class="guide" id="gr"></div>
 <img id="pic" alt="">
 <div id="bar">
-  <button id="lines">Lines</button>
-  <button id="closer">&#8722;</button>
-  <button id="wider">+</button>
+  <button id="smaller">Size &#8722;</button>
+  <button id="bigger">Size +</button>
   <button id="sharp">Sharp</button>
   <button id="full">Full screen</button>
   <a class="btn" href="/">Controls</a>
@@ -57,7 +60,9 @@ function showUi(on) {
   clearTimeout(hideTimer);
   if (on) hideTimer = setTimeout(function () { showUi(false); }, 5000);
 }
-pic.onclick = function () { showUi(!document.body.classList.contains('ui')); };
+document.addEventListener('click', function (e) {
+  if (!bar.contains(e.target)) showUi(!document.body.classList.contains('ui'));
+});
 bar.onclick = function () { showUi(true); };
 
 function applyUi() {
@@ -77,24 +82,24 @@ fullBtn.onclick = function () {
 };
 applyUi();
 
-// Guide lines: on/off and spacing in screen points (50 apart, centred), remembered on this
-// device. - / + change the spacing by 2 points per tap.
-var guides = true, gap = 50;
-try {
-  guides = localStorage.getItem('guides') !== '0';
-  gap = parseFloat(localStorage.getItem('gappx')) || gap;
-} catch (e) {}
-function applyGuides() {
-  gap = Math.min(600, Math.max(4, gap));
-  document.body.classList.toggle('guides', guides);
-  document.documentElement.style.setProperty('--gap', gap + 'px');
-  document.getElementById('lines').className = guides ? 'on' : '';
-  try { localStorage.setItem('guides', guides ? '1' : '0'); localStorage.setItem('gappx', String(gap)); } catch (e) {}
+// Picture width in screen points, remembered on this device. A phone starts at 770 (eye centres
+// about 64 mm apart on an iPhone, the usual lens spacing); bigger screens start full width.
+var phone = Math.max(screen.width, screen.height) < 1000, size = phone ? 770 : 0;   // 0 = full
+try { var sv = localStorage.getItem('size'); if (sv !== null) size = parseFloat(sv) || 0; } catch (e) {}
+function applySize() {
+  var full = Math.max(window.innerWidth, 320);
+  if (size >= full) size = 0;
+  if (size && size < 200) size = 200;
+  document.documentElement.style.setProperty('--w', size ? size + 'px' : '100vw');
+  try { localStorage.setItem('size', String(size)); } catch (e) {}
 }
-document.getElementById('lines').onclick = function () { guides = !guides; applyGuides(); };
-document.getElementById('closer').onclick = function () { guides = true; gap -= 2; applyGuides(); };
-document.getElementById('wider').onclick = function () { guides = true; gap += 2; applyGuides(); };
-applyGuides();
+document.getElementById('smaller').onclick = function () {
+  size = (size || pic.getBoundingClientRect().width) - 10; applySize();
+};
+document.getElementById('bigger').onclick = function () {
+  if (size) { size += 10; applySize(); }
+};
+applySize();
 
 function width() { return sharp ? 2560 : 1280; }
 
