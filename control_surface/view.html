@@ -19,15 +19,11 @@
   /* The picture is centred and can be smaller than the screen (black on all sides), so that
      the two eye pictures sit under the lenses of a phone viewer: their centres are half the
      picture width apart. */
-  /* Always landscape: iOS will not let a page lock the orientation, so when the phone reports
-     portrait the whole page is turned a quarter turn. --sw / --sh are the long and short side. */
   :root { --sw: 100vw; --sh: 100vh; --w: var(--sw); }
   :root.phone { --w: calc(var(--sw) * 0.865); }
   #root { position: fixed; top: 0; left: 0; width: var(--sw); height: var(--sh); overflow: hidden; }
-  @media (orientation: portrait) {
-    :root { --sw: 100vh; --sh: 100vw; }
-    #root { transform-origin: top left; transform: rotate(90deg) translateY(-100%); }
-  }
+  /* the guide lines are for the phone viewer, which is used in landscape only */
+  @media (orientation: portrait) { .guide { display: none; } }
   #pic { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); display: block;
          width: min(var(--w), var(--sw), calc(var(--sh) * 32 / 9)); aspect-ratio: 32 / 9; }
   #bar { z-index: 3; position: fixed; left: 0; right: 0; bottom: 0; display: none; gap: 8px; align-items: center;
