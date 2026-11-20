@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Rig view</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; color: #ccd; font: 14px -apple-system, system-ui, sans-serif; }
+  body { display: flex; flex-direction: column; }
+  #stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
+  #box { position: relative; overflow: hidden; width: 100%; max-height: 100%; aspect-ratio: 32 / 9; }
+  #box.one { aspect-ratio: 16 / 9; max-width: calc(100vh * 16 / 9); }
+  #pic { position: absolute; top: 0; left: 0; height: 100%; width: 100%; display: block; }
+  #box.one #pic { width: 200%; }
+  #box.one.right #pic { left: -100%; }
+  #bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+         padding: 8px max(12px, env(safe-area-inset-left)) calc(8px + env(safe-area-inset-bottom)); background: #11141a; }
+  button, a.btn { font: inherit; color: #ccd; background: #222733; border: 1px solid #343b4b; border-radius: 8px;
+                  padding: 8px 12px; text-decoration: none; }
+  button.on { background: #2d5fd0; border-color: #2d5fd0; color: #fff; }
+  #stat { margin-left: auto; color: #8a93a6; font-variant-numeric: tabular-nums; }
+  #stat.bad { color: #ff8a70; }
+</style>
+</head>
+<body>
+<div id="stage"><div id="box"><img id="pic" alt=""></div></div>
+<div id="bar">
+  <button data-eye="both" class="on">Both eyes</button>
+  <button data-eye="left">Left</button>
+  <button data-eye="right">Right</button>
+  <button id="sharp">Sharp</button>
+  <a class="btn" href="/">Controls</a>
+  <span id="stat">connecting…</span>
+</div>
+<script>
+// Pulls JPEG frames of the program picture one after another. Each request waits on the
+// server for a frame newer than the last one shown, so the rate follows the link speed.
+var box = document.getElementById('box'), pic = document.getElementById('pic'),
+    stat = document.getElementById('stat'), sharpBtn = document.getElementById('sharp');
+var eye = 'both', sharp = false, seq = 0, shown = [], lastUrl = null;
+try { eye = localStorage.getItem('eye') || eye; sharp = localStorage.getItem('sharp') === '1'; } catch (e) {}
+
+function applyUi() {
+  box.className = eye === 'both' ? '' : 'one ' + eye;
+  document.querySelectorAll('[data-eye]').forEach(function (b) {
+    b.className = b.getAttribute('data-eye') === eye ? 'on' : '';
+  });
+  sharpBtn.className = sharp ? 'on' : '';
+  try { localStorage.setItem('eye', eye); localStorage.setItem('sharp', sharp ? '1' : '0'); } catch (e) {}
+}
+document.querySelectorAll('[data-eye]').forEach(function (b) {
+  b.onclick = function () { eye = b.getAttribute('data-eye'); applyUi(); };
+});
+sharpBtn.onclick = function () { sharp = !sharp; applyUi(); };
+applyUi();
+
+function width() {
+  var base = eye === 'both' ? 1280 : 1920;      // one eye shows half of the frame
+  return sharp ? base * 2 : base;
+}
+
+function next(delay) { setTimeout(pull, delay); }
+
+function pull() {
+  if (document.hidden) { next(500); return; }
+  fetch('/frame.jpg?w=' + width() + '&after=' + seq, { cache: 'no-store' }).then(function (r) {
+    if (!r.ok) throw new Error('no picture');
+    var s = parseInt(r.headers.get('X-Seq') || '0', 10);
+    return r.blob().then(function (b) {
+      if (s !== seq) {
+        seq = s;
+        var url = URL.createObjectURL(b);
+        pic.onload = function () { if (lastUrl) URL.revokeObjectURL(lastUrl); lastUrl = url; };
+        pic.src = url;
+        var now = Date.now();
+        shown.push(now);
+        while (shown.length && now - shown[0] > 2000) shown.shift();
+        stat.className = '';
+        stat.textContent = (shown.length / 2).toFixed(0) + ' fps · ' + Math.round(b.size / 1024) + ' KB';
+      }
+      next(0);
+    });
+  }).catch(function () {
+    stat.className = 'bad';
+    stat.textContent = 'no picture, retrying';
+    next(1500);
+  });
+}
+pull();
+</script>
+</body>
+</html>

@@ -20,6 +20,7 @@ There is no login: anyone on the same network can move the controls.
 """
 import argparse
 import asyncio
+import base64
 import json
 import re
 import socket
@@ -597,17 +598,96 @@ class Surface:
                 pass
 
 
-def http(connection, request):
-    """Plain HTTP on the websocket port: serve the page."""
-    if (request.headers.get("Upgrade") or "").lower() == "websocket":
+PREVIEW_FPS = 15.0
+PREVIEW_IDLE_S = 3.0      # stop grabbing this long after the last viewer request
+
+
+class Preview:
+    """Latest program frame as JPEG, grabbed from a relay instance (never from main: a
+    screenshot there would cost render time; the relays show the same picture with headroom).
+    Grabs only while a /view page is asking for frames."""
+
+    def __init__(self, relays):
+        self.relays, self.jpg, self.seq = relays, None, 0
+        self.wanted, self.width, self.fresh = 0.0, 1280, asyncio.Event()
+        self.source = {}
+
+    async def grab(self):
+        for r in self.relays.values():
+            if not r.ok:
+                continue
+            try:
+                if r not in self.source:
+                    # the relay's canvas is 16:9 with the 32:9 program letterboxed in it, so
+                    # take the virtual-camera input itself (full side-by-side, no bars)
+                    scene = (await r.call("GetCurrentProgramScene"))["currentProgramSceneName"]
+                    items = (await r.call("GetSceneItemList", {"sceneName": scene}))["sceneItems"]
+                    cams = [i["sourceName"] for i in items
+                            if i.get("sceneItemEnabled") and i.get("inputKind") == "macos-avcapture"]
+                    self.source[r] = cams[0] if cams else scene
+                d = await r.call("GetSourceScreenshot", {"sourceName": self.source[r], "imageFormat": "jpg",
+                                                         "imageWidth": self.width,
+                                                         "imageCompressionQuality": 55})
+                return base64.b64decode(d["imageData"].split(",", 1)[1])
+            except Exception:
+                self.source.pop(r, None)
+                continue
         return None
-    path = request.path.split("?")[0]
-    if path in ("/", "/index.html"):
-        body, ctype, code, reason = (HERE / "index.html").read_bytes(), "text/html; charset=utf-8", 200, "OK"
-    else:
-        body, ctype, code, reason = b"not found\n", "text/plain", 404, "Not Found"
-    return Response(code, reason, Headers([("Content-Type", ctype), ("Content-Length", str(len(body))),
-                                           ("Cache-Control", "no-store"), ("Connection", "close")]), body)
+
+    async def run(self):
+        while True:
+            if time.monotonic() - self.wanted > PREVIEW_IDLE_S:
+                self.jpg = None
+                await asyncio.sleep(0.2)
+                continue
+            t = time.monotonic()
+            jpg = await self.grab()
+            if jpg:
+                self.jpg, self.seq = jpg, self.seq + 1
+                self.fresh.set()
+                self.fresh = asyncio.Event()
+            await asyncio.sleep(max(0.0, 1.0 / PREVIEW_FPS - (time.monotonic() - t)) if jpg else 1.0)
+
+    async def frame(self, width, after):
+        """Next frame newer than `after` (waits up to 2 s), or None when no relay answers."""
+        self.wanted, self.width = time.monotonic(), width
+        if self.jpg is None or self.seq <= after:
+            try:
+                await asyncio.wait_for(self.fresh.wait(), 2)
+            except asyncio.TimeoutError:
+                pass
+        return self.jpg, self.seq
+
+
+def make_http(preview):
+    async def http(connection, request):
+        """Plain HTTP on the websocket port: the page, the viewer and its frames."""
+        if (request.headers.get("Upgrade") or "").lower() == "websocket":
+            return None
+        path, _, query = request.path.partition("?")
+        extra = []
+        if path in ("/", "/index.html"):
+            body, ctype, code, reason = (HERE / "index.html").read_bytes(), "text/html; charset=utf-8", 200, "OK"
+        elif path == "/view":
+            body, ctype, code, reason = (HERE / "view.html").read_bytes(), "text/html; charset=utf-8", 200, "OK"
+        elif path == "/frame.jpg":
+            q = dict(kv.split("=", 1) for kv in query.split("&") if "=" in kv)
+            try:
+                width = min(3840, max(320, int(q.get("w", 1280))))
+                after = int(q.get("after", 0))
+            except ValueError:
+                width, after = 1280, 0
+            jpg, seq = await preview.frame(width, after)
+            if jpg:
+                body, ctype, code, reason = jpg, "image/jpeg", 200, "OK"
+                extra = [("X-Seq", str(seq))]
+            else:
+                body, ctype, code, reason = b"no relay instance answers\n", "text/plain", 503, "Unavailable"
+        else:
+            body, ctype, code, reason = b"not found\n", "text/plain", 404, "Not Found"
+        return Response(code, reason, Headers([("Content-Type", ctype), ("Content-Length", str(len(body))),
+                                               ("Cache-Control", "no-store"), ("Connection", "close")] + extra), body)
+    return http
 
 
 def lan_address():
@@ -627,9 +707,10 @@ async def main():
     args = ap.parse_args()
     password = yaml.safe_load(BRIDGE_CFG.read_text())["obs_instances"]["viture"]["password"]
     s = Surface(password)
-    async with serve(s.handle, "0.0.0.0", args.port, process_request=http, ping_interval=20):
-        log(f"control surface: http://{lan_address()}:{args.port}/")
-        await asyncio.gather(s.keeper(), s.writer(), s.pusher(), s.saver(), s.poller())
+    preview = Preview(s.relays)
+    async with serve(s.handle, "0.0.0.0", args.port, process_request=make_http(preview), ping_interval=20):
+        log(f"control surface: http://{lan_address()}:{args.port}/   viewer: /view")
+        await asyncio.gather(s.keeper(), s.writer(), s.pusher(), s.saver(), s.poller(), preview.run())
 
 
 if __name__ == "__main__":

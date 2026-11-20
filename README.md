@@ -148,6 +148,11 @@ One web page with every filter parameter of main, for an iPad on the same WiFi:
 `launch_dual.sh`; by hand:
 `nohup control_bridge/.venv/bin/python3 control_surface/server.py > /tmp/control_surface.log 2>&1 &`
 
+**Live view:** `http://<mac address>:8080/view` shows the program picture at about 15 fps with
+well under a second of delay (JPEG frames pulled from a relay instance, so it costs main nothing;
+frames are grabbed only while a viewer is open). Buttons: both eyes / left / right, Sharp. LAN only:
+the surface has no login, so reach it from outside through a VPN (e.g. Tailscale), never a port forward.
+
 - The page is built from the LIVE filter list (every filter, enabled or not) and the slider
   ranges from the shader files, so a new uniform or filter appears after "Reload".
 - `control_surface/info.yaml` holds the grouping (tabs, stages, sections), short labels and the
