@@ -4,18 +4,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Rig view</title>
 <style>
-  html, body { margin: 0; height: 100%; background: #000; color: #ccd; font: 14px -apple-system, system-ui, sans-serif; }
-  body { display: flex; flex-direction: column; }
-  #stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
-  #box { position: relative; overflow: hidden; width: 100%; max-height: 100%; aspect-ratio: 32 / 9; }
-  #box.one { aspect-ratio: 16 / 9; max-width: calc(100vh * 16 / 9); }
-  #pic { position: absolute; top: 0; left: 0; height: 100%; width: 100%; display: block; }
-  #box.one #pic { width: 200%; }
-  #box.one.right #pic { left: -100%; }
-  #bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
-         padding: 8px max(12px, env(safe-area-inset-left)) calc(8px + env(safe-area-inset-bottom)); background: #11141a; }
+  html, body { margin: 0; height: 100%; background: #000; color: #ccd; overflow: hidden;
+               font: 14px -apple-system, system-ui, sans-serif; -webkit-user-select: none; user-select: none; }
+  #pic { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; }
+  #bar { position: fixed; left: 0; right: 0; bottom: 0; display: none; gap: 8px; align-items: center;
+         padding: 10px max(12px, env(safe-area-inset-left)) calc(10px + env(safe-area-inset-bottom));
+         background: rgba(17, 20, 26, .88); }
+  body.ui #bar { display: flex; }
   button, a.btn { font: inherit; color: #ccd; background: #222733; border: 1px solid #343b4b; border-radius: 8px;
                   padding: 8px 12px; text-decoration: none; }
   button.on { background: #2d5fd0; border-color: #2d5fd0; color: #fff; }
@@ -24,41 +23,50 @@
 </style>
 </head>
 <body>
-<div id="stage"><div id="box"><img id="pic" alt=""></div></div>
+<img id="pic" alt="">
 <div id="bar">
-  <button data-eye="both" class="on">Both eyes</button>
-  <button data-eye="left">Left</button>
-  <button data-eye="right">Right</button>
   <button id="sharp">Sharp</button>
+  <button id="full">Full screen</button>
   <a class="btn" href="/">Controls</a>
   <span id="stat">connecting…</span>
 </div>
 <script>
 // Pulls JPEG frames of the program picture one after another. Each request waits on the
 // server for a frame newer than the last one shown, so the rate follows the link speed.
-var box = document.getElementById('box'), pic = document.getElementById('pic'),
-    stat = document.getElementById('stat'), sharpBtn = document.getElementById('sharp');
-var eye = 'both', sharp = false, seq = 0, shown = [], lastUrl = null;
-try { eye = localStorage.getItem('eye') || eye; sharp = localStorage.getItem('sharp') === '1'; } catch (e) {}
+var pic = document.getElementById('pic'), bar = document.getElementById('bar'),
+    stat = document.getElementById('stat'), sharpBtn = document.getElementById('sharp'),
+    fullBtn = document.getElementById('full');
+var sharp = false, seq = 0, shown = [], lastUrl = null, hideTimer = null;
+try { sharp = localStorage.getItem('sharp') === '1'; } catch (e) {}
+
+// The picture fills the screen with nothing over it. A tap shows the bar; another tap, or
+// 5 s without touching it, hides it again.
+function showUi(on) {
+  document.body.className = on ? 'ui' : '';
+  clearTimeout(hideTimer);
+  if (on) hideTimer = setTimeout(function () { showUi(false); }, 5000);
+}
+pic.onclick = function () { showUi(document.body.className !== 'ui'); };
+bar.onclick = function () { showUi(true); };
 
 function applyUi() {
-  box.className = eye === 'both' ? '' : 'one ' + eye;
-  document.querySelectorAll('[data-eye]').forEach(function (b) {
-    b.className = b.getAttribute('data-eye') === eye ? 'on' : '';
-  });
   sharpBtn.className = sharp ? 'on' : '';
-  try { localStorage.setItem('eye', eye); localStorage.setItem('sharp', sharp ? '1' : '0'); } catch (e) {}
+  try { localStorage.setItem('sharp', sharp ? '1' : '0'); } catch (e) {}
 }
-document.querySelectorAll('[data-eye]').forEach(function (b) {
-  b.onclick = function () { eye = b.getAttribute('data-eye'); applyUi(); };
-});
 sharpBtn.onclick = function () { sharp = !sharp; applyUi(); };
+var root = document.documentElement;
+var goFull = root.requestFullscreen || root.webkitRequestFullscreen;
+if (!goFull) fullBtn.style.display = 'none';      // iPhone Safari: use Add to Home Screen instead
+fullBtn.onclick = function () {
+  if (document.fullscreenElement || document.webkitFullscreenElement) {
+    (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+  } else {
+    try { goFull.call(root); } catch (e) {}
+  }
+};
 applyUi();
 
-function width() {
-  var base = eye === 'both' ? 1280 : 1920;      // one eye shows half of the frame
-  return sharp ? base * 2 : base;
-}
+function width() { return sharp ? 2560 : 1280; }
 
 function next(delay) { setTimeout(pull, delay); }
 
