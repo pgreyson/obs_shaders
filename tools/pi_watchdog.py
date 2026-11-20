@@ -31,20 +31,48 @@ import urllib.parse
 import urllib.request
 
 import simpleobsws
+import subprocess
 import yaml
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CFG = yaml.safe_load(open(os.path.join(HERE, "..", "control_bridge", "config.yaml")))["obs_instances"]["viture"]
 URL = f"ws://{CFG.get('host', 'localhost')}:{CFG['port']}"
 
-PIS = {  # OBS input name -> Pi web console host
-    # WiFi "rofo" since 2026-11-17 (192.168.50.x, DHCP: addresses can drift without a router
-    # reservation). Old network: stage 10.0.1.38, room 10.0.1.45.
-    "StereoPi stage": "192.168.50.19",     # MAC dc:a6:32:ff:13:9c
-    # room: picture is live but the Pi had not joined "rofo" when checked (no address found);
-    # put its address here once it shows up. Until then it cannot be rebooted from here.
+PIS = {  # OBS input name -> Pi web console host (last known; refreshed by MAC, see resolve())
+    # WiFi "rofo" since 2026-11-17 (192.168.50.x, DHCP: addresses drift without a router
+    # reservation: stage went .19 -> .105 on 2026-11-18). Old network: stage 10.0.1.38, room 10.0.1.45.
+    "StereoPi stage": "192.168.50.105",
+    # room: has not joined "rofo" (seen only at a self-assigned 169.254 address), so it cannot
+    # be rebooted from here until its WiFi settings are updated.
     "StereoPi room": "192.168.50.0",
 }
+MACS = {
+    "StereoPi stage": "dc:a6:32:ff:13:9c",
+    "StereoPi room": "d8:3a:dd:95:92:4a",
+}
+SUBNET = "192.168.50."
+
+
+def resolve(name):
+    """Current address of a Pi by MAC from the ARP table (after a broadcast ping to fill it);
+    updates PIS and returns the host. Falls back to the last known address."""
+    mac = [int(x, 16) for x in MACS[name].split(":")]
+    try:
+        subprocess.run(["ping", "-c", "2", "-t", "2", SUBNET + "255"], capture_output=True, timeout=6)
+        out = subprocess.run(["arp", "-an"], capture_output=True, text=True, timeout=6).stdout
+    except Exception:
+        return PIS[name]
+    for m in re.finditer(r"\((\S+)\) at ([0-9a-f:]+)", out):
+        ip, got = m.group(1), m.group(2)
+        try:
+            if ip.startswith(SUBNET) and [int(x, 16) for x in got.split(":")] == mac and ip != PIS[name]:
+                log(f"{name}: address changed {PIS[name]} -> {ip}")
+                PIS[name] = ip
+        except ValueError:
+            pass
+    return PIS[name]
+
+
 POLL_S = 5.0
 STALL_S = 30.0        # identical frames for this long -> suspect
 CONFIRM_S = 4.0       # raspivid tick sample interval
@@ -176,6 +204,11 @@ async def main():
                 if not healthy_static_logged[name]:
                     log(f"{name}: frame unchanged for {now - static_since[name]:.0f} s, checking {host}")
                 verdict = await asyncio.get_event_loop().run_in_executor(None, pi_confirms_stall, host)
+                if verdict is None:
+                    moved = await asyncio.get_event_loop().run_in_executor(None, resolve, name)
+                    if moved != host:
+                        host = moved
+                        verdict = await asyncio.get_event_loop().run_in_executor(None, pi_confirms_stall, host)
                 if verdict is None:
                     if not unreachable_logged[name]:
                         log(f"{name}: {host} console does not answer -> cannot reboot from here (power cycle needed)")
