@@ -12,6 +12,13 @@ main nothing (two cropped scene items, no shader).
   tools/stream_gap.py 0          back to the plain picture
   tools/stream_gap.py show
   tools/stream_gap.py 4 --relay youtube
+  tools/stream_gap.py 4 --frame-depth 0     hairline frames at the screen plane
+
+The hairline frames are drawn at the rig's GLOBAL ZERO depth by default (the value in
+control_surface/.display_zero.json, canvas px at 1920 per eye, scaled to the eye's size on the
+stream): the left eye's frame moves right and the right eye's left by half of it each. Re-run
+the tool after changing global zero. If that offset is larger than the gap, the two frames
+cross in the middle; the tool says so.
 
 Run with control_bridge/.venv/bin/python3.
 """
@@ -26,6 +33,15 @@ SCENE, SOURCE = "full_sbs", "Viture Program (VirtualCam)"
 FRAMES = "Eye frames"            # image source: a hairline round each eye, as on a stereo card
 FRAME_DIR = os.path.join(HERE, '..', 'obs_config', 'eye_frames')
 LINE_PX, LINE_GREY = 2, 96       # on the 1920-wide stream
+ZERO_FILE = os.path.join(HERE, '..', 'control_surface', '.display_zero.json')
+
+
+def global_zero():
+    try:
+        import json
+        return float(json.load(open(ZERO_FILE))["zero_px"])
+    except Exception:
+        return 0.0
 
 
 def frames_png(cw, ch, boxes, path):
@@ -48,7 +64,7 @@ def frames_png(cw, ch, boxes, path):
                 + chunk(b'IDAT', zlib.compress(raw, 6)) + chunk(b'IEND', b''))
 
 
-async def apply(name, port, gap_pct):
+async def apply(name, port, gap_pct, frame_depth=None):
     ws = simpleobsws.WebSocketClient(url=f"ws://127.0.0.1:{port}", password=PW)
     try:
         await asyncio.wait_for(ws.connect(), 4)
@@ -105,8 +121,12 @@ async def apply(name, port, gap_pct):
                 "boundsWidth": w, "boundsHeight": h,
                 "positionX": cw / 4 + k * cw / 2 - w / 2, "positionY": ch / 2 - h / 2})
         # hairline round each eye: a transparent picture drawn over the two eyes
-        boxes = [(cw / 4 + k * cw / 2 - w / 2, ch / 2 - h / 2, w, h) for k in range(2)]
-        png = os.path.abspath(os.path.join(FRAME_DIR, f"eye_frames_{cw}x{ch}_{gap_pct:g}.png"))
+        depth = global_zero() if frame_depth is None else frame_depth      # canvas px, + = in front
+        d = depth * w / 1920.0                                             # on the stream
+        boxes = [(cw / 4 + k * cw / 2 - w / 2 + (d / 2 if k == 0 else -d / 2), ch / 2 - h / 2, w, h) for k in range(2)]
+        png = os.path.abspath(os.path.join(FRAME_DIR, f"eye_frames_{cw}x{ch}_{gap_pct:g}_{depth:g}.png"))
+        print(f"{name}: frames at depth {depth:g} px (global zero {global_zero():g}) = {d:.0f} px on the stream"
+              + (f"; wider than the {gap:.0f} px gap, so the frames cross in the middle (gap of {100 * d / cw:.1f} % or more avoids it)" if d > gap else ""))
         frames_png(cw, ch, boxes, png)
         if frame_items:
             await call("SetInputSettings", {"inputName": FRAMES, "inputSettings": {"file": png}, "overlay": True})
@@ -131,11 +151,14 @@ async def main():
         relay = args[args.index("--relay") + 1]; del args[args.index("--relay"):args.index("--relay") + 2]
     if not args:
         raise SystemExit(__doc__)
+    frame_depth = None
+    if "--frame-depth" in args:
+        frame_depth = float(args[args.index("--frame-depth") + 1]); del args[args.index("--frame-depth"):args.index("--frame-depth") + 2]
     gap = None if args[0] == "show" else float(args[0])
     if gap is not None and not 0 <= gap <= 30:
         raise SystemExit("gap must be 0..30 (% of the stream width)")
     for name, port in RELAYS.items():
         if relay in ("both", name):
-            await apply(name, port, gap)
+            await apply(name, port, gap, frame_depth)
 
 asyncio.run(main())
