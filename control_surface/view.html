@@ -71,10 +71,8 @@
            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* The list works like a picker wheel: the row on the centre line is the highlighted one,
      however it got there (scrolling, or the up / down buttons). */
-  .plist { flex: 1; position: relative; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
-           scroll-snap-type: y mandatory; scrollbar-width: none; }
-  .plist::-webkit-scrollbar { display: none; }
-  .prow { scroll-snap-align: center; }
+  .pwin { flex: 1; position: relative; overflow: hidden; touch-action: none; }
+  .plist { position: absolute; left: 0; right: 0; top: 0; will-change: transform; }
   /* while the right-hand slider is being dragged the whole overlay gets out of the way */
   #hud.adjust .panel, #hud.adjust .nav, #hud.adjust .vs { opacity: 0 !important; transition: opacity .15s; }
   .prow { position: relative; display: flex; align-items: baseline; gap: .5em; padding: .8em .6em .85em;
@@ -107,8 +105,8 @@
 <div class="guide" id="gl"></div><div class="guide" id="gr"></div>
 <img id="pic" alt="">
 <div id="hud">
-  <div class="eye" id="eyeL"><div class="nav"><div>&#9650;</div><div>&#9679;</div><div>&#9660;</div></div><div class="panel"><div class="phead"></div><div class="plist"></div></div><div class="vs"><div class="track"><div class="knob"></div></div></div></div>
-  <div class="eye" id="eyeR"><div class="nav"><div>&#9650;</div><div>&#9679;</div><div>&#9660;</div></div><div class="panel"><div class="phead"></div><div class="plist"></div></div><div class="vs"><div class="track"><div class="knob"></div></div></div></div>
+  <div class="eye" id="eyeL"><div class="nav"><div>&#9650;</div><div>&#9679;</div><div>&#9660;</div></div><div class="panel"><div class="phead"></div><div class="pwin"><div class="plist"></div></div></div><div class="vs"><div class="track"><div class="knob"></div></div></div></div>
+  <div class="eye" id="eyeR"><div class="nav"><div>&#9650;</div><div>&#9679;</div><div>&#9660;</div></div><div class="panel"><div class="phead"></div><div class="pwin"><div class="plist"></div></div></div><div class="vs"><div class="track"><div class="knob"></div></div></div></div>
 </div>
 <div class="strip" id="ls"></div>
 <div class="strip" id="rs"></div>
@@ -261,7 +259,7 @@ function sizeHud() {
   hud.style.setProperty('--ew', ew + 'px');
   hud.style.setProperty('--pop', pop.toFixed(1) + 'px');
   hud.style.setProperty('--base', (Math.abs(pop) / 2).toFixed(1) + 'px');   // keeps both copies inside their eye
-  placeSpacers();
+  if (rows[cursor] && rows[cursor].els) place(winH() / 2 - centreOf(cursor), false);
 }
 window.addEventListener('resize', sizeHud);
 var depthRow = { kind: 'local', label: 'Overlay depth', key: 'local:depth', min: -80, max: 80, step: 0.5,
@@ -274,7 +272,6 @@ function wake() {                       // full strength while in use, fades 2.5
   liveT = setTimeout(function () { hud.classList.remove('live'); }, 2500);
 }
 hud.addEventListener('pointerdown', wake, true);
-hud.addEventListener('scroll', wake, true);
 
 function csend(m) { if (cws && cws.readyState === 1) cws.send(JSON.stringify(m)); }
 // at most one write per parameter every 33 ms, always the newest value
@@ -376,13 +373,12 @@ function paintKnob() {
 }
 function setCursor(i, scroll) {
   if (!rows[i]) return;
-  if (scroll) quiet = Date.now() + 250;
   if (rows[cursor]) rows[cursor].els.forEach(function (e) { e.row.classList.remove('cur'); });
   cursor = i;
   rows[i].els.forEach(function (e, k) {
     e.row.classList.add('cur');
-    if (scroll) lists[k].scrollTop = e.row.offsetTop + e.row.offsetHeight / 2 - lists[k].clientHeight / 2;   // to the centre line
   });
+  if (scroll) place(winH() / 2 - centreOf(i), true);            // bring it to the centre line, both eyes
   if (rows[i].key) lastKey.par = rows[i].key;
   heads[0].textContent = heads[1].textContent = rows[i].path || 'Controls';   // where the highlighted row lives
   paintKnob();
@@ -438,7 +434,7 @@ function slide(r, v0, dy) {
 
 function build() {
   rows = makeRows();
-  for (var k = 0; k < 2; k++) { heads[k].textContent = model ? 'Controls' : 'connecting…'; lists[k].innerHTML = ''; lists[k].scrollTop = 0; }
+  for (var k = 0; k < 2; k++) { heads[k].textContent = model ? 'Controls' : 'connecting…'; lists[k].innerHTML = ''; }
   rows.forEach(function (r, i) {
     r.els = [];
     for (var k = 0; k < 2; k++) {
@@ -448,19 +444,16 @@ function build() {
       if (r.kind !== 'sect') row.appendChild(e.val);
       if (frac(r) !== null) { e.fill = el('fill'); row.appendChild(e.fill); }
       if (r.kind !== 'sect') row.onclick = (function (i, r) {
-        return function () { var was = cursor === i; setCursor(i, true); if (was || r.kind === 'nav') activate(r); };
+        return function () {
+          if (Date.now() - dragEnd < 350) return;      // the end of a scroll drag is not a tap
+          var was = cursor === i; setCursor(i, true); if (was || r.kind === 'nav') activate(r);
+        };
       })(i, r);
       lists[k].appendChild(row);
       r.els.push(e);
     }
     paint(r);
   });
-  for (var q = 0; q < 2; q++) {            // room above and below so the first and last row can reach the centre
-    spacers[q] = [el('pspace'), el('pspace')];
-    lists[q].insertBefore(spacers[q][0], lists[q].firstChild);
-    lists[q].appendChild(spacers[q][1]);
-  }
-  placeSpacers();
   // start on the row used last in this mode, else the first control
   var want = lastKey.par, start = -1;
   rows.forEach(function (r, i) {
@@ -471,29 +464,39 @@ function build() {
   setCursor(start >= 0 ? start : Math.min(1, rows.length - 1), true);
 }
 
-// keep the two copies scrolled alike when a panel is scrolled directly
-var syncing = false, quiet = 0, spacers = [];
-function placeSpacers() {
-  for (var q = 0; q < spacers.length; q++) {
-    var h = Math.max(0, lists[q].clientHeight / 2 - 14) + 'px';
-    spacers[q][0].style.height = h; spacers[q][1].style.height = h;
+// Scrolling is done here, not by the browser, so both eyes' copies move in the same frame:
+// each list is one block moved by a transform inside a clipped window. A thumb drag on
+// either panel moves both; on release the nearest row settles on the centre line.
+var offY = 0, dragEnd = 0;
+function winH() { return lists[0].parentNode.clientHeight || 200; }
+function centreOf(i) { var e = rows[i].els[0].row; return e.offsetTop + e.offsetHeight / 2; }
+function place(y, smooth) {
+  offY = y;
+  for (var k = 0; k < 2; k++) {
+    lists[k].style.transition = smooth ? 'transform .15s' : 'none';
+    lists[k].style.transform = 'translateY(' + y.toFixed(1) + 'px)';
   }
 }
 [0, 1].forEach(function (i) {
-  lists[i].addEventListener('scroll', function () {
-    if (syncing) return;
-    syncing = true;
-    lists[1 - i].scrollTop = lists[i].scrollTop;
-    setTimeout(function () { syncing = false; }, 0);
-    if (Date.now() < quiet) return;       // a scroll we started ourselves (button, tap)
-    // scrolled by hand: highlight whichever row is now on the centre line
-    var mid = lists[i].scrollTop + lists[i].clientHeight / 2, best = -1, bd = 1e9;
-    rows.forEach(function (r, n) {
-      var e = r.els[i].row, d = Math.abs(e.offsetTop + e.offsetHeight / 2 - mid);
-      if (d < bd) { bd = d; best = n; }
-    });
-    if (best >= 0 && best !== cursor) setCursor(best, false);
+  var win = lists[i].parentNode, y0 = 0, off0 = 0, down = false, moved = false;
+  win.addEventListener('pointerdown', function (e) { down = true; moved = false; y0 = e.clientY; off0 = offY; });
+  win.addEventListener('pointermove', function (e) {
+    if (!down || !rows.length) return;
+    var dy = e.clientY - y0;
+    if (!moved && Math.abs(dy) < 6) return;
+    moved = true; wake();
+    var h = winH(), y = Math.max(h / 2 - centreOf(rows.length - 1), Math.min(h / 2 - centreOf(0), off0 + dy));
+    place(y, false);
+    var mid = h / 2 - y, best = -1, bd = 1e9;       // the row now on the centre line
+    for (var n = 0; n < rows.length; n++) { var d = Math.abs(centreOf(n) - mid); if (d < bd) { bd = d; best = n; } }
+    if (best !== cursor) setCursor(best, false);
   });
+  function end() {
+    if (down && moved) { dragEnd = Date.now(); setCursor(cursor, true); }   // settle on the row
+    down = false;
+  }
+  win.addEventListener('pointerup', end);
+  win.addEventListener('pointercancel', end);
 });
 
 // ---- the two margins
