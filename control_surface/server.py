@@ -656,6 +656,7 @@ class Preview:
     def __init__(self, relays):
         self.relays, self.jpg, self.seq = relays, None, 0
         self.wanted, self.width, self.fresh = 0.0, 1280, asyncio.Event()
+        self.quality = 75      # JPEG quality; the viewer can ask for another (its Stream quality row)
         self.source = {}
 
     async def grab(self):
@@ -673,7 +674,7 @@ class Preview:
                     self.source[r] = cams[0] if cams else scene
                 d = await r.call("GetSourceScreenshot", {"sourceName": self.source[r], "imageFormat": "jpg",
                                                          "imageWidth": self.width,
-                                                         "imageCompressionQuality": 55})
+                                                         "imageCompressionQuality": self.quality})
                 return base64.b64decode(d["imageData"].split(",", 1)[1])
             except Exception:
                 self.source.pop(r, None)
@@ -706,8 +707,11 @@ class Preview:
                 now = time.monotonic()
                 if t_sent is not None:
                     wait += now - t_sent          # viewer took this long to show the frame and ask again
-                try:
-                    width = min(3840, max(320, int(msg)))
+                try:                          # "width" or "width,quality"
+                    w, _, q = str(msg).partition(",")
+                    width = min(3840, max(320, int(w)))
+                    if q:
+                        self.quality = min(95, max(30, int(q)))
                 except (TypeError, ValueError):
                     width = 1280
                 jpg, new = await self.frame(width, seq)

@@ -149,7 +149,7 @@ One web page with every filter parameter of main, for an iPad on the same WiFi:
 `nohup control_bridge/.venv/bin/python3 control_surface/server.py > /tmp/control_surface.log 2>&1 &`
 
 **Live view:** `http://<mac address>:8080/view` shows the program picture at up to 30 fps with
-well under a second of delay (JPEG frames sent over one WebSocket from a relay instance, so it costs main nothing;
+well under a second of delay (JPEG frames, quality 75 by default and adjustable per device with the overlay's *Stream quality* row, sent over one WebSocket from a relay instance, so it costs main nothing;
 frames are grabbed only while a viewer is open). Full screen, both eyes, nothing over the picture; two fixed dark guide lines at the centre for aligning a phone stereo viewer; on a phone the picture is 70 % of the screen width for a phone stereo viewer (full width on bigger screens; the overlay's *Picture width %* row changes it per device); double tap anywhere to bring the stereo control overlay forward or hide it. LAN only:
 the surface has no login, so reach it from outside through a VPN (e.g. Tailscale), never a port forward.
 

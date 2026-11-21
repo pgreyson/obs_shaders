@@ -192,7 +192,11 @@ function applyPicW() {
 }
 applyPicW();
 
-function width() { return 2560; }      // 1280 per eye: about what a phone shows per eye
+function width() { return 2560; }
+// JPEG quality of the frames (30..95), set with the overlay's "Stream quality" row and kept
+// on this device. Higher = cleaner but bigger frames, which can cost frame rate.
+var quality = 75;
+try { var qv = parseInt(localStorage.getItem('quality'), 10); if (qv >= 30 && qv <= 95) quality = qv; } catch (e) {}      // 1280 per eye: about what a phone shows per eye
 
 // Frames arrive over one WebSocket as binary JPEGs. The page asks for the next frame only
 // when the previous one is on screen, so the rate follows what the link and phone can do
@@ -209,7 +213,7 @@ function setStat(text, brief, ok) {
 
 function ask() {
   if (ws && ws.readyState === 1) {
-    ws.send(String(width()));
+    ws.send(width() + ',' + quality);
     clearTimeout(waiting);
     waiting = setTimeout(function () { try { ws.close(); } catch (e) {} }, 5000);
   }
@@ -316,6 +320,10 @@ var widthRow = { kind: 'local', label: 'Picture width %', key: 'local:picw', min
   get: function () { return picW === null ? (isPhone ? 70 : 100) : picW; },
   set: function (v) { picW = v; try { localStorage.setItem('picw', String(v)); } catch (e) {} applyPicW(); sizeHud(); } };
 
+var qualityRow = { kind: 'local', label: 'Stream quality', key: 'local:quality', min: 30, max: 95, step: 5,
+  get: function () { return quality; },
+  set: function (v) { quality = v; try { localStorage.setItem('quality', String(v)); } catch (e) {} } };
+
 function wake() {                       // full strength while in use, fades 2.5 s after
   hud.classList.add('live');
   clearTimeout(liveT);
@@ -366,6 +374,7 @@ function makeRows() {
   if (!model) return out;
   function add(r, level, path) { r.level = level; r.path = path; out.push(r); }
   add(depthRow, 0, 'Overlay');
+  add(qualityRow, 0, 'Stream · JPEG quality, higher = bigger frames');
   add(widthRow, 0, 'Picture · screen ' + Math.round(window.innerWidth) + '×' + Math.round(window.innerHeight));
   out.push(fold('layers', 'Layers', 0, 'Layers'));
   if (open.layers) model.layers.forEach(function (l) {
@@ -514,7 +523,7 @@ function build() {
   });
   sizeHud();
   cursor = -1;
-  setCursor(start >= 0 ? start : Math.min(2, rows.length - 1), true);
+  setCursor(start >= 0 ? start : Math.min(3, rows.length - 1), true);
 }
 
 // Scrolling is done here, not by the browser, so both eyes' copies move in the same frame:
