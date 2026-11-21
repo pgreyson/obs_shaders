@@ -43,7 +43,7 @@ PIS = {  # OBS input name -> Pi web console host (last known; refreshed by MAC, 
     # reservation: stage went .19 -> .105 on 2026-11-18). Old network: stage 10.0.1.38, room 10.0.1.45.
     "StereoPi stage": "192.168.50.105",
     # room: on "rofo" since 2026-11-20; its address has drifted too (.106 -> .64 the same day).
-    "StereoPi room": "192.168.50.64",
+    "StereoPi room": "192.168.50.106",
 }
 MACS = {
     "StereoPi stage": "dc:a6:32:ff:13:9c",

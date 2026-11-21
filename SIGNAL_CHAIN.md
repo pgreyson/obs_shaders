@@ -198,6 +198,14 @@ relay and pushed the 8 GB M2 into swap.
   chain. Stopped — starting it steals the Blackmagic from main.
 - In main: scene `camera_test`, the `Oracle Preview` and `Test Pattern` layers (off).
 
+## Known failure: scrambled camera pictures after a power loss
+
+After the Mac and the Pis lost power together (2026-11-21), both UltraStudio boxes locked to
+the Pis' HDMI wrongly: the raw camera frames were wrapped sideways and vertically with the
+blanking visible inside the picture, and the stage box reported 1280×720 instead of 1920×1080.
+Releasing and reselecting the devices in OBS did not help. Rebooting each Pi did
+(`tools/pi_conf.sh <ip> run reboot`): the HDMI signal drops and the box locks again.
+
 ## Known failure: fullscreen projectors on a display that goes away
 
 If a display carrying a fullscreen projector (VITURE, LTV) is turned off or unplugged,
