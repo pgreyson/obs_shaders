@@ -164,6 +164,12 @@ buttons (up and down also own the corners above and below the picture; hold to r
 anywhere else scrolls the list; on the right there are no buttons and a drag anywhere is the slider
 for the highlighted control. Switches are not on the slider: the middle button flips them. The header shows the viewer's frame rate, and the last row of the list, *Full controls*, opens the full control page (followed by *Full screen* where the browser supports it). A single tap does nothing; the old bottom bar is gone. Faint until used.
 
+**Record:** the control page's header has a **Record** pill, and the stereo overlay a *Record* row
+near the end of its list (middle button flips it; a red dot shows by the frame rate while it runs).
+Both start and stop recording on OBS main with main's own recording settings and folder, and show
+the free disk space. The server refuses to start, and stops a running recording, below
+`REC_MIN_FREE_GB` (5 GB) free.
+
 **HTTPS:** the same pages are on `https://Pauls-Mac-mini.local:8443/` (and the IP), for phones with
 Safari's HTTPS-only setting and for Home Screen icons. The certificate comes from a local authority
 in `control_surface/certs/` (gitignored; server certificate valid 397 days, names: the `.local` host

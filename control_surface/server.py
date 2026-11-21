@@ -24,6 +24,7 @@ import base64
 import contextlib
 import json
 import re
+import shutil
 import socket
 import ssl
 import time
@@ -170,6 +171,7 @@ class Surface:
         self.wrote = {}      # ((source, filter), key) -> time of the last write from a page
         self.fast = set()    # filters with a CV-driven control (read back more often)
         self.rebuild = asyncio.Event()
+        self.rec_dir = None  # main's recording folder (asked once per connection)
 
     # ---- model -------------------------------------------------------------
 
@@ -333,8 +335,32 @@ class Surface:
 
     # ---- OBS events --------------------------------------------------------
 
+    async def rec_status(self):
+        """Main's recording state, plus free space on the disk it records to."""
+        r = await self.obs.call("GetRecordStatus")
+        if self.rec_dir is None:
+            self.rec_dir = (await self.obs.call("GetRecordDirectory")).get("recordDirectory") or str(Path.home())
+        free = shutil.disk_usage(self.rec_dir).free / 1e9
+        return {"rec": bool(r.get("outputActive")), "rect": (r.get("outputTimecode") or "")[:8],
+                "free": round(free, 1)}
+
+    async def set_rec(self, on):
+        st = await self.rec_status()
+        if on and st["free"] < REC_MIN_FREE_GB:
+            log(f"record refused: {st['free']} GB free")
+        elif on != st["rec"]:
+            await self.obs.call("StartRecord" if on else "StopRecord")
+            log("record", "started" if on else "stopped", "from a page")
+            st["rec"] = on
+        self.status = {**self.status, **st}
+        await self.send_all({"t": "status", **self.status})
+
     async def on_event(self, typ, data):
-        if typ == "SourceFilterEnableStateChanged":
+        if typ == "RecordStateChanged":
+            if data.get("outputState") in ("OBS_WEBSOCKET_OUTPUT_STARTED", "OBS_WEBSOCKET_OUTPUT_STOPPED"):
+                self.status = {**self.status, "rec": bool(data.get("outputActive"))}
+                await self.send_all({"t": "status", **self.status})
+        elif typ == "SourceFilterEnableStateChanged":
             await self.send_all({"t": "en", "s": data["sourceName"], "f": data["filterName"],
                                  "on": data["filterEnabled"]})
             self.patch_filter(data["sourceName"], data["filterName"], on=data["filterEnabled"])
@@ -472,6 +498,8 @@ class Surface:
                 self.to_bridge({"source": m["s"], "filter": m["f"], "property": m["k"], "clear": True})
         elif t == "reload":
             self.rebuild.set()
+        elif t == "rec":
+            await self.set_rec(bool(m["on"]))
 
     async def set_virtual(self, key, k, v, conn):
         """Move every target by the change of the virtual control, then remember its value."""
@@ -554,6 +582,7 @@ class Surface:
                 try:
                     await self.obs.connect()
                     log("connected to main (:4455)")
+                    self.rec_dir = None
                     self.rebuild.set()
                 except Exception:
                     self.status = {"obs": False}
@@ -574,6 +603,11 @@ class Surface:
                 s = await self.obs.call("GetStats")
                 st.update(fps=round(s.get("activeFps", 0), 1), ms=round(s.get("averageFrameRenderTime", 0), 1),
                           cpu=round(s.get("cpuUsage", 0), 1), mem=round(s.get("memoryUsage", 0)))
+                st.update(await self.rec_status())
+                if st["rec"] and st["free"] < REC_MIN_FREE_GB:
+                    await self.obs.call("StopRecord")
+                    log(f"record stopped: only {st['free']} GB free")
+                    st["rec"] = False
             except Exception:
                 st = {"obs": False}
             if time.monotonic() - last_relay > 6:
@@ -600,6 +634,8 @@ class Surface:
             except asyncio.TimeoutError:
                 pass
 
+
+REC_MIN_FREE_GB = 5.0     # recording will not start, and is stopped, below this much free disk
 
 PREVIEW_FPS = 30.0
 PREVIEW_IDLE_S = 3.0      # stop grabbing this long after the last viewer request

@@ -29,6 +29,7 @@ header { position: sticky; top: 0; z-index: 10; background: rgba(14,16,19,.96);
 .pill b { color: var(--text); font-weight: 600; }
 .pill.ok { color: var(--on); } .pill.bad { color: var(--bad); } .pill.warn { color: var(--warn); }
 .grow { flex: 1; }
+#rec.on { background: #b3261e; color: #fff; }
 .tabs { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
 .tabs::-webkit-scrollbar { display: none; }
 .tab { padding: 10px 14px; border-radius: 10px 10px 0 0; color: var(--dim); white-space: nowrap;
@@ -124,6 +125,7 @@ main { padding: 12px 12px calc(40px + env(safe-area-inset-bottom)); max-width: 1
     <span id="relays" style="display:contents"></span>
     <span class="grow"></span>
     <span class="pill" id="saved" style="visibility:hidden">saved in OBS</span>
+    <button class="pill" id="rec" style="display:none">Record</button>
     <a class="pill" id="view" href="/view" style="text-decoration:none">View</a>
     <button class="pill" id="full">Full screen</button>
     <button class="pill" id="reload">Reload</button>
@@ -183,6 +185,11 @@ function setLink(st) {
       perf.className = "pill" + (st.ms > 36 ? " warn" : "");
     }
   }
+  const rec = $("#rec");
+  rec.style.display = st.obs && st.rec != null ? "" : "none";
+  recOn = !!st.rec;
+  rec.classList.toggle("on", recOn);
+  rec.textContent = recOn ? "● REC " + (st.rect || "") + " · " + Math.round(st.free) + " GB free" : "Record · " + Math.round(st.free) + " GB free";
   rel.textContent = "";
   for (const name in (st.relays || {})) {
     const s = st.relays[name];
@@ -436,6 +443,9 @@ function render() {
   }
 }
 $("#reload").onclick = () => send({ t: "reload" });
+// records on OBS main with main's own recording settings; the server stops it when the disk is nearly full
+let recOn = false;
+$("#rec").onclick = () => send({ t: "rec", on: !recOn });
 // Opened inside the viewer (its Controls button): View hands back to it instead of navigating.
 $("#view").onclick = (e) => {
   if (window.parent !== window) { e.preventDefault(); window.parent.postMessage("view", location.origin); }

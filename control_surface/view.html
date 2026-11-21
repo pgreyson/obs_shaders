@@ -69,6 +69,7 @@
   .ppath { flex: 1; overflow: hidden; text-overflow: ellipsis; }
   .pfps { flex: none; font-weight: 400; font-variant-numeric: tabular-nums; }
   .pfps.bad { color: #c98070; }
+  #hud.rec .pfps::before { content: '\25CF  '; color: #e0352b; }
   /* The list works like a picker wheel: the row on the centre line is the highlighted one,
      however it got there (scrolling, or the up / down buttons). */
   .pwin { flex: 1; position: relative; overflow: hidden; }
@@ -331,6 +332,15 @@ function el(cls, text) { var d = document.createElement('div'); d.className = cl
 
 // ---- rows. kind: nav | sect | sw (a switch: get/set) | param
 function swRow(label, get, set) { return { kind: 'sw', label: label, get: get, set: set }; }
+// Recording on OBS main (its own recording settings). A switch row near the end of the list;
+// a red dot by the frame rate while it runs.
+var rec = { on: false, t: '', free: null };
+var recRow = swRow('Record', function () { return rec.on; },
+                   function (on) { rec.on = on; csend({ t: 'rec', on: on }); });
+recRow.key = 'rec';
+recRow.text = function () {
+  return rec.on ? '● ' + rec.t : rec.free === null ? 'off' : 'off · ' + Math.round(rec.free) + ' GB free';
+};
 // One tree, no pages and no back rows: tab > filter > section > control. Every branch starts
 // collapsed; its row opens or closes it (not remembered across reloads).
 var open = {};
@@ -375,6 +385,7 @@ function makeRows() {
       });
     }); });
   });
+  add(recRow, 0, 'Record on OBS main');
   // last row: the full control page (for when the list here is not enough)
   out.push({ kind: 'nav', key: 'full', level: 0, path: 'Full controls', label: 'Full controls', note: '›', go: openControls });
   if (goFull && !navigator.standalone) {
@@ -383,7 +394,7 @@ function makeRows() {
   return out;
 }
 function rowText(r) {
-  if (r.kind === 'sw') return r.get() ? 'on' : 'off';
+  if (r.kind === 'sw') return r.text ? r.text() : r.get() ? 'on' : 'off';
   if (r.kind === 'nav') return r.note || '';
   if (r.kind === 'local') return r.get().toFixed(1);
   if (r.kind !== 'param') return '';
@@ -601,6 +612,12 @@ function cconnect() {
   cws.onmessage = function (e) {
     if (sock !== cws) return;           // a socket from before the overlay was last hidden
     var m = JSON.parse(e.data);
+    if (m.t === 'status') {
+      rec.on = !!m.rec; rec.t = m.rect || ''; rec.free = typeof m.free === 'number' ? m.free : null;
+      hud.classList.toggle('rec', rec.on);
+      if (recRow.els && rows.indexOf(recRow) >= 0) paint(recRow);
+      return;
+    }
     if (m.t === 'model') { model = m; build(); return; }
     if (!model) return;
     if (m.t === 'v') {
