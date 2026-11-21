@@ -16,9 +16,11 @@ main nothing (two cropped scene items, no shader).
 
 The hairline frames are drawn at the rig's GLOBAL ZERO depth by default (the value in
 control_surface/.display_zero.json, canvas px at 1920 per eye, scaled to the eye's size on the
-stream): the left eye's frame moves right and the right eye's left by half of it each. Re-run
-the tool after changing global zero. If that offset is larger than the gap, the two frames
-cross in the middle; the tool says so.
+stream): the left eye's frame moves right and the right eye's left by half of it each. Each
+frame is its own scene item, and the control surface (control_surface/server.py, stream_frames)
+moves the two items whenever Global zero changes, so they follow it live; --frame-depth sets a
+fixed depth until Global zero is next moved. If the offset is larger than the gap, the two
+frames cross in the middle; the tool says so.
 
 Run with control_bridge/.venv/bin/python3.
 """
@@ -44,17 +46,16 @@ def global_zero():
         return 0.0
 
 
-def frames_png(cw, ch, boxes, path):
-    """Transparent cw x ch PNG with a LINE_PX outline just outside each box (x, y, w, h)."""
-    rows = [bytearray(cw * 4) for _ in range(ch)]
+def frame_png(w, h, path):
+    """One frame: a transparent picture of w+2L x h+2L with an L-wide outline (the w x h hole
+    is where the eye picture shows through)."""
+    cw, ch = int(round(w)) + 2 * LINE_PX, int(round(h)) + 2 * LINE_PX
     px = bytes((LINE_GREY, LINE_GREY, LINE_GREY, 255))
-    for x, y, w, h in boxes:
-        x0, y0, x1, y1 = int(round(x)) - LINE_PX, int(round(y)) - LINE_PX, int(round(x + w)) + LINE_PX, int(round(y + h)) + LINE_PX
-        for yy in range(max(0, y0), min(ch, y1)):
-            edge = yy < y0 + LINE_PX or yy >= y1 - LINE_PX
-            for xx in range(max(0, x0), min(cw, x1)):
-                if edge or xx < x0 + LINE_PX or xx >= x1 - LINE_PX:
-                    rows[yy][xx * 4:xx * 4 + 4] = px
+    full = bytearray(px * cw)
+    side = bytearray(cw * 4)
+    side[:LINE_PX * 4] = px * LINE_PX
+    side[-LINE_PX * 4:] = px * LINE_PX
+    rows = [full if (yy < LINE_PX or yy >= ch - LINE_PX) else side for yy in range(ch)]
     raw = b''.join(b'\x00' + bytes(r) for r in rows)
     def chunk(t, d):
         return struct.pack('>I', len(d)) + t + d + struct.pack('>I', zlib.crc32(t + d) & 0xffffffff)
@@ -123,19 +124,26 @@ async def apply(name, port, gap_pct, frame_depth=None):
         # hairline round each eye: a transparent picture drawn over the two eyes
         depth = global_zero() if frame_depth is None else frame_depth      # canvas px, + = in front
         d = depth * w / 1920.0                                             # on the stream
-        boxes = [(cw / 4 + k * cw / 2 - w / 2 + (d / 2 if k == 0 else -d / 2), ch / 2 - h / 2, w, h) for k in range(2)]
-        png = os.path.abspath(os.path.join(FRAME_DIR, f"eye_frames_{cw}x{ch}_{gap_pct:g}_{depth:g}.png"))
+        png = os.path.abspath(os.path.join(FRAME_DIR, f"eye_frame_{w:.0f}x{h:.0f}.png"))
         print(f"{name}: frames at depth {depth:g} px (global zero {global_zero():g}) = {d:.0f} px on the stream"
               + (f"; wider than the {gap:.0f} px gap, so the frames cross in the middle (gap of {100 * d / cw:.1f} % or more avoids it)" if d > gap else ""))
-        frames_png(cw, ch, boxes, png)
-        if frame_items:
-            await call("SetInputSettings", {"inputName": FRAMES, "inputSettings": {"file": png}, "overlay": True})
-        else:
+        frame_png(w, h, png)
+        ids = sorted(i["sceneItemId"] for i in frame_items)
+        if not ids:
             r = await ws.call(simpleobsws.Request("CreateInput", {"sceneName": SCENE, "inputName": FRAMES,
                               "inputKind": "image_source", "inputSettings": {"file": png}, "sceneItemEnabled": True}))
-            if not r.ok():       # the input exists already (other scene / earlier run): reuse it
-                await call("SetInputSettings", {"inputName": FRAMES, "inputSettings": {"file": png}, "overlay": True})
-                await call("CreateSceneItem", {"sceneName": SCENE, "sourceName": FRAMES})
+            if r.ok():
+                ids.append(r.responseData["sceneItemId"])
+        await call("SetInputSettings", {"inputName": FRAMES, "inputSettings": {"file": png}, "overlay": True})
+        while len(ids) < 2:      # one scene item of the same picture per eye
+            ids.append((await call("CreateSceneItem", {"sceneName": SCENE, "sourceName": FRAMES}))["sceneItemId"])
+        for extra in ids[2:]:
+            await call("RemoveSceneItem", {"sceneName": SCENE, "sceneItemId": extra})
+        for k, item_id in enumerate(ids[:2]):
+            await xf(item_id, {"cropLeft": 0, "cropRight": 0, "alignment": 5, "boundsType": "OBS_BOUNDS_NONE",
+                               "scaleX": 1.0, "scaleY": 1.0, "rotation": 0,
+                               "positionX": cw / 4 + k * cw / 2 - w / 2 - LINE_PX + (d / 2 if k == 0 else -d / 2),
+                               "positionY": ch / 2 - h / 2 - LINE_PX})
         print(f"{name}: gap {gap:.0f} px between the eyes, each eye {w:.0f} x {h:.0f} (of {cw / 2:.0f} x {cw / 2 * 9 / 16:.0f}), hairline frames on")
     # scene item edits over the websocket do not mark the collection changed: nudge a save
     await call("CreateScene", {"sceneName": "zz_save_nudge"})
