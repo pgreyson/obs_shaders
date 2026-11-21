@@ -571,7 +571,9 @@ var grab = null;
     try { rs.setPointerCapture(e.pointerId); } catch (err) {}
     down = true; moved = false; y0 = e.clientY;
     var r = rows[cursor];
-    grab = r && r.kind !== 'nav' ? { r: r, v0: grabValue(r) } : null;
+    // numbers and option lists only: switches belong to the left thumb's middle button
+    var sw = r && (r.kind === 'sw' || (r.kind === 'param' && r.p.type === 'bool'));
+    grab = r && r.kind !== 'nav' && !sw ? { r: r, v0: grabValue(r) } : null;
   });
   rs.addEventListener('pointermove', function (e) {
     if (!down) return;

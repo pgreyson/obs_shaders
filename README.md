@@ -162,7 +162,7 @@ hides while a value is being dragged. Three big buttons (up / select / down) and
 drawn in both eyes. Touch goes by screen half: on the left, the far-left strip is the three
 buttons (up and down also own the corners above and below the picture; hold to repeat) and a drag
 anywhere else scrolls the list; on the right there are no buttons and a drag anywhere is the slider
-for the highlighted control. The header shows the viewer's frame rate, and the last row of the list, *Full controls*, opens the full control page (followed by *Full screen* where the browser supports it). A single tap does nothing; the old bottom bar is gone. Faint until used.
+for the highlighted control. Switches are not on the slider: the middle button flips them. The header shows the viewer's frame rate, and the last row of the list, *Full controls*, opens the full control page (followed by *Full screen* where the browser supports it). A single tap does nothing; the old bottom bar is gone. Faint until used.
 
 **HTTPS:** the same pages are on `https://Pauls-Mac-mini.local:8443/` (and the IP), for phones with
 Safari's HTTPS-only setting and for Home Screen icons. The certificate comes from a local authority
