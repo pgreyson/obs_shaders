@@ -595,8 +595,9 @@ var grab = null;
 
 function cconnect() {
   if (!hudOn || (cws && cws.readyState < 2)) return;
-  cws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
+  var sock = cws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
   cws.onmessage = function (e) {
+    if (sock !== cws) return;           // a socket from before the overlay was last hidden
     var m = JSON.parse(e.data);
     if (m.t === 'model') { model = m; build(); return; }
     if (!model) return;
@@ -618,7 +619,11 @@ function cconnect() {
       rows.forEach(function (r) { if (r.kind === 'sw') paint(r); });
     }
   };
-  cws.onclose = function () { cws = null; model = null; if (hudOn) { build(); setTimeout(cconnect, 1500); } };
+  cws.onclose = function () {
+    if (sock !== cws) return;
+    cws = null; model = null;
+    if (hudOn) { build(); setTimeout(cconnect, 1500); }
+  };
 }
 
 function applyHud() {
@@ -626,7 +631,7 @@ function applyHud() {
   overlayBtn.className = hudOn ? 'on' : '';
   try { localStorage.setItem('hud', hudOn ? '1' : '0'); } catch (e) {}
   if (hudOn) { build(); cconnect(); wake(); }
-  else if (cws) { try { cws.close(); } catch (e) {} }
+  else if (cws) { var old = cws; cws = null; model = null; try { old.close(); } catch (e) {} }
 }
 overlayBtn.onclick = function () { hudOn = !hudOn; applyHud(); };
 applyHud();
