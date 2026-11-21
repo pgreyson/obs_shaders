@@ -9,6 +9,7 @@
 <title>Rig view</title>
 <style>
   html, body { margin: 0; height: 100%; background: #000; color: #ccd; overflow: hidden;
+               touch-action: manipulation;
                font: 14px -apple-system, system-ui, sans-serif; -webkit-user-select: none; user-select: none; }
   /* Alignment guides for a clip-on / Cardboard stereo viewer: two fixed vertical lines either
      side of the screen centre, drawn over the picture. */
@@ -64,7 +65,10 @@
            background: rgba(0, 0, 0, .30); color: #a4a9b6; opacity: .22; transition: opacity .6s; }
   #hud.live .panel { opacity: .5; transition: opacity .1s; background: rgba(0, 0, 0, .55); }
   .phead { padding: .45em .6em; flex: none; border-bottom: 1px solid rgba(255, 255, 255, .16); font-weight: 600;
-           white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+           display: flex; gap: .5em; white-space: nowrap; }
+  .ppath { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+  .pfps { flex: none; font-weight: 400; font-variant-numeric: tabular-nums; }
+  .pfps.bad { color: #c98070; }
   /* The list works like a picker wheel: the row on the centre line is the highlighted one,
      however it got there (scrolling, or the up / down buttons). */
   .pwin { flex: 1; position: relative; overflow: hidden; }
@@ -103,8 +107,8 @@
 <div class="guide" id="gl"></div><div class="guide" id="gr"></div>
 <img id="pic" alt="">
 <div id="hud">
-  <div class="eye" id="eyeL"><div class="nav"><div>&#9650;</div><div>&#9679;</div><div>&#9660;</div></div><div class="panel"><div class="phead"></div><div class="pwin"><div class="plist"></div></div></div></div>
-  <div class="eye" id="eyeR"><div class="nav"><div>&#9650;</div><div>&#9679;</div><div>&#9660;</div></div><div class="panel"><div class="phead"></div><div class="pwin"><div class="plist"></div></div></div></div>
+  <div class="eye" id="eyeL"><div class="nav"><div>&#9650;</div><div>&#9679;</div><div>&#9660;</div></div><div class="panel"><div class="phead"><span class="ppath"></span><span class="pfps"></span></div><div class="pwin"><div class="plist"></div></div></div></div>
+  <div class="eye" id="eyeR"><div class="nav"><div>&#9650;</div><div>&#9679;</div><div>&#9660;</div></div><div class="panel"><div class="phead"><span class="ppath"></span><span class="pfps"></span></div><div class="pwin"><div class="plist"></div></div></div></div>
 </div>
 <div class="strip" id="ls"></div>
 <div class="strip" id="rs"></div>
@@ -122,16 +126,28 @@ var pic = document.getElementById('pic'), bar = document.getElementById('bar'),
     fullBtn = document.getElementById('full');
 var seq = 0, shown = [], lastUrl = null, hideTimer = null;
 
-// The picture fills the screen with nothing over it. A tap shows the bar; another tap, or
-// 5 s without touching it, hides it again.
+// The picture fills the screen with nothing over it. A double tap anywhere brings the stereo
+// control overlay forward or hides it. A single tap shows the bar; another tap, or 5 s
+// without touching it, hides it again (a single tap waits a moment to see if a second follows).
 function showUi(on) {
   document.body.classList.toggle('ui', on);
   clearTimeout(hideTimer);
   if (on) hideTimer = setTimeout(function () { showUi(false); }, 5000);
 }
+var tapT = null, stripUp = 0;
+function tap() {
+  if (tapT) {
+    clearTimeout(tapT); tapT = null;
+    showUi(false);
+    hudOn = !hudOn; applyHud();
+  } else {
+    tapT = setTimeout(function () { tapT = null; showUi(!document.body.classList.contains('ui')); }, 320);
+  }
+}
 document.addEventListener('click', function (e) {
   if (e.target.closest && e.target.closest('.panel, .strip, .nav, .vs')) return;
-  if (!bar.contains(e.target)) showUi(!document.body.classList.contains('ui'));
+  if (Date.now() - stripUp < 500) return;        // the click that follows a tap a touch zone already took
+  if (!bar.contains(e.target)) tap();
 });
 bar.onclick = function () { showUi(true); };
 
@@ -157,6 +173,14 @@ function width() { return 2560; }      // 1280 per eye: about what a phone shows
 // (up to the rig's 30 fps) and frames never queue up behind each other.
 var ws = null, pending = null, waiting = null, paused = false;
 
+// frame rate: in the bar, and in the header of the stereo overlay (both eyes)
+var fpsEls = document.querySelectorAll('.pfps');
+function setStat(text, brief, ok) {
+  stat.className = ok ? '' : 'bad';
+  stat.textContent = text;
+  for (var k = 0; k < fpsEls.length; k++) { fpsEls[k].className = ok ? 'pfps' : 'pfps bad'; fpsEls[k].textContent = brief; }
+}
+
 function ask() {
   if (ws && ws.readyState === 1) {
     ws.send(String(width()));
@@ -171,8 +195,7 @@ function connect() {
   ws.onopen = ask;
   ws.onmessage = function (e) {
     if (typeof e.data === 'string') {            // "none": no relay instance has a picture
-      stat.className = 'bad';
-      stat.textContent = 'no picture, retrying';
+      setStat('no picture, retrying', 'no picture');
       setTimeout(ask, 1000);
       return;
     }
@@ -183,16 +206,15 @@ function connect() {
       var now = Date.now();
       shown.push(now);
       while (shown.length && now - shown[0] > 2000) shown.shift();
-      stat.className = '';
-      stat.textContent = (shown.length / 2).toFixed(0) + ' fps · ' + Math.round(size / 1024) + ' KB';
+      var fps = (shown.length / 2).toFixed(0) + ' fps';
+      setStat(fps + ' · ' + Math.round(size / 1024) + ' KB', fps, true);
       if (document.hidden || paused) pending = true; else ask();
     };
     pic.src = url;
   };
   ws.onclose = function () {
     clearTimeout(waiting);
-    stat.className = 'bad';
-    stat.textContent = 'reconnecting';
+    setStat('reconnecting', 'no link');
     setTimeout(connect, 1000);
   };
 }
@@ -204,13 +226,13 @@ connect();
 // Controls: load the control page in a frame over the picture and stop asking for frames
 // while it is up. Its View button posts "view" back, which removes the frame again.
 var ctlwrap = document.getElementById('ctlwrap');
-document.getElementById('controls').onclick = function (e) {
-  e.stopPropagation();
+function openControls() {
   showUi(false);
   paused = true;
   ctlwrap.innerHTML = '<iframe id="ctl" src="/"></iframe>';
   ctlwrap.className = 'on';
-};
+}
+document.getElementById('controls').onclick = function (e) { e.stopPropagation(); openControls(); };
 window.addEventListener('message', function (e) {
   if (e.origin !== location.origin || e.data !== 'view') return;
   ctlwrap.className = '';
@@ -225,7 +247,7 @@ window.addEventListener('message', function (e) {
 // margin: drag up/down = change the cursor row's value, tap = flip a switch / next option.
 // Tapping a row in either panel also selects it. Talks to the control page's server socket.
 var hud = document.getElementById('hud'), overlayBtn = document.getElementById('overlay');
-var heads = hud.querySelectorAll('.phead'), lists = hud.querySelectorAll('.plist');
+var heads = hud.querySelectorAll('.ppath'), lists = hud.querySelectorAll('.plist');
 var ls = document.getElementById('ls'), rs = document.getElementById('rs'),
     navs = hud.querySelectorAll('.nav');
 var hudOn = false, cws = null, model = null, rows = [], cursor = 0,
@@ -336,6 +358,8 @@ function makeRows() {
       });
     }); });
   });
+  // last row: the full control page (for when the list here is not enough)
+  out.push({ kind: 'nav', key: 'full', level: 0, path: 'Full controls', label: 'Full controls', note: '›', go: openControls });
   return out;
 }
 function rowText(r) {
@@ -512,7 +536,8 @@ function press(b) {
   });
   function end() {
     stopRep();
-    if (down && btn < 0) { if (moved) setCursor(cursor, true); else showUi(!document.body.classList.contains('ui')); }
+    stripUp = Date.now();
+    if (down && btn < 0) { if (moved) setCursor(cursor, true); else tap(); }
     down = false;
   }
   ls.addEventListener('pointerup', end);
@@ -538,8 +563,9 @@ var grab = null;
     if (grab.r.kind !== 'local') hud.classList.add('adjust');
     slide(grab.r, grab.v0, dy);
   });
-  function end(tap) {
-    if (down && !moved && tap) showUi(!document.body.classList.contains('ui'));
+  function end(isTap) {
+    stripUp = Date.now();
+    if (down && !moved && isTap) tap();
     down = false; grab = null;
     hud.classList.remove('adjust'); wake();
   }

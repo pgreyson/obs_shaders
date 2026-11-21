@@ -150,10 +150,10 @@ One web page with every filter parameter of main, for an iPad on the same WiFi:
 
 **Live view:** `http://<mac address>:8080/view` shows the program picture at up to 30 fps with
 well under a second of delay (JPEG frames sent over one WebSocket from a relay instance, so it costs main nothing;
-frames are grabbed only while a viewer is open). Full screen, both eyes, nothing over the picture; two fixed dark guide lines at the centre for aligning a phone stereo viewer; on a phone the picture is fixed at 86.5 % of the screen width for a Cardboard-type viewer; tap for the bar (Full screen, Controls). LAN only:
+frames are grabbed only while a viewer is open). Full screen, both eyes, nothing over the picture; two fixed dark guide lines at the centre for aligning a phone stereo viewer; on a phone the picture is fixed at 86.5 % of the screen width for a Cardboard-type viewer; double tap anywhere to bring the stereo control overlay forward or hide it; single tap for the bar (Full screen, Overlay, Controls). LAN only:
 the surface has no login, so reach it from outside through a VPN (e.g. Tailscale), never a port forward.
 
-**Stereo overlay:** the viewer's tap bar has an **Overlay** button. It draws one narrow, translucent
+**Stereo overlay:** double tap anywhere in the viewer (or the bar's **Overlay** button; with the overlay up, anywhere except its three buttons). It draws one narrow, translucent
 list of named controls hard against the left edge of each eye's picture, so it fuses into a single
 panel in a phone stereo viewer. Its depth is the *Overlay depth* row at the top of the list (one collapsible tree: tab > filter >
 section > control; set it through the viewer; it starts at the rig's global zero). The list is a picker
@@ -162,7 +162,7 @@ hides while a value is being dragged. Three big buttons (up / select / down) and
 drawn in both eyes. Touch goes by screen half: on the left, the far-left strip is the three
 buttons (up and down also own the corners above and below the picture; hold to repeat) and a drag
 anywhere else scrolls the list; on the right there are no buttons and a drag anywhere is the slider
-for the highlighted control. A tap that is not on a button shows the bar. Faint until used.
+for the highlighted control. The header shows the viewer's frame rate, and the last row of the list, *Full controls*, opens the full control page. A single tap that is not on a button shows the bar. Faint until used.
 
 **HTTPS:** the same pages are on `https://Pauls-Mac-mini.local:8443/` (and the IP), for phones with
 Safari's HTTPS-only setting and for Home Screen icons. The certificate comes from a local authority
