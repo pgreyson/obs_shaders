@@ -30,6 +30,7 @@ header { position: sticky; top: 0; z-index: 10; background: rgba(14,16,19,.96);
 .pill.ok { color: var(--on); } .pill.bad { color: var(--bad); } .pill.warn { color: var(--warn); }
 .grow { flex: 1; }
 #rec.on { background: #b3261e; color: #fff; }
+#legacy.on { color: var(--text); background: var(--line); }
 .tabs { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
 .tabs::-webkit-scrollbar { display: none; }
 .tab { padding: 10px 14px; border-radius: 10px 10px 0 0; color: var(--dim); white-space: nowrap;
@@ -128,6 +129,7 @@ main { padding: 12px 12px calc(40px + env(safe-area-inset-bottom)); max-width: 1
     <button class="pill" id="rec" style="display:none">Record</button>
     <a class="pill" id="view" href="/view" style="text-decoration:none">View</a>
     <button class="pill" id="full">Full screen</button>
+    <button class="pill" id="legacy">Legacy</button>
     <button class="pill" id="reload">Reload</button>
   </div>
   <div class="tabs" id="tabs"></div>
@@ -414,14 +416,17 @@ function render() {
   const tabs = $("#tabs"), main = $("#main");
   tabs.textContent = ""; main.textContent = "";
   if (!model.tabs.length) { main.append(el("div", null, "OBS reported no filters.")); return; }
-  if (!model.tabs.some((t) => t.id === curTab)) curTab = model.tabs[0].id;
-  for (const t of model.tabs) {
+  // replaced and test-only filters (legacy in info.yaml) are hidden unless the Legacy pill is on
+  const shown = model.tabs.filter((t) => showLegacy || !t.legacy);
+  if (!shown.some((t) => t.id === curTab)) curTab = shown[0].id;
+  for (const t of shown) {
     const b = el("button", "tab" + (t.id === curTab ? " sel" : ""), t.title);
     b.onclick = () => { curTab = t.id; store.set("tab", curTab); render(); window.scrollTo(0, 0); };
     tabs.append(b);
   }
   const tab = model.tabs.find((t) => t.id === curTab);
-  const real = tab.stages.flatMap((s) => s.filters).filter((f) => !f.virtual), n = real.length, on = real.filter((f) => f.on).length;
+  const stages = tab.stages.filter((s) => showLegacy || !s.legacy);
+  const real = stages.flatMap((s) => s.filters).filter((f) => !f.virtual), n = real.length, on = real.filter((f) => f.on).length;
   const th = el("div", "tabhead");
   th.append(infoBtn(() => sheet(tab.title, "Source “" + tab.source + "”", [["p", tab.info]])));
   const lay = tab.layer != null ? model.layers.find((x) => x.id === tab.layer) : null;
@@ -435,7 +440,7 @@ function render() {
   th.append(el("span", null, "“" + tab.source + "” · " + n + " filters, " + on + " enabled · runs top to bottom"));
   main.append(th);
   if (tab.layers) { const st = el("div", "stage"); st.append(el("h2", null, "Mix")); const g = el("div", "cards"); g.append(makeLayers(tab)); st.append(g); main.append(st); }
-  for (const s of tab.stages) {
+  for (const s of stages) {
     const st = el("div", "stage"), g = el("div", "cards");
     st.append(el("h2", null, s.title));
     for (const f of s.filters) g.append(makeCard(tab, f));
@@ -443,6 +448,8 @@ function render() {
   }
 }
 $("#reload").onclick = () => send({ t: "reload" });
+let showLegacy = false;
+$("#legacy").onclick = () => { showLegacy = !showLegacy; $("#legacy").classList.toggle("on", showLegacy); if (model) render(); };
 // records on OBS main with main's own recording settings; the server stops it when the disk is nearly full
 let recOn = false;
 $("#rec").onclick = () => send({ t: "rec", on: !recOn });

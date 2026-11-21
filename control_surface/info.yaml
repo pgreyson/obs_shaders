@@ -12,6 +12,8 @@
 #   instances extra note for one filter on one source ("source/filter")
 #   layers    text for the scene items of the program scene
 
+# `legacy: true` on a tab or a stage: replaced / test-only filters. The pages hide them (the
+# control page has a "Legacy" pill that shows them again; the viewer's overlay never shows them).
 tabs:
   - id: synth
     title: Synth
@@ -23,18 +25,20 @@ tabs:
 
       Filters run top to bottom in the order shown. Each enabled shader pass costs roughly 4 ms of the 33 ms frame, so unused filters should be switched off, not left neutral. Watch the render time in the top bar while toggling.
     stages:
-      - title: Input
+      - title: Input (test pattern, SBS input mode)
+        legacy: true
         filters: [test pattern, sbs align]
       - title: Colour (also shapes depth)
         filters: [synth color]
       - title: Depth field
         filters: [depth bake, field smooth h, field smooth v]
       - title: Stereo render
-        filters: [stereo splat, stereo displace]
+        filters: [stereo splat]
       - title: After the stereo render
         filters: [stereo soften, pillar box]
       - title: Replaced (kept off for rollback)
-        filters: [synth color OLD, palette]
+        legacy: true
+        filters: [synth color OLD, palette, stereo displace]
 
   - id: stage
     title: Stage camera
@@ -47,6 +51,7 @@ tabs:
       - title: Camera (alignment, key and look in one pass)
         filters: [camera]
       - title: Replaced (kept off for rollback)
+        legacy: true
         filters: [sbs align, camera key, camera out]
 
   - id: room
@@ -60,6 +65,7 @@ tabs:
       - title: Camera (alignment, key and look in one pass)
         filters: [camera]
       - title: Replaced (kept off for rollback)
+        legacy: true
         filters: [sbs align, camera key, camera out]
 
   - id: program
@@ -70,6 +76,9 @@ tabs:
       The program scene "Scene" is the mix of all layers. Its output feeds the Viture glasses and the OBS Virtual Camera, which the Twitch, YouTube and projector instances pick up. Filters here act on the finished mix, after every layer, and are carried by all outputs.
     stages:
       - title: Whole-program stereo
+        filters: []
+      - title: Replaced (kept off)
+        legacy: true
         filters: [display zero, stereo window]
 
   - id: audio
@@ -84,6 +93,7 @@ tabs:
   - id: bench
     title: Test bench
     source: Test Pattern
+    legacy: true
     info: |
       "Test Pattern" is a still image layer in the program scene (normally hidden, see Program > Layers) with its own copy of the synth depth chain. It is the bench for checking the depth and splat stages against the reference renderer on a known picture, without the live synth.
 

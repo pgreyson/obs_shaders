@@ -374,11 +374,13 @@ function makeRows() {
   });
   model.tabs.forEach(function (tab) {
     var tid = 't/' + tab.id, any = false;
-    tab.stages.forEach(function (st) { st.filters.forEach(function (f) { if (f.params.length) any = true; }); });
+    if (tab.legacy) return;             // test bench, replaced filters: full control page only
+    var stages = tab.stages.filter(function (st) { return !st.legacy; });
+    stages.forEach(function (st) { st.filters.forEach(function (f) { if (f.params.length) any = true; }); });
     if (!any) return;
     out.push(fold(tid, tab.title, 0, tab.title));
     if (!open[tid]) return;
-    tab.stages.forEach(function (st) { st.filters.forEach(function (f) {
+    stages.forEach(function (st) { st.filters.forEach(function (f) {
       if (!f.params.length) return;
       var fid = tid + '/' + f.name, path = tab.title + ' · ' + f.name, c = { tab: tab, f: f };
       out.push(fold(fid, f.name, 1, path, f));

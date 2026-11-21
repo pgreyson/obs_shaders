@@ -164,6 +164,10 @@ buttons (up and down also own the corners above and below the picture; hold to r
 anywhere else scrolls the list; on the right there are no buttons and a drag anywhere is the slider
 for the highlighted control. Switches are not on the slider: the middle button flips them. The header shows the viewer's frame rate, and the last row of the list, *Full controls*, opens the full control page (followed by *Full screen* where the browser supports it). A single tap does nothing; the old bottom bar is gone. Faint until used.
 
+**Legacy filters:** stages and tabs marked `legacy: true` in `control_surface/info.yaml` (replaced
+filters kept off for rollback, the retired renderers, the test pattern and the Test bench tab) are
+hidden. The control page's **Legacy** pill shows them again; the stereo overlay never lists them.
+
 **Record:** the control page's header has a **Record** pill, and the stereo overlay a *Record* row
 near the end of its list (middle button flips it; a red dot shows by the frame rate while it runs).
 Both start and stop recording on OBS main with main's own recording settings and folder, and show

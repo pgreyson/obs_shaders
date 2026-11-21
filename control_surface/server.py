@@ -286,13 +286,13 @@ class Surface:
                 fs = [f for f in fl if f["name"] in stg["filters"]]
                 fs.sort(key=lambda f: f["pos"])
                 placed.update(f["name"] for f in fs)
-                if fs:
-                    stages.append({"title": stg["title"], "filters": fs})
+                if fs or not stg["filters"]:      # an empty stage is a slot for a virtual control
+                    stages.append({"title": stg["title"], "filters": fs, "legacy": bool(stg.get("legacy"))})
             rest = [f for f in fl if f["name"] not in placed]
             if rest:
                 stages.append({"title": "Other", "filters": rest})
             tabs.append({"id": t["id"], "title": t["title"], "source": src, "info": t.get("info", ""),
-                         "stages": stages, "layers": bool(t.get("layers")),
+                         "stages": stages, "layers": bool(t.get("layers")), "legacy": bool(t.get("legacy")),
                          "layer": next((l["id"] for l in layers if l["name"] == src), None)})
         for src, fl in by_source.items():
             if src not in used:
@@ -317,12 +317,15 @@ class Surface:
             card = {"name": v["name"], "kind": "virtual", "virtual": True, "on": True, "pos": 0, "of": 0,
                     "file": "", "info": v.get("info", ""), "note": "", "header": "", "params": [p],
                     "values": values[key]}
-            if tab["stages"]:
-                tab["stages"][0]["filters"].insert(0, card)
+            live = [s for s in tab["stages"] if not s.get("legacy")]
+            if live:
+                live[0]["filters"].insert(0, card)
             else:
-                tab["stages"].append({"title": "Whole program", "filters": [card]})
+                tab["stages"].insert(0, {"title": "Whole program", "filters": [card]})
         self.schema, self.values = schema, values
         self.fast = {k for k, sch in schema.items() if any("cv" in p for p in sch.values())}
+        for tab in tabs:                               # stage slots that stayed empty
+            tab["stages"] = [s for s in tab["stages"] if s["filters"]]
         essential = set(info.get("essential") or [])   # filters whose OFF state shows the raw source
         for tab in tabs:
             for stg in tab["stages"]:
