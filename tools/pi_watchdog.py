@@ -42,9 +42,8 @@ PIS = {  # OBS input name -> Pi web console host (last known; refreshed by MAC, 
     # WiFi "rofo" since 2026-11-17 (192.168.50.x, DHCP: addresses drift without a router
     # reservation: stage went .19 -> .105 on 2026-11-18). Old network: stage 10.0.1.38, room 10.0.1.45.
     "StereoPi stage": "192.168.50.105",
-    # room: has not joined "rofo" (seen only at a self-assigned 169.254 address), so it cannot
-    # be rebooted from here until its WiFi settings are updated.
-    "StereoPi room": "192.168.50.0",
+    # room: on "rofo" since 2026-11-20; its address has drifted too (.106 -> .64 the same day).
+    "StereoPi room": "192.168.50.64",
 }
 MACS = {
     "StereoPi stage": "dc:a6:32:ff:13:9c",
