@@ -158,10 +158,8 @@ list of named controls hard against the left edge of each eye's picture, so it f
 panel in a phone stereo viewer. Its depth is the *Overlay depth* row at the top of the list (one collapsible tree: tab > filter >
 section > control; set it through the viewer; it starts at the rig's global zero). The list is a picker
 wheel: the row on the centre line is the highlighted one. Sections start collapsed. The overlay
-hides for as long as the right thumb is down (except on *Overlay depth*). The list is drawn in both eyes at the far left; the three buttons (up / select / down) are touch areas only, not drawn. Touch goes by screen half: on the left, the far-left strip is the three
-buttons (up and down also own the corners above and below the picture; hold to repeat) and a drag
-anywhere else scrolls the list; on the right there are no buttons and a drag anywhere is the slider
-for the highlighted control. Switches are not on the slider: the middle button flips them. The header shows the viewer's frame rate, and the last row of the list, *Full controls*, opens the full control page (followed by *Full screen* where the browser supports it). A single tap does nothing; the old bottom bar is gone. Faint until used.
+hides for as long as the right thumb is down (except on *Overlay depth*). The list is drawn in both eyes at the far left. Touch goes by screen half: on the left a drag anywhere scrolls the list and taps do nothing; on the right a drag anywhere is the slider
+for the highlighted control, a single tap acts on it (opens a section, flips a switch, next option) and a double tap hides the overlay. Switches are not on the slider: a right-hand tap flips them. The header shows the viewer's frame rate, and the last row of the list, *Full controls*, opens the full control page (followed by *Full screen* where the browser supports it). A single tap does nothing; the old bottom bar is gone. Faint until used.
 
 **Legacy filters:** stages and tabs marked `legacy: true` in `control_surface/info.yaml` (replaced
 filters kept off for rollback, the retired renderers, the test pattern and the Test bench tab) are

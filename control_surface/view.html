@@ -605,57 +605,42 @@ function scrollTo(y) {                  // follow a drag; the row on the centre 
   if (best !== cursor) setCursor(best, false);
 }
 
-// ---- the two touch zones
-// which button a touch in the left zone is on: 0 up, 1 select, 2 down, or -1 for none. The
-// buttons reach from the screen's left edge to the right edge of the left eye's button
-// column, and split the full screen height in thirds of the picture (so up and down also
-// own the corners above and below the picture).
-function buttonAt(x, y) {
-  var col = navs[0].getBoundingClientRect(), r = hud.getBoundingClientRect();
-  if (x > col.right) return -1;
-  var t = (y - r.top) / (r.height || 1);
-  return t < 1 / 3 ? 0 : t > 2 / 3 ? 2 : 1;
-}
-function press(b) {
-  for (var k = 0; k < 2; k++) (function (d) {
-    d.classList.add('press');
-    setTimeout(function () { d.classList.remove('press'); }, 140);
-  })(navs[k].children[b]);
-  if (b === 0) setCursor(step(cursor, -1), true);
-  else if (b === 2) setCursor(step(cursor, 1), true);
-  else activate(rows[cursor]);
-}
-(function () {                          // left zone
-  var y0 = 0, off0 = 0, down = false, moved = false, btn = -1, rep = null;
-  function stopRep() { clearTimeout(rep); clearInterval(rep); rep = null; }
+// ---- the two touch zones (2026-11-21)
+// Left half: only a drag, which scrolls the list (the row on the centre line is the
+// highlight). Taps there do nothing. Right half: drag = slider for the highlighted row,
+// single tap = act on it (open / close a section, flip a switch, next option), double tap =
+// hide the overlay. A single tap waits a moment to see whether a second one follows.
+(function () {                          // left zone: scroll only
+  var y0 = 0, off0 = 0, down = false, moved = false;
   ls.addEventListener('pointerdown', function (e) {
     e.preventDefault(); wake();
     try { ls.setPointerCapture(e.pointerId); } catch (err) {}
     down = true; moved = false; y0 = e.clientY; off0 = offY;
-    btn = buttonAt(e.clientX, e.clientY);
-    if (btn >= 0) {
-      press(btn);
-      if (btn !== 1) rep = setTimeout(function () {       // held: keep stepping
-        rep = setInterval(function () { wake(); press(btn); }, 170);
-      }, 450);
-    }
   });
   ls.addEventListener('pointermove', function (e) {
-    if (!down || btn >= 0) return;
+    if (!down) return;
     var dy = e.clientY - y0;
     if (!moved && Math.abs(dy) < 6) return;
     moved = true; wake();
     scrollTo(off0 + dy);
   });
   function end() {
-    stopRep();
     stripUp = Date.now();
-    if (down && btn < 0) { if (moved) setCursor(cursor, true); else tap(); }
+    if (down && moved) setCursor(cursor, true);      // settle the highlight on the centre line
     down = false;
   }
   ls.addEventListener('pointerup', end);
-  ls.addEventListener('pointercancel', function () { stopRep(); if (down && btn < 0 && moved) setCursor(cursor, true); down = false; });
+  ls.addEventListener('pointercancel', end);
 })();
+var rtapT = null;
+function rightTap() {
+  if (rtapT) {                          // second tap in time: hide the overlay
+    clearTimeout(rtapT); rtapT = null;
+    hudOn = false; applyHud();
+    return;
+  }
+  rtapT = setTimeout(function () { rtapT = null; wake(); activate(rows[cursor]); }, 280);
+}
 var grab = null;
 (function () {                          // right zone: one slider, wherever the thumb lands
   var y0 = 0, down = false, moved = false;
@@ -681,7 +666,7 @@ var grab = null;
   });
   function end(isTap) {
     stripUp = Date.now();
-    if (down && !moved && isTap) tap();
+    if (down && !moved && isTap) rightTap();
     down = false; grab = null;
     hud.classList.remove('adjust'); wake();
   }
