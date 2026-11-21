@@ -49,7 +49,21 @@
   .eye { position: absolute; top: 0; height: 100%; width: 50%; overflow: hidden; }
   #eyeL { left: 0; --dx: calc(var(--pop) / 2); }
   #eyeR { left: 50%; --dx: calc(var(--pop) / -2); }
-  .panel { position: absolute; left: calc(var(--base) + var(--dx)); top: 4%; bottom: 4%; width: 40%; pointer-events: auto;
+  /* per eye, left to right: nav column (up / select / down), the list, ... , the slider at
+     the right edge. All of it is drawn in both eyes at the same depth; the left thumb uses
+     the left eye's nav column, the right thumb the right eye's slider. */
+  .nav, .vs { position: absolute; top: 4%; bottom: 4%; width: 9%; pointer-events: auto; touch-action: none;
+              border-radius: .4em; background: rgba(0, 0, 0, .30); color: #d8dce6; opacity: .42; transition: opacity .6s; }
+  #hud.live .nav, #hud.live .vs { opacity: 1; transition: opacity .1s; background: rgba(0, 0, 0, .55); }
+  .nav { left: calc(var(--base) + var(--dx)); display: flex; flex-direction: column; }
+  .nav div { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 1.5em; }
+  .nav div + div { border-top: 1px solid rgba(255, 255, 255, .14); }
+  .vs { right: calc(var(--base) - var(--dx)); }
+  .vs .track { position: absolute; left: 50%; top: 9%; bottom: 9%; width: 2px; margin-left: -1px;
+               background: rgba(255, 255, 255, .30); }
+  .vs .knob { position: absolute; left: 50%; width: 1.5em; height: 1.5em; margin: -.75em 0 0 -.75em; border-radius: 50%;
+              background: rgba(120, 165, 255, .95); display: none; }
+  .panel { position: absolute; left: calc(var(--base) + var(--dx) + 10%); top: 4%; bottom: 4%; width: 38%; pointer-events: auto;
            display: flex; flex-direction: column; border-radius: .4em; overflow: hidden;
            background: rgba(0, 0, 0, .30); color: #d8dce6; opacity: .42; transition: opacity .6s; }
   #hud.live .panel { opacity: 1; transition: opacity .1s; background: rgba(0, 0, 0, .55); }
@@ -69,10 +83,6 @@
            width: max(48px, calc((var(--sw) - min(var(--w), var(--sw), var(--sh) * 32 / 9)) / 2)); }
   body.hud .strip { display: block; }
   #ls { left: 0; } #rs { right: 0; }
-  #track { position: absolute; left: 50%; top: 14%; bottom: 14%; width: 2px; margin-left: -1px;
-           background: rgba(255, 255, 255, .10); display: none; }
-  #knob { position: absolute; left: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%;
-          background: rgba(150, 180, 255, .45); }
   body:not(.hud) .hudonly { display: none; }
   /* The control page opens inside this page (no navigation), so a Home Screen web app keeps
      running without iOS adding its browser bar. */
@@ -89,11 +99,11 @@
 <div class="guide" id="gl"></div><div class="guide" id="gr"></div>
 <img id="pic" alt="">
 <div id="hud">
-  <div class="eye" id="eyeL"><div class="panel"><div class="phead"></div><div class="plist"></div></div></div>
-  <div class="eye" id="eyeR"><div class="panel"><div class="phead"></div><div class="plist"></div></div></div>
+  <div class="eye" id="eyeL"><div class="nav"><div>&#9650;</div><div>&#9679;</div><div>&#9660;</div></div><div class="panel"><div class="phead"></div><div class="plist"></div></div><div class="vs"><div class="track"><div class="knob"></div></div></div></div>
+  <div class="eye" id="eyeR"><div class="nav"><div>&#9650;</div><div>&#9679;</div><div>&#9660;</div></div><div class="panel"><div class="phead"></div><div class="plist"></div></div><div class="vs"><div class="track"><div class="knob"></div></div></div></div>
 </div>
 <div class="strip" id="ls"></div>
-<div class="strip" id="rs"><div id="track"><div id="knob"></div></div></div>
+<div class="strip" id="rs"></div>
 <div id="bar">
   <button id="full">Full screen</button>
   <button id="overlay">Overlay</button>
@@ -118,7 +128,7 @@ function showUi(on) {
   if (on) hideTimer = setTimeout(function () { showUi(false); }, 5000);
 }
 document.addEventListener('click', function (e) {
-  if (e.target.closest && e.target.closest('.panel, .strip')) return;
+  if (e.target.closest && e.target.closest('.panel, .strip, .nav, .vs')) return;
   if (!bar.contains(e.target)) showUi(!document.body.classList.contains('ui'));
 });
 bar.onclick = function () { showUi(true); };
@@ -215,7 +225,7 @@ window.addEventListener('message', function (e) {
 var hud = document.getElementById('hud'), overlayBtn = document.getElementById('overlay');
 var heads = hud.querySelectorAll('.phead'), lists = hud.querySelectorAll('.plist');
 var ls = document.getElementById('ls'), rs = document.getElementById('rs'),
-    track = document.getElementById('track'), knob = document.getElementById('knob');
+    navs = hud.querySelectorAll('.nav'), sliders = hud.querySelectorAll('.vs'), knobs = hud.querySelectorAll('.knob');
 var hudOn = false, cws = null, model = null, picking = false, sel = null, rows = [], cursor = 0,
     liveT = null, trim = 0, lastKey = {};
 try {
@@ -348,8 +358,10 @@ function paint(r) {
 }
 function paintKnob() {
   var f = rows[cursor] ? frac(rows[cursor]) : null;
-  track.style.display = f === null ? 'none' : 'block';
-  if (f !== null) knob.style.top = ((1 - f) * 100) + '%';
+  for (var k = 0; k < 2; k++) {
+    knobs[k].style.display = f === null ? 'none' : 'block';
+    if (f !== null) knobs[k].style.top = ((1 - f) * 100) + '%';
+  }
 }
 function setCursor(i, scroll) {
   if (!rows[i] || rows[i].kind === 'sect') return;
@@ -458,6 +470,7 @@ function strip(node, onStart, onMove, onTap) {
   var y0 = 0, down = false, moved = false;
   node.addEventListener('pointerdown', function (e) {
     down = true; moved = false; y0 = e.clientY;
+    e.stopPropagation();
     try { node.setPointerCapture(e.pointerId); } catch (err) {}
     wake(); onStart();
     e.preventDefault();
@@ -468,19 +481,34 @@ function strip(node, onStart, onMove, onTap) {
     if (!moved && Math.abs(dy) < 6) return;
     moved = true; wake(); onMove(dy);
   });
-  function end() { if (down && !moved) onTap(); down = false; }
+  function end() { if (down && !moved) onTap(y0); down = false; }
   node.addEventListener('pointerup', end);
   node.addEventListener('pointercancel', function () { down = false; });
 }
+// Left side (the nav column in either eye, and the black margin beside it): drag = move the
+// highlight one row per 30 points; tap the top third = up one, bottom third = down one,
+// middle = act on the highlighted row (open, flip, next option).
 var c0 = 0, grab = null;
-strip(ls, function () { c0 = cursor; }, function (dy) {
-  var n = Math.round(dy / 30), i = c0, dir = n > 0 ? 1 : -1;      // one row per 30 points
-  for (var k = 0; k < Math.abs(n); k++) i = step(i, dir);
-  if (i !== cursor) setCursor(i, true);
-}, function () { activate(rows[cursor]); });
-strip(rs, function () { var r = rows[cursor]; grab = r && r.kind !== 'nav' && r.kind !== 'sect' ? { r: r, v0: grabValue(r) } : null; },
-      function (dy) { if (grab) slide(grab.r, grab.v0, dy); },
-      function () { var r = rows[cursor]; if (r && r.kind !== 'nav') activate(r); });
+function navTap(y) {
+  var r = hud.getBoundingClientRect(), t = (y - r.top) / (r.height || 1);
+  if (t < 0.36) setCursor(step(cursor, -1), true);
+  else if (t > 0.64) setCursor(step(cursor, 1), true);
+  else activate(rows[cursor]);
+}
+[ls, navs[0], navs[1]].forEach(function (n) {
+  strip(n, function () { c0 = cursor; }, function (dy) {
+    var k = Math.round(dy / 30), i = c0, dir = k > 0 ? 1 : -1;
+    for (var j = 0; j < Math.abs(k); j++) i = step(i, dir);
+    if (i !== cursor) setCursor(i, true);
+  }, navTap);
+});
+// Right side (the slider in either eye, and the black margin beside it): one vertical slider
+// for the highlighted row; a tap flips a switch or steps an option.
+[rs, sliders[0], sliders[1]].forEach(function (n) {
+  strip(n, function () { var r = rows[cursor]; grab = r && r.kind !== 'nav' && r.kind !== 'sect' ? { r: r, v0: grabValue(r) } : null; },
+        function (dy) { if (grab) slide(grab.r, grab.v0, dy); },
+        function () { var r = rows[cursor]; if (r && r.kind !== 'nav') activate(r); });
+});
 
 function cconnect() {
   if (!hudOn || (cws && cws.readyState < 2)) return;

@@ -156,9 +156,11 @@ the surface has no login, so reach it from outside through a VPN (e.g. Tailscale
 **Stereo overlay:** the viewer's tap bar has an **Overlay** button. It draws one narrow, translucent
 list of named controls hard against the left edge of each eye's picture, so it fuses into a single
 panel in a phone stereo viewer. Its depth follows the rig's global zero (the panel sits where the
-picture is); *Overlay nearer / farther* in the bar trim it. Thumbs stay outside the pictures: the
-black margin on the left moves the highlight (drag) and acts on it (tap: open, flip, next option);
-the margin on the right is one vertical slider for the highlighted control. Faint until used.
+picture is); *Overlay nearer / farther* in the bar trim it. Everything is drawn in both eyes:
+a nav column left of the list (tap up / select / down, or drag to move the highlight) for the left
+thumb on the left eye's copy, and one vertical slider at the right edge of each eye for the right
+thumb on the right eye's copy; it changes the highlighted control. The black margins beside them
+take the same touches. Faint until used.
 
 **HTTPS:** the same pages are on `https://Pauls-Mac-mini.local:8443/` (and the IP), for phones with
 Safari's HTTPS-only setting and for Home Screen icons. The certificate comes from a local authority
