@@ -153,6 +153,11 @@ well under a second of delay (JPEG frames sent over one WebSocket from a relay i
 frames are grabbed only while a viewer is open). Full screen, both eyes, nothing over the picture; two fixed dark guide lines at the centre for aligning a phone stereo viewer; on a phone the picture is fixed at 86.5 % of the screen width for a Cardboard-type viewer; tap for the bar (Full screen, Controls). LAN only:
 the surface has no login, so reach it from outside through a VPN (e.g. Tailscale), never a port forward.
 
+**Stereo overlay:** the viewer's tap bar has an **Overlay** button. It draws one narrow, translucent
+control panel in each eye's picture (6 pt nearer than the screen plane), so it fuses into a single
+panel in a phone stereo viewer. Header: tap the name to choose a filter or toggle layers, on/off on
+the right. Rows: drag sideways to change a number, tap a switch or option. Faint until touched.
+
 **HTTPS:** the same pages are on `https://Pauls-Mac-mini.local:8443/` (and the IP), for phones with
 Safari's HTTPS-only setting and for Home Screen icons. The certificate comes from a local authority
 in `control_surface/certs/` (gitignored; server certificate valid 397 days, names: the `.local` host

@@ -35,6 +35,37 @@
   button.on { background: #2d5fd0; border-color: #2d5fd0; color: #fff; }
   #stat { margin-left: auto; color: #8a93a6; font-variant-numeric: tabular-nums; }
   #stat.bad { color: #ff8a70; }
+  /* Stereo control overlay: the same narrow panel drawn once in each eye's picture, so through
+     a phone stereo viewer it fuses into one panel. The two copies are offset towards each
+     other by --pop, which floats the panel just in front of the screen plane. Faint until
+     touched. Either copy takes touches. */
+  #hud { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 2; display: none;
+         width: min(var(--w), var(--sw), calc(var(--sh) * 32 / 9)); aspect-ratio: 32 / 9; pointer-events: none;
+         --ew: 400px; --pop: 6px; font-size: calc(var(--ew) * 0.029); }
+  body.hud #hud { display: block; }
+  .eye { position: absolute; top: 0; height: 100%; width: 50%; overflow: hidden; }
+  #eyeL { left: 0; --dx: calc(var(--pop) / 2); }
+  #eyeR { left: 50%; --dx: calc(var(--pop) / -2); }
+  .panel { position: absolute; left: calc(3% + var(--dx)); top: 5%; bottom: 5%; width: 45%; pointer-events: auto;
+           display: flex; flex-direction: column; border-radius: .5em; overflow: hidden;
+           background: rgba(0, 0, 0, .30); color: #d8dce6; opacity: .42; transition: opacity .6s; }
+  #hud.live .panel { opacity: 1; transition: opacity .1s; background: rgba(0, 0, 0, .55); }
+  .phead { display: flex; align-items: center; gap: .4em; padding: .45em .6em; flex: none;
+           border-bottom: 1px solid rgba(255, 255, 255, .16); font-weight: 600; }
+  .phead .name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .phead .onoff { flex: none; padding: .1em .55em; border-radius: 1em; border: 1px solid rgba(255, 255, 255, .35);
+                  font-weight: 400; font-size: .9em; }
+  .phead .onoff.on { background: rgba(70, 130, 255, .75); border-color: transparent; color: #fff; }
+  .plist { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+  .prow { position: relative; display: flex; align-items: baseline; gap: .5em; padding: .5em .6em .55em;
+          touch-action: pan-y; border-bottom: 1px solid rgba(255, 255, 255, .07); }
+  .prow .lab { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .prow .val { flex: none; font-variant-numeric: tabular-nums; color: #fff; }
+  .prow .fill { position: absolute; left: 0; bottom: 0; height: 2px; background: rgba(110, 160, 255, .9); }
+  .prow.hot { background: rgba(70, 130, 255, .28); }
+  .prow.dim { color: #8a90a0; }
+  .prow.sect { font-size: .82em; letter-spacing: .06em; text-transform: uppercase; color: #9aa2b6;
+               padding-top: .7em; border-bottom: 0; }
   /* The control page opens inside this page (no navigation), so a Home Screen web app keeps
      running without iOS adding its browser bar. */
   #ctlwrap { position: fixed; inset: 0; z-index: 5; background: #0e1013; display: none; }
@@ -49,8 +80,13 @@
 <div id="root">
 <div class="guide" id="gl"></div><div class="guide" id="gr"></div>
 <img id="pic" alt="">
+<div id="hud">
+  <div class="eye" id="eyeL"><div class="panel"><div class="phead"></div><div class="plist"></div></div></div>
+  <div class="eye" id="eyeR"><div class="panel"><div class="phead"></div><div class="plist"></div></div></div>
+</div>
 <div id="bar">
   <button id="full">Full screen</button>
+  <button id="overlay">Overlay</button>
   <button id="controls">Controls</button>
   <span id="stat">connecting…</span>
 </div>
@@ -70,6 +106,7 @@ function showUi(on) {
   if (on) hideTimer = setTimeout(function () { showUi(false); }, 5000);
 }
 document.addEventListener('click', function (e) {
+  if (e.target.closest && e.target.closest('.panel')) return;
   if (!bar.contains(e.target)) showUi(!document.body.classList.contains('ui'));
 });
 bar.onclick = function () { showUi(true); };
@@ -157,6 +194,222 @@ window.addEventListener('message', function (e) {
   paused = false;
   if (pending) { pending = null; ask(); }
 });
+
+// ---------------------------------------------------------------- stereo control overlay
+// One list of controls, drawn in both eye pictures (see the CSS). It talks to the same server
+// connection as the control page: header = which filter (tap to choose) and its on/off;
+// rows = that filter's parameters. Drag a row sideways to change a number, tap to flip a
+// switch or step through options, scroll the list up and down as usual.
+var hud = document.getElementById('hud'), overlayBtn = document.getElementById('overlay');
+var heads = hud.querySelectorAll('.phead'), lists = hud.querySelectorAll('.plist');
+var hudOn = false, cws = null, model = null, picking = false, sel = null, rowUpd = {}, liveT = null;
+try { hudOn = localStorage.getItem('hud') === '1'; sel = JSON.parse(localStorage.getItem('hudsel') || 'null'); } catch (e) {}
+
+function sizeHud() { hud.style.setProperty('--ew', (hud.clientWidth / 2 || 400) + 'px'); }
+window.addEventListener('resize', sizeHud);
+
+function wake() {                       // full strength while in use, fades 2.5 s after
+  hud.classList.add('live');
+  clearTimeout(liveT);
+  liveT = setTimeout(function () { hud.classList.remove('live'); }, 2500);
+}
+hud.addEventListener('pointerdown', wake, true);
+hud.addEventListener('scroll', wake, true);
+
+function csend(m) { if (cws && cws.readyState === 1) cws.send(JSON.stringify(m)); }
+
+function eachFilter(fn) {
+  model.tabs.forEach(function (tab) {
+    tab.stages.forEach(function (st) { st.filters.forEach(function (f) { fn(tab, f); }); });
+  });
+}
+function current() {
+  var hit = null, first = null;
+  eachFilter(function (tab, f) {
+    if (!first && f.on && f.params.length) first = { tab: tab, f: f };
+    if (sel && tab.id === sel.tab && f.name === sel.f) hit = { tab: tab, f: f };
+  });
+  return hit || first;
+}
+function decimals(p) {
+  var st = p.step || (p.max - p.min) / 200;
+  return p.type === 'int' || st >= 1 ? 0 : st >= 0.1 ? 1 : st >= 0.01 ? 2 : 3;
+}
+function valueOf(f, p) { var v = f.values ? f.values[p.key] : undefined; return v === undefined || v === null ? p['default'] : v; }
+function show(f, p) {
+  var v = valueOf(f, p);
+  if (p.type === 'bool') return v ? 'on' : 'off';
+  if (p.options) return p.options[String(Math.round(v))] || String(v);
+  return typeof v === 'number' ? v.toFixed(decimals(p)) : String(v);
+}
+function el(cls, text) { var d = document.createElement('div'); d.className = cls; if (text !== undefined) d.textContent = text; return d; }
+function both(fn) { for (var i = 0; i < 2; i++) fn(heads[i], lists[i], i); }
+
+function paramRow(c, p, list) {
+  var row = el('prow'), lab = el('lab', p.label || p.key), val = el('val'), fill = el('fill');
+  row.appendChild(lab); row.appendChild(val);
+  var numeric = p.type !== 'bool' && !p.options && typeof p.min === 'number' && typeof p.max === 'number';
+  if (numeric) row.appendChild(fill);
+  function paint() {
+    val.textContent = show(c.f, p);
+    if (numeric) fill.style.width = Math.max(0, Math.min(1, (valueOf(c.f, p) - p.min) / ((p.max - p.min) || 1))) * 100 + '%';
+  }
+  (rowUpd[p.key] = rowUpd[p.key] || []).push({ paint: paint, row: row });
+  paint();
+  function put(v) {
+    c.f.values = c.f.values || {};
+    c.f.values[p.key] = v;
+    rowUpd[p.key].forEach(function (u) { u.paint(); });
+    queue(c, p, v);
+  }
+  if (!numeric) {
+    row.onclick = function () {
+      var v = valueOf(c.f, p);
+      if (p.type === 'bool') put(!v);
+      else {
+        var keys = Object.keys(p.options).map(Number).sort(function (a, b) { return a - b; });
+        put(keys[(keys.indexOf(Math.round(v)) + 1) % keys.length]);
+      }
+    };
+    return row;
+  }
+  // sideways drag: the full range is 1.5 panel widths, relative to where the value was
+  var x0 = 0, y0 = 0, v0 = 0, drag = false, down = false;
+  function hot(on) { rowUpd[p.key].forEach(function (u) { u.row.classList.toggle('hot', on); }); }
+  row.addEventListener('pointerdown', function (e) { down = true; drag = false; x0 = e.clientX; y0 = e.clientY; v0 = +valueOf(c.f, p); });
+  row.addEventListener('pointermove', function (e) {
+    if (!down) return;
+    var dx = e.clientX - x0, dy = e.clientY - y0;
+    if (!drag) {
+      if (Math.abs(dx) < 6 || Math.abs(dx) < Math.abs(dy)) return;
+      drag = true; hot(true);
+      try { row.setPointerCapture(e.pointerId); } catch (err) {}
+      x0 = e.clientX; dx = 0;
+    }
+    wake();
+    var v = v0 + dx / (list.clientWidth * 1.5) * (p.max - p.min), st = p.step || 0;
+    if (p.type === 'int') st = Math.max(1, st);
+    if (st) v = Math.round(v / st) * st;
+    v = Math.max(p.min, Math.min(p.max, +v.toFixed(6)));
+    if (v !== valueOf(c.f, p)) put(v);
+  });
+  function end() { down = false; if (drag) { drag = false; hot(false); } }
+  row.addEventListener('pointerup', end);
+  row.addEventListener('pointercancel', end);
+  return row;
+}
+
+// at most one write per parameter every 33 ms, always the newest value
+var outQ = {}, outT = null;
+function queue(c, p, v) {
+  outQ[c.tab.source + '\n' + c.f.name + '\n' + p.key] = { t: 'set', s: c.tab.source, f: c.f.name, k: p.key, v: v };
+  if (!outT) outT = setTimeout(function () {
+    outT = null;
+    var q = outQ; outQ = {};
+    Object.keys(q).forEach(function (k) { csend(q[k]); });
+  }, 33);
+}
+
+function build() {
+  rowUpd = {};
+  both(function (head, list) { head.innerHTML = ''; list.innerHTML = ''; list.scrollTop = 0; });
+  if (!model) { both(function (head) { head.appendChild(el('name', 'connecting…')); }); return; }
+  if (picking) {
+    both(function (head, list) {
+      var n = el('name', '‹ back');
+      head.appendChild(n);
+      head.onclick = function () { picking = false; build(); };
+      list.appendChild(el('prow sect', 'Layers'));
+      model.layers.forEach(function (l) {
+        var row = el('prow' + (l.on ? '' : ' dim')), val = el('val', l.on ? 'on' : 'off');
+        row.appendChild(el('lab', l.name)); row.appendChild(val);
+        row.onclick = function () { l.on = !l.on; csend({ t: 'item', scene: l.scene, id: l.id, on: l.on }); build(); };
+        list.appendChild(row);
+      });
+      var lastTab = null;
+      eachFilter(function (tab, f) {
+        if (!f.params.length) return;
+        if (tab !== lastTab) { lastTab = tab; list.appendChild(el('prow sect', tab.title)); }
+        var row = el('prow' + (f.on ? '' : ' dim'));
+        row.appendChild(el('lab', f.name)); row.appendChild(el('val', f.on ? '' : 'off'));
+        row.onclick = function () {
+          sel = { tab: tab.id, f: f.name }; picking = false;
+          try { localStorage.setItem('hudsel', JSON.stringify(sel)); } catch (e) {}
+          build();
+        };
+        list.appendChild(row);
+      });
+    });
+    return;
+  }
+  var c = current();
+  if (!c) { both(function (head) { head.appendChild(el('name', 'no filters')); }); return; }
+  both(function (head, list) {
+    var n = el('name', c.tab.title + ' · ' + c.f.name);
+    n.onclick = function () { picking = true; build(); };
+    head.onclick = null;
+    head.appendChild(n);
+    if (!c.f.virtual && !(c.f.essential && c.f.on)) {
+      var sw = el('onoff' + (c.f.on ? ' on' : ''), c.f.on ? 'on' : 'off');
+      sw.onclick = function () { c.f.on = !c.f.on; csend({ t: 'en', s: c.tab.source, f: c.f.name, on: c.f.on }); build(); };
+      head.appendChild(sw);
+    }
+    var section = null;
+    c.f.params.forEach(function (p) {
+      if (p.section && p.section !== section) { section = p.section; list.appendChild(el('prow sect', section)); }
+      list.appendChild(paramRow(c, p, list));
+    });
+  });
+}
+
+// keep the two copies scrolled alike
+var syncing = false;
+both(function (head, list, i) {
+  list.addEventListener('scroll', function () {
+    if (syncing) return;
+    syncing = true;
+    lists[1 - i].scrollTop = list.scrollTop;
+    setTimeout(function () { syncing = false; }, 0);
+  });
+});
+
+function cconnect() {
+  if (!hudOn || (cws && cws.readyState < 2)) return;
+  cws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
+  cws.onmessage = function (e) {
+    var m = JSON.parse(e.data);
+    if (m.t === 'model') { model = m; build(); return; }
+    if (!model) return;
+    if (m.t === 'v') {
+      var c = current();
+      eachFilter(function (tab, f) {
+        if (tab.source !== m.s || f.name !== m.f) return;
+        f.values = f.values || {};
+        Object.keys(m.k).forEach(function (k) {
+          f.values[k] = m.k[k];
+          if (c && c.f === f && !picking && rowUpd[k]) rowUpd[k].forEach(function (u) { u.paint(); });
+        });
+      });
+    } else if (m.t === 'en') {
+      eachFilter(function (tab, f) { if (tab.source === m.s && f.name === m.f) f.on = m.on; });
+      build();
+    } else if (m.t === 'item') {
+      model.layers.forEach(function (l) { if (l.scene === m.scene && l.id === m.id) l.on = m.on; });
+      if (picking) build();
+    }
+  };
+  cws.onclose = function () { cws = null; model = null; if (hudOn) { build(); setTimeout(cconnect, 1500); } };
+}
+
+function applyHud() {
+  document.body.classList.toggle('hud', hudOn);
+  overlayBtn.className = hudOn ? 'on' : '';
+  try { localStorage.setItem('hud', hudOn ? '1' : '0'); } catch (e) {}
+  if (hudOn) { sizeHud(); build(); cconnect(); wake(); }
+  else if (cws) { try { cws.close(); } catch (e) {} }
+}
+overlayBtn.onclick = function () { hudOn = !hudOn; applyHud(); };
+applyHud();
 </script>
 </body>
 </html>
