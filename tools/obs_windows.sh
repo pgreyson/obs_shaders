@@ -7,7 +7,7 @@
 # Needs Accessibility permission for the app that runs it (System Settings > Privacy).
 set -euo pipefail
 case "${1:-minimize}" in minimize) V=true ;; restore) V=false ;; *) echo "usage: $0 minimize|restore"; exit 2 ;; esac
-for pid in $(pgrep -f "OBS[ A-Za-z]*.app/Contents/MacOS/OBS" || true); do
+for pid in $(pgrep -f "OBS[ A-Za-z]*\.app/Contents/MacOS/OBS( |$)" || true); do
   osascript -e "tell application \"System Events\" to tell (first process whose unix id is $pid) to set value of attribute \"AXMinimized\" of (every window whose name contains \"Profile\") to $V" >/dev/null 2>&1 \
     || echo "  could not reach the window of OBS pid $pid (Accessibility permission?)"
 done
