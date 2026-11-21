@@ -49,21 +49,17 @@
   .eye { position: absolute; top: 0; height: 100%; width: 50%; overflow: hidden; }
   #eyeL { left: 0; --dx: calc(var(--pop) / 2); }
   #eyeR { left: 50%; --dx: calc(var(--pop) / -2); }
-  /* per eye, left to right: nav column (up / select / down), the list, ... , the slider at
-     the right edge. All of it is drawn in both eyes at the same depth; the left thumb uses
-     the left eye's nav column, the right thumb the right eye's slider. */
-  .nav, .vs { position: absolute; top: 4%; bottom: 4%; width: 11%; pointer-events: auto; touch-action: none;
-              border-radius: .4em; background: rgba(0, 0, 0, .30); color: #d8dce6; opacity: .42; transition: opacity .6s; }
-  #hud.live .nav, #hud.live .vs { opacity: 1; transition: opacity .1s; background: rgba(0, 0, 0, .55); }
-  .nav { left: calc(var(--base) + var(--dx)); display: flex; flex-direction: column; }
-  .nav div { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 1.5em; }
-  .nav div + div { border-top: 1px solid rgba(255, 255, 255, .14); }
-  .vs { right: calc(var(--base) - var(--dx)); }
-  .vs .track { position: absolute; left: 50%; top: 9%; bottom: 9%; width: 2px; margin-left: -1px;
-               background: rgba(255, 255, 255, .30); }
-  .vs .knob { position: absolute; left: 50%; width: 1.5em; height: 1.5em; margin: -.75em 0 0 -.75em; border-radius: 50%;
-              background: rgba(120, 165, 255, .95); display: none; }
-  .panel { position: absolute; left: calc(var(--base) + var(--dx) + 12%); top: 4%; bottom: 4%; width: 38%; pointer-events: auto;
+  /* per eye, left to right: three big buttons (up / select / down), then the list. Drawn in
+     both eyes at the same depth; touches are taken by two invisible zones (below), not by
+     these elements. */
+  .nav { position: absolute; top: 0; bottom: 0; width: 16%; left: calc(var(--base) + var(--dx));
+         display: flex; flex-direction: column; gap: 3%; color: #e6e9f2; opacity: .5; transition: opacity .6s; }
+  #hud.live .nav { opacity: 1; transition: opacity .1s; }
+  .nav div { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 2.3em;
+             border-radius: .25em; background: rgba(0, 0, 0, .40); border: 1px solid rgba(255, 255, 255, .28); }
+  #hud.live .nav div { background: rgba(0, 0, 0, .62); }
+  .nav div.press { background: rgba(70, 130, 255, .8) !important; }
+  .panel { position: absolute; left: calc(var(--base) + var(--dx) + 17.5%); top: 0; bottom: 0; width: 43%;
            display: flex; flex-direction: column; border-radius: .4em; overflow: hidden;
            background: rgba(0, 0, 0, .30); color: #d8dce6; opacity: .42; transition: opacity .6s; }
   #hud.live .panel { opacity: 1; transition: opacity .1s; background: rgba(0, 0, 0, .55); }
@@ -71,10 +67,10 @@
            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* The list works like a picker wheel: the row on the centre line is the highlighted one,
      however it got there (scrolling, or the up / down buttons). */
-  .pwin { flex: 1; position: relative; overflow: hidden; touch-action: none; }
+  .pwin { flex: 1; position: relative; overflow: hidden; }
   .plist { position: absolute; left: 0; right: 0; top: 0; will-change: transform; }
   /* while the right-hand slider is being dragged the whole overlay gets out of the way */
-  #hud.adjust .panel, #hud.adjust .nav, #hud.adjust .vs { opacity: 0 !important; transition: opacity .15s; }
+  #hud.adjust .panel, #hud.adjust .nav { opacity: 0 !important; transition: opacity .15s; }
   .prow { position: relative; display: flex; align-items: baseline; gap: .5em; padding: .8em .6em .85em;
           border-bottom: 1px solid rgba(255, 255, 255, .07); }
   .prow .lab { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -82,13 +78,15 @@
   .prow .fill { position: absolute; left: 0; bottom: 0; height: 2px; background: rgba(110, 160, 255, .9); }
   .prow.cur { background: rgba(70, 130, 255, .34); color: #fff; }
   .prow.dim { color: #8a90a0; }
-  .prow.sect { letter-spacing: .05em; text-transform: uppercase; color: #aab2c6; }
+  .prow.sect { color: #aab2c6; }
   .prow.sect.cur { color: #fff; }
-  .prow.l1 { padding-left: 1.4em; } .prow.l2 { padding-left: 2.2em; } .prow.l3 { padding-left: 3em; }
-  .strip { position: fixed; top: 0; bottom: 0; z-index: 2; display: none; touch-action: none;
-           width: max(48px, calc((var(--sw) - min(var(--w), var(--sw), var(--sh) * 32 / 9)) / 2)); }
+  .prow.l1 { padding-left: 1.1em; } .prow.l2 { padding-left: 1.6em; } .prow.l3 { padding-left: 2.1em; }
+  /* Touch zones: the left half of the screen is the left thumb's, the right half the right
+     thumb's. Left: its far-left part is the three buttons (top / middle / bottom), a drag
+     anywhere else scrolls the list. Right: no buttons, a drag anywhere is the slider. */
+  .strip { position: fixed; top: 0; bottom: 0; width: 50%; z-index: 2; display: none; touch-action: none; }
   body.hud .strip { display: block; }
-  #ls { left: 0; } #rs { right: 0; }
+  #ls { left: 0; } #rs { left: 50%; }
   body:not(.hud) .hudonly { display: none; }
   /* The control page opens inside this page (no navigation), so a Home Screen web app keeps
      running without iOS adding its browser bar. */
@@ -105,8 +103,8 @@
 <div class="guide" id="gl"></div><div class="guide" id="gr"></div>
 <img id="pic" alt="">
 <div id="hud">
-  <div class="eye" id="eyeL"><div class="nav"><div>&#9650;</div><div>&#9679;</div><div>&#9660;</div></div><div class="panel"><div class="phead"></div><div class="pwin"><div class="plist"></div></div></div><div class="vs"><div class="track"><div class="knob"></div></div></div></div>
-  <div class="eye" id="eyeR"><div class="nav"><div>&#9650;</div><div>&#9679;</div><div>&#9660;</div></div><div class="panel"><div class="phead"></div><div class="pwin"><div class="plist"></div></div></div><div class="vs"><div class="track"><div class="knob"></div></div></div></div>
+  <div class="eye" id="eyeL"><div class="nav"><div>&#9650;</div><div>&#9679;</div><div>&#9660;</div></div><div class="panel"><div class="phead"></div><div class="pwin"><div class="plist"></div></div></div></div>
+  <div class="eye" id="eyeR"><div class="nav"><div>&#9650;</div><div>&#9679;</div><div>&#9660;</div></div><div class="panel"><div class="phead"></div><div class="pwin"><div class="plist"></div></div></div></div>
 </div>
 <div class="strip" id="ls"></div>
 <div class="strip" id="rs"></div>
@@ -229,7 +227,7 @@ window.addEventListener('message', function (e) {
 var hud = document.getElementById('hud'), overlayBtn = document.getElementById('overlay');
 var heads = hud.querySelectorAll('.phead'), lists = hud.querySelectorAll('.plist');
 var ls = document.getElementById('ls'), rs = document.getElementById('rs'),
-    navs = hud.querySelectorAll('.nav'), sliders = hud.querySelectorAll('.vs'), knobs = hud.querySelectorAll('.knob');
+    navs = hud.querySelectorAll('.nav');
 var hudOn = false, cws = null, model = null, rows = [], cursor = 0,
     liveT = null, depth = null, lastKey = {};
 try {
@@ -271,7 +269,6 @@ function wake() {                       // full strength while in use, fades 2.5
   clearTimeout(liveT);
   liveT = setTimeout(function () { hud.classList.remove('live'); }, 2500);
 }
-hud.addEventListener('pointerdown', wake, true);
 
 function csend(m) { if (cws && cws.readyState === 1) cws.send(JSON.stringify(m)); }
 // at most one write per parameter every 33 ms, always the newest value
@@ -362,14 +359,6 @@ function paint(r) {
     e.val.textContent = t;
     if (e.fill) e.fill.style.width = (f * 100) + '%';
   });
-  if (rows[cursor] === r) paintKnob();
-}
-function paintKnob() {
-  var f = rows[cursor] ? frac(rows[cursor]) : null;
-  for (var k = 0; k < 2; k++) {
-    knobs[k].style.display = f === null ? 'none' : 'block';
-    if (f !== null) knobs[k].style.top = ((1 - f) * 100) + '%';
-  }
 }
 function setCursor(i, scroll) {
   if (!rows[i]) return;
@@ -381,7 +370,6 @@ function setCursor(i, scroll) {
   if (scroll) place(winH() / 2 - centreOf(i), true);            // bring it to the centre line, both eyes
   if (rows[i].key) lastKey.par = rows[i].key;
   heads[0].textContent = heads[1].textContent = rows[i].path || 'Controls';   // where the highlighted row lives
-  paintKnob();
 }
 function step(from, dir) {              // next selectable row in a direction, or the same one
   var i = from + dir;
@@ -443,12 +431,6 @@ function build() {
       row.appendChild(el('lab', r.label));
       if (r.kind !== 'sect') row.appendChild(e.val);
       if (frac(r) !== null) { e.fill = el('fill'); row.appendChild(e.fill); }
-      if (r.kind !== 'sect') row.onclick = (function (i, r) {
-        return function () {
-          if (Date.now() - dragEnd < 350) return;      // the end of a scroll drag is not a tap
-          var was = cursor === i; setCursor(i, true); if (was || r.kind === 'nav') activate(r);
-        };
-      })(i, r);
       lists[k].appendChild(row);
       r.els.push(e);
     }
@@ -465,9 +447,8 @@ function build() {
 }
 
 // Scrolling is done here, not by the browser, so both eyes' copies move in the same frame:
-// each list is one block moved by a transform inside a clipped window. A thumb drag on
-// either panel moves both; on release the nearest row settles on the centre line.
-var offY = 0, dragEnd = 0;
+// each list is one block moved by a transform inside a clipped window.
+var offY = 0;
 function winH() { return lists[0].parentNode.clientHeight || 200; }
 function centreOf(i) { var e = rows[i].els[0].row; return e.offsetTop + e.offsetHeight / 2; }
 function place(y, smooth) {
@@ -477,78 +458,94 @@ function place(y, smooth) {
     lists[k].style.transform = 'translateY(' + y.toFixed(1) + 'px)';
   }
 }
-[0, 1].forEach(function (i) {
-  var win = lists[i].parentNode, y0 = 0, off0 = 0, down = false, moved = false;
-  win.addEventListener('pointerdown', function (e) { down = true; moved = false; y0 = e.clientY; off0 = offY; });
-  win.addEventListener('pointermove', function (e) {
-    if (!down || !rows.length) return;
+function scrollTo(y) {                  // follow a drag; the row on the centre line becomes the highlight
+  if (!rows.length) return;
+  var h = winH();
+  y = Math.max(h / 2 - centreOf(rows.length - 1), Math.min(h / 2 - centreOf(0), y));
+  place(y, false);
+  var mid = h / 2 - y, best = -1, bd = 1e9;
+  for (var n = 0; n < rows.length; n++) { var d = Math.abs(centreOf(n) - mid); if (d < bd) { bd = d; best = n; } }
+  if (best !== cursor) setCursor(best, false);
+}
+
+// ---- the two touch zones
+// which button a touch in the left zone is on: 0 up, 1 select, 2 down, or -1 for none. The
+// buttons reach from the screen's left edge to the right edge of the left eye's button
+// column, and split the full screen height in thirds of the picture (so up and down also
+// own the corners above and below the picture).
+function buttonAt(x, y) {
+  var col = navs[0].getBoundingClientRect(), r = hud.getBoundingClientRect();
+  if (x > col.right) return -1;
+  var t = (y - r.top) / (r.height || 1);
+  return t < 1 / 3 ? 0 : t > 2 / 3 ? 2 : 1;
+}
+function press(b) {
+  for (var k = 0; k < 2; k++) (function (d) {
+    d.classList.add('press');
+    setTimeout(function () { d.classList.remove('press'); }, 140);
+  })(navs[k].children[b]);
+  if (b === 0) setCursor(step(cursor, -1), true);
+  else if (b === 2) setCursor(step(cursor, 1), true);
+  else activate(rows[cursor]);
+}
+(function () {                          // left zone
+  var y0 = 0, off0 = 0, down = false, moved = false, btn = -1, rep = null;
+  function stopRep() { clearTimeout(rep); clearInterval(rep); rep = null; }
+  ls.addEventListener('pointerdown', function (e) {
+    e.preventDefault(); wake();
+    try { ls.setPointerCapture(e.pointerId); } catch (err) {}
+    down = true; moved = false; y0 = e.clientY; off0 = offY;
+    btn = buttonAt(e.clientX, e.clientY);
+    if (btn >= 0) {
+      press(btn);
+      if (btn !== 1) rep = setTimeout(function () {       // held: keep stepping
+        rep = setInterval(function () { wake(); press(btn); }, 170);
+      }, 450);
+    }
+  });
+  ls.addEventListener('pointermove', function (e) {
+    if (!down || btn >= 0) return;
     var dy = e.clientY - y0;
     if (!moved && Math.abs(dy) < 6) return;
     moved = true; wake();
-    var h = winH(), y = Math.max(h / 2 - centreOf(rows.length - 1), Math.min(h / 2 - centreOf(0), off0 + dy));
-    place(y, false);
-    var mid = h / 2 - y, best = -1, bd = 1e9;       // the row now on the centre line
-    for (var n = 0; n < rows.length; n++) { var d = Math.abs(centreOf(n) - mid); if (d < bd) { bd = d; best = n; } }
-    if (best !== cursor) setCursor(best, false);
+    scrollTo(off0 + dy);
   });
   function end() {
-    if (down && moved) { dragEnd = Date.now(); setCursor(cursor, true); }   // settle on the row
+    stopRep();
+    if (down && btn < 0) { if (moved) setCursor(cursor, true); else showUi(!document.body.classList.contains('ui')); }
     down = false;
   }
-  win.addEventListener('pointerup', end);
-  win.addEventListener('pointercancel', end);
-});
-
-// ---- the two margins
-function strip(node, onStart, onMove, onTap, onEnd) {
+  ls.addEventListener('pointerup', end);
+  ls.addEventListener('pointercancel', function () { stopRep(); if (down && btn < 0 && moved) setCursor(cursor, true); down = false; });
+})();
+var grab = null;
+(function () {                          // right zone: one slider, wherever the thumb lands
   var y0 = 0, down = false, moved = false;
-  node.addEventListener('pointerdown', function (e) {
+  rs.addEventListener('pointerdown', function (e) {
+    e.preventDefault(); wake();
+    try { rs.setPointerCapture(e.pointerId); } catch (err) {}
     down = true; moved = false; y0 = e.clientY;
-    e.stopPropagation();
-    try { node.setPointerCapture(e.pointerId); } catch (err) {}
-    wake(); onStart();
-    e.preventDefault();
+    var r = rows[cursor];
+    grab = r && r.kind !== 'nav' ? { r: r, v0: grabValue(r) } : null;
   });
-  node.addEventListener('pointermove', function (e) {
+  rs.addEventListener('pointermove', function (e) {
     if (!down) return;
     var dy = e.clientY - y0;
     if (!moved && Math.abs(dy) < 6) return;
-    moved = true; wake(); onMove(dy);
+    moved = true; wake();
+    if (!grab) return;
+    // out of the way while a value is being changed (not for the overlay's own depth)
+    if (grab.r.kind !== 'local') hud.classList.add('adjust');
+    slide(grab.r, grab.v0, dy);
   });
-  function end() { if (down && !moved) onTap(y0); down = false; if (onEnd) onEnd(); }
-  node.addEventListener('pointerup', end);
-  node.addEventListener('pointercancel', function () { down = false; if (onEnd) onEnd(); });
-}
-// Left side (the nav column in either eye, and the black margin beside it): drag = move the
-// highlight one row per 40 points; tap the top third = up one, bottom third = down one,
-// middle = act on the highlighted row (open, flip, next option).
-var c0 = 0, grab = null;
-function navTap(y) {
-  var r = hud.getBoundingClientRect(), t = (y - r.top) / (r.height || 1);
-  if (t < 0.36) setCursor(step(cursor, -1), true);
-  else if (t > 0.64) setCursor(step(cursor, 1), true);
-  else activate(rows[cursor]);
-}
-[ls, navs[0], navs[1]].forEach(function (n) {
-  strip(n, function () { c0 = cursor; }, function (dy) {
-    var k = Math.round(dy / 44), i = c0, dir = k > 0 ? 1 : -1;
-    for (var j = 0; j < Math.abs(k); j++) i = step(i, dir);
-    if (i !== cursor) setCursor(i, true);
-  }, navTap);
-});
-// Right side (the slider in either eye, and the black margin beside it): one vertical slider
-// for the highlighted row; a tap flips a switch or steps an option.
-[rs, sliders[0], sliders[1]].forEach(function (n) {
-  strip(n, function () { var r = rows[cursor]; grab = r && r.kind !== 'nav' ? { r: r, v0: grabValue(r) } : null; },
-        function (dy) {
-          if (!grab) return;
-          // out of the way while a value is being changed (not for the overlay's own depth)
-          if (grab.r.kind !== 'local') hud.classList.add('adjust');
-          slide(grab.r, grab.v0, dy);
-        },
-        function () { var r = rows[cursor]; if (r && r.kind !== 'nav') activate(r); },
-        function () { hud.classList.remove('adjust'); wake(); });
-});
+  function end(tap) {
+    if (down && !moved && tap) showUi(!document.body.classList.contains('ui'));
+    down = false; grab = null;
+    hud.classList.remove('adjust'); wake();
+  }
+  rs.addEventListener('pointerup', function () { end(true); });
+  rs.addEventListener('pointercancel', function () { end(false); });
+})();
 
 function cconnect() {
   if (!hudOn || (cws && cws.readyState < 2)) return;

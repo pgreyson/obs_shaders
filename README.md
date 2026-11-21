@@ -158,11 +158,11 @@ list of named controls hard against the left edge of each eye's picture, so it f
 panel in a phone stereo viewer. Its depth is the *Overlay depth* row at the top of the list (one collapsible tree: tab > filter >
 section > control; set it through the viewer; it starts at the rig's global zero). The list is a picker
 wheel: the row on the centre line is the highlighted one. Sections start collapsed. The overlay
-hides while the slider is being dragged. Everything is drawn in both eyes:
-a nav column left of the list (tap up / select / down, or drag to move the highlight) for the left
-thumb on the left eye's copy, and one vertical slider at the right edge of each eye for the right
-thumb on the right eye's copy; it changes the highlighted control. The black margins beside them
-take the same touches. Faint until used.
+hides while a value is being dragged. Three big buttons (up / select / down) and the list are
+drawn in both eyes. Touch goes by screen half: on the left, the far-left strip is the three
+buttons (up and down also own the corners above and below the picture; hold to repeat) and a drag
+anywhere else scrolls the list; on the right there are no buttons and a drag anywhere is the slider
+for the highlighted control. A tap that is not on a button shows the bar. Faint until used.
 
 **HTTPS:** the same pages are on `https://Pauls-Mac-mini.local:8443/` (and the IP), for phones with
 Safari's HTTPS-only setting and for Home Screen icons. The certificate comes from a local authority
