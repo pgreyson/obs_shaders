@@ -86,6 +86,7 @@
   .prow.dim { color: #8a90a0; }
   .prow.sect { letter-spacing: .05em; text-transform: uppercase; color: #aab2c6; }
   .prow.sect.cur { color: #fff; }
+  .prow.l1 { padding-left: 1.4em; } .prow.l2 { padding-left: 2.2em; } .prow.l3 { padding-left: 3em; }
   .strip { position: fixed; top: 0; bottom: 0; z-index: 2; display: none; touch-action: none;
            width: max(48px, calc((var(--sw) - min(var(--w), var(--sw), var(--sh) * 32 / 9)) / 2)); }
   body.hud .strip { display: block; }
@@ -231,11 +232,10 @@ var hud = document.getElementById('hud'), overlayBtn = document.getElementById('
 var heads = hud.querySelectorAll('.phead'), lists = hud.querySelectorAll('.plist');
 var ls = document.getElementById('ls'), rs = document.getElementById('rs'),
     navs = hud.querySelectorAll('.nav'), sliders = hud.querySelectorAll('.vs'), knobs = hud.querySelectorAll('.knob');
-var hudOn = false, cws = null, model = null, picking = false, sel = null, rows = [], cursor = 0,
+var hudOn = false, cws = null, model = null, rows = [], cursor = 0,
     liveT = null, depth = null, lastKey = {};
 try {
   hudOn = localStorage.getItem('hud') === '1';
-  sel = JSON.parse(localStorage.getItem('hudsel') || 'null');
   var dv = localStorage.getItem('huddepth'); if (dv !== null && dv !== '') depth = parseFloat(dv) || 0;
 } catch (e) {}
 
@@ -247,7 +247,7 @@ function eachFilter(fn) {
 function valueOf(f, p) { var v = f.values ? f.values[p.key] : undefined; return v === undefined || v === null ? p['default'] : v; }
 
 // Depth of the overlay: how far the two copies are pushed towards each other, in screen
-// points (+ = nearer). Set with the "Overlay depth" row on the filters & layers page while
+// points (+ = nearer). Set with the "Overlay depth" row at the top of the list while
 // looking through the viewer; remembered on this device. Until it has been set it starts at
 // the rig's global zero (canvas px, 1920 per eye) scaled to this screen.
 function sizeHud() {
@@ -288,14 +288,6 @@ function queue(c, p, v) {
   }, 33);
 }
 
-function current() {
-  var hit = null, first = null;
-  eachFilter(function (tab, f) {
-    if (!first && f.on && f.params.length) first = { tab: tab, f: f };
-    if (sel && tab.id === sel.tab && f.name === sel.f) hit = { tab: tab, f: f };
-  });
-  return hit || first;
-}
 function decimals(p) {
   var st = p.step || (p.max - p.min) / 200;
   return p.type === 'int' || st >= 1 ? 0 : st >= 0.1 ? 1 : st >= 0.01 ? 2 : 3;
@@ -306,46 +298,49 @@ function el(cls, text) { var d = document.createElement('div'); d.className = cl
 
 // ---- rows. kind: nav | sect | sw (a switch: get/set) | param
 function swRow(label, get, set) { return { kind: 'sw', label: label, get: get, set: set }; }
-// Sections start collapsed; a section row opens or closes it (not remembered across reloads).
+// One tree, no pages and no back rows: tab > filter > section > control. Every branch starts
+// collapsed; its row opens or closes it (not remembered across reloads).
 var open = {};
-function fold(id, label) {
-  return { kind: 'nav', fold: true, key: 'fold:' + id, label: (open[id] ? '▾ ' : '▸ ') + label,
-           go: function () { open[id] = !open[id]; lastKey[picking ? 'pick' : 'par'] = 'fold:' + id; build(); } };
+function fold(id, label, level, path, f) {
+  return { kind: 'nav', fold: true, key: 'fold:' + id, level: level, path: path,
+           label: (open[id] ? '▾ ' : '▸ ') + label, note: f && !f.on ? 'off' : '', dim: f && !f.on,
+           go: function () { open[id] = !open[id]; lastKey.par = 'fold:' + id; build(); } };
 }
 function makeRows() {
   var out = [];
   if (!model) return out;
-  if (picking) {
-    out.push({ kind: 'nav', label: '‹ back', go: function () { picking = false; build(); } });
-    out.push(depthRow);
-    out.push(fold('pick/layers', 'Layers'));
-    model.layers.forEach(function (l) {
-      if (open['pick/layers']) out.push(swRow(l.name, function () { return l.on; },
-                     function (on) { l.on = on; csend({ t: 'item', scene: l.scene, id: l.id, on: on }); }));
-    });
-    var lastTab = null;
-    eachFilter(function (tab, f) {
+  function add(r, level, path) { r.level = level; r.path = path; out.push(r); }
+  add(depthRow, 0, 'Overlay');
+  out.push(fold('layers', 'Layers', 0, 'Layers'));
+  if (open.layers) model.layers.forEach(function (l) {
+    add(swRow(l.name, function () { return l.on; },
+              function (on) { l.on = on; csend({ t: 'item', scene: l.scene, id: l.id, on: on }); }), 1, 'Layers');
+  });
+  model.tabs.forEach(function (tab) {
+    var tid = 't/' + tab.id, any = false;
+    tab.stages.forEach(function (st) { st.filters.forEach(function (f) { if (f.params.length) any = true; }); });
+    if (!any) return;
+    out.push(fold(tid, tab.title, 0, tab.title));
+    if (!open[tid]) return;
+    tab.stages.forEach(function (st) { st.filters.forEach(function (f) {
       if (!f.params.length) return;
-      if (tab !== lastTab) { lastTab = tab; out.push(fold('pick/' + tab.id, tab.title)); }
-      if (open['pick/' + tab.id]) out.push({ kind: 'nav', label: f.name, note: f.on ? '' : 'off', dim: !f.on, key: tab.id + '/' + f.name, go: function () {
-        sel = { tab: tab.id, f: f.name }; picking = false;
-        try { localStorage.setItem('hudsel', JSON.stringify(sel)); } catch (e) {}
-        build();
-      } });
-    });
-    return out;
-  }
-  var c = current();
-  out.push({ kind: 'nav', label: '‹ filters & layers', go: function () { picking = true; build(); } });
-  if (!c) return out;
-  if (!c.f.virtual && !(c.f.essential && c.f.on)) {
-    out.push(swRow('Filter', function () { return c.f.on; },
-                   function (on) { c.f.on = on; csend({ t: 'en', s: c.tab.source, f: c.f.name, on: on }); }));
-  }
-  var section = null;
-  c.f.params.forEach(function (p) {
-    if (p.section && p.section !== section) { section = p.section; out.push(fold(c.tab.id + '/' + c.f.name + '/' + section, section)); }
-    if (!p.section || open[c.tab.id + '/' + c.f.name + '/' + p.section]) out.push({ kind: 'param', label: p.label || p.key, c: c, p: p, key: p.key });
+      var fid = tid + '/' + f.name, path = tab.title + ' · ' + f.name, c = { tab: tab, f: f };
+      out.push(fold(fid, f.name, 1, path, f));
+      if (!open[fid]) return;
+      if (!f.virtual && !(f.essential && f.on)) {
+        var sw = swRow('Filter', function () { return f.on; },
+                       function (on) { f.on = on; csend({ t: 'en', s: tab.source, f: f.name, on: on }); });
+        sw.key = fid + '/on';
+        add(sw, 2, path);
+      }
+      var section = null;
+      f.params.forEach(function (p) {
+        if (p.section && p.section !== section) { section = p.section; out.push(fold(fid + '/' + section, section, 2, path)); }
+        if (!p.section || open[fid + '/' + p.section]) {
+          add({ kind: 'param', label: p.label || p.key, c: c, p: p, key: fid + '/' + p.key }, p.section ? 3 : 2, path);
+        }
+      });
+    }); });
   });
   return out;
 }
@@ -388,7 +383,8 @@ function setCursor(i, scroll) {
     e.row.classList.add('cur');
     if (scroll) lists[k].scrollTop = e.row.offsetTop + e.row.offsetHeight / 2 - lists[k].clientHeight / 2;   // to the centre line
   });
-  if (rows[i].key) lastKey[picking ? 'pick' : 'par'] = rows[i].key;
+  if (rows[i].key) lastKey.par = rows[i].key;
+  heads[0].textContent = heads[1].textContent = rows[i].path || 'Controls';   // where the highlighted row lives
   paintKnob();
 }
 function step(from, dir) {              // next selectable row in a direction, or the same one
@@ -442,13 +438,11 @@ function slide(r, v0, dy) {
 
 function build() {
   rows = makeRows();
-  var c = model && !picking ? current() : null;
-  var title = !model ? 'connecting…' : picking ? 'Filters & layers' : c ? c.tab.title + ' · ' + c.f.name : 'no filters';
-  for (var k = 0; k < 2; k++) { heads[k].textContent = title; lists[k].innerHTML = ''; lists[k].scrollTop = 0; }
+  for (var k = 0; k < 2; k++) { heads[k].textContent = model ? 'Controls' : 'connecting…'; lists[k].innerHTML = ''; lists[k].scrollTop = 0; }
   rows.forEach(function (r, i) {
     r.els = [];
     for (var k = 0; k < 2; k++) {
-      var row = el('prow' + (r.fold ? ' sect' : '') + (r.dim ? ' dim' : ''));
+      var row = el('prow l' + (r.level || 0) + (r.fold ? ' sect' : '') + (r.dim ? ' dim' : ''));
       var e = { row: row, val: el('val') };
       row.appendChild(el('lab', r.label));
       if (r.kind !== 'sect') row.appendChild(e.val);
@@ -468,14 +462,13 @@ function build() {
   }
   placeSpacers();
   // start on the row used last in this mode, else the first control
-  var want = lastKey[picking ? 'pick' : 'par'], start = -1, firstCtl = -1;
+  var want = lastKey.par, start = -1;
   rows.forEach(function (r, i) {
     if (want && r.key === want && start < 0) start = i;
-    if (firstCtl < 0 && i > 0 && (r.kind === 'param' || r.kind === 'nav')) firstCtl = i;
   });
   sizeHud();
   cursor = -1;
-  setCursor(start >= 0 ? start : firstCtl >= 0 ? firstCtl : 0, true);
+  setCursor(start >= 0 ? start : Math.min(1, rows.length - 1), true);
 }
 
 // keep the two copies scrolled alike when a panel is scrolled directly
