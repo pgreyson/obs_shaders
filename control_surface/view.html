@@ -2,17 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Rig view</title>
 <style>
   html, body { margin: 0; height: 100%; background: #000; color: #ccd; overflow: hidden;
-               touch-action: manipulation;
                font: 14px -apple-system, system-ui, sans-serif; -webkit-user-select: none; user-select: none; }
   /* Alignment guides for a clip-on / Cardboard stereo viewer: two fixed vertical lines either
      side of the screen centre, drawn over the picture. */
+  * { touch-action: manipulation; }
   .guide { position: fixed; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: #1c1c1c;
            z-index: 2; pointer-events: none; }
   #gl { left: calc(50% - 8.5px); }
@@ -149,6 +149,27 @@ document.addEventListener('click', function (e) {
   if (Date.now() - stripUp < 500) return;        // the click that follows a tap a touch zone already took
   if (!bar.contains(e.target)) tap();
 });
+// Touch screens: taps are taken at touchend and the default is cancelled, which is what stops
+// iOS zooming the page on a double tap (it also means no click follows). The bar keeps its
+// normal clicks; the overlay's touch zones do their own taps.
+(function () {
+  var x0 = 0, y0 = 0, still = false;
+  document.addEventListener('touchstart', function (e) {
+    still = e.touches.length === 1; x0 = e.touches[0].clientX; y0 = e.touches[0].clientY;
+  }, { passive: true });
+  document.addEventListener('touchmove', function (e) {
+    if (Math.abs(e.touches[0].clientX - x0) + Math.abs(e.touches[0].clientY - y0) > 12) still = false;
+  }, { passive: true });
+  document.addEventListener('touchend', function (e) {
+    if (bar.contains(e.target)) return;
+    e.preventDefault();
+    if (still && !(e.target.closest && e.target.closest('.strip'))) tap();
+    still = false;
+  }, { passive: false });
+  ['gesturestart', 'gesturechange', 'dblclick'].forEach(function (n) {
+    document.addEventListener(n, function (e) { e.preventDefault(); }, { passive: false });
+  });
+})();
 bar.onclick = function () { showUi(true); };
 
 var root = document.documentElement;
