@@ -44,7 +44,7 @@
      is one vertical slider for the highlighted control. */
   #hud { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 2; display: none;
          width: min(var(--w), var(--sw), calc(var(--sh) * 32 / 9)); aspect-ratio: 32 / 9; pointer-events: none;
-         --ew: 400px; --pop: 0px; --base: 0px; font-size: calc(var(--ew) * 0.029); }
+         --ew: 400px; --pop: 0px; --base: 0px; font-size: calc(var(--ew) * 0.033); }
   body.hud #hud { display: block; }
   .eye { position: absolute; top: 0; height: 100%; width: 50%; overflow: hidden; }
   #eyeL { left: 0; --dx: calc(var(--pop) / 2); }
@@ -52,7 +52,7 @@
   /* per eye, left to right: nav column (up / select / down), the list, ... , the slider at
      the right edge. All of it is drawn in both eyes at the same depth; the left thumb uses
      the left eye's nav column, the right thumb the right eye's slider. */
-  .nav, .vs { position: absolute; top: 4%; bottom: 4%; width: 9%; pointer-events: auto; touch-action: none;
+  .nav, .vs { position: absolute; top: 4%; bottom: 4%; width: 11%; pointer-events: auto; touch-action: none;
               border-radius: .4em; background: rgba(0, 0, 0, .30); color: #d8dce6; opacity: .42; transition: opacity .6s; }
   #hud.live .nav, #hud.live .vs { opacity: 1; transition: opacity .1s; background: rgba(0, 0, 0, .55); }
   .nav { left: calc(var(--base) + var(--dx)); display: flex; flex-direction: column; }
@@ -63,22 +63,22 @@
                background: rgba(255, 255, 255, .30); }
   .vs .knob { position: absolute; left: 50%; width: 1.5em; height: 1.5em; margin: -.75em 0 0 -.75em; border-radius: 50%;
               background: rgba(120, 165, 255, .95); display: none; }
-  .panel { position: absolute; left: calc(var(--base) + var(--dx) + 10%); top: 4%; bottom: 4%; width: 38%; pointer-events: auto;
+  .panel { position: absolute; left: calc(var(--base) + var(--dx) + 12%); top: 4%; bottom: 4%; width: 38%; pointer-events: auto;
            display: flex; flex-direction: column; border-radius: .4em; overflow: hidden;
            background: rgba(0, 0, 0, .30); color: #d8dce6; opacity: .42; transition: opacity .6s; }
   #hud.live .panel { opacity: 1; transition: opacity .1s; background: rgba(0, 0, 0, .55); }
   .phead { padding: .45em .6em; flex: none; border-bottom: 1px solid rgba(255, 255, 255, .16); font-weight: 600;
            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .plist { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
-  .prow { position: relative; display: flex; align-items: baseline; gap: .5em; padding: .5em .6em .55em;
+  .prow { position: relative; display: flex; align-items: baseline; gap: .5em; padding: .8em .6em .85em;
           border-bottom: 1px solid rgba(255, 255, 255, .07); }
   .prow .lab { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .prow .val { flex: none; font-variant-numeric: tabular-nums; color: #fff; }
   .prow .fill { position: absolute; left: 0; bottom: 0; height: 2px; background: rgba(110, 160, 255, .9); }
   .prow.cur { background: rgba(70, 130, 255, .34); color: #fff; }
   .prow.dim { color: #8a90a0; }
-  .prow.sect { font-size: .82em; letter-spacing: .06em; text-transform: uppercase; color: #9aa2b6;
-               padding-top: .7em; border-bottom: 0; }
+  .prow.sect { letter-spacing: .05em; text-transform: uppercase; color: #aab2c6; }
+  .prow.sect.cur { color: #fff; }
   .strip { position: fixed; top: 0; bottom: 0; z-index: 2; display: none; touch-action: none;
            width: max(48px, calc((var(--sw) - min(var(--w), var(--sw), var(--sh) * 32 / 9)) / 2)); }
   body.hud .strip { display: block; }
@@ -299,21 +299,27 @@ function el(cls, text) { var d = document.createElement('div'); d.className = cl
 
 // ---- rows. kind: nav | sect | sw (a switch: get/set) | param
 function swRow(label, get, set) { return { kind: 'sw', label: label, get: get, set: set }; }
+// Sections start collapsed; a section row opens or closes it (not remembered across reloads).
+var open = {};
+function fold(id, label) {
+  return { kind: 'nav', fold: true, key: 'fold:' + id, label: (open[id] ? '▾ ' : '▸ ') + label,
+           go: function () { open[id] = !open[id]; lastKey[picking ? 'pick' : 'par'] = 'fold:' + id; build(); } };
+}
 function makeRows() {
   var out = [];
   if (!model) return out;
   if (picking) {
     out.push({ kind: 'nav', label: '‹ back', go: function () { picking = false; build(); } });
-    out.push({ kind: 'sect', label: 'Layers' });
+    out.push(fold('pick/layers', 'Layers'));
     model.layers.forEach(function (l) {
-      out.push(swRow(l.name, function () { return l.on; },
+      if (open['pick/layers']) out.push(swRow(l.name, function () { return l.on; },
                      function (on) { l.on = on; csend({ t: 'item', scene: l.scene, id: l.id, on: on }); }));
     });
     var lastTab = null;
     eachFilter(function (tab, f) {
       if (!f.params.length) return;
-      if (tab !== lastTab) { lastTab = tab; out.push({ kind: 'sect', label: tab.title }); }
-      out.push({ kind: 'nav', label: f.name, note: f.on ? '' : 'off', dim: !f.on, key: tab.id + '/' + f.name, go: function () {
+      if (tab !== lastTab) { lastTab = tab; out.push(fold('pick/' + tab.id, tab.title)); }
+      if (open['pick/' + tab.id]) out.push({ kind: 'nav', label: f.name, note: f.on ? '' : 'off', dim: !f.on, key: tab.id + '/' + f.name, go: function () {
         sel = { tab: tab.id, f: f.name }; picking = false;
         try { localStorage.setItem('hudsel', JSON.stringify(sel)); } catch (e) {}
         build();
@@ -330,8 +336,8 @@ function makeRows() {
   }
   var section = null;
   c.f.params.forEach(function (p) {
-    if (p.section && p.section !== section) { section = p.section; out.push({ kind: 'sect', label: section }); }
-    out.push({ kind: 'param', label: p.label || p.key, c: c, p: p, key: p.key });
+    if (p.section && p.section !== section) { section = p.section; out.push(fold(c.tab.id + '/' + c.f.name + '/' + section, section)); }
+    if (!p.section || open[c.tab.id + '/' + c.f.name + '/' + p.section]) out.push({ kind: 'param', label: p.label || p.key, c: c, p: p, key: p.key });
   });
   return out;
 }
@@ -430,7 +436,7 @@ function build() {
   rows.forEach(function (r, i) {
     r.els = [];
     for (var k = 0; k < 2; k++) {
-      var row = el('prow' + (r.kind === 'sect' ? ' sect' : '') + (r.dim ? ' dim' : ''));
+      var row = el('prow' + (r.fold ? ' sect' : '') + (r.dim ? ' dim' : ''));
       var e = { row: row, val: el('val') };
       row.appendChild(el('lab', r.label));
       if (r.kind !== 'sect') row.appendChild(e.val);
@@ -447,7 +453,7 @@ function build() {
   var want = lastKey[picking ? 'pick' : 'par'], start = -1, firstCtl = -1;
   rows.forEach(function (r, i) {
     if (want && r.key === want && start < 0) start = i;
-    if (firstCtl < 0 && (r.kind === 'param' || (picking && r.kind === 'nav' && i > 0))) firstCtl = i;
+    if (firstCtl < 0 && i > 0 && (r.kind === 'param' || r.kind === 'nav')) firstCtl = i;
   });
   cursor = -1;
   setCursor(start >= 0 ? start : firstCtl >= 0 ? firstCtl : 0, true);
@@ -486,7 +492,7 @@ function strip(node, onStart, onMove, onTap) {
   node.addEventListener('pointercancel', function () { down = false; });
 }
 // Left side (the nav column in either eye, and the black margin beside it): drag = move the
-// highlight one row per 30 points; tap the top third = up one, bottom third = down one,
+// highlight one row per 40 points; tap the top third = up one, bottom third = down one,
 // middle = act on the highlighted row (open, flip, next option).
 var c0 = 0, grab = null;
 function navTap(y) {
@@ -497,7 +503,7 @@ function navTap(y) {
 }
 [ls, navs[0], navs[1]].forEach(function (n) {
   strip(n, function () { c0 = cursor; }, function (dy) {
-    var k = Math.round(dy / 30), i = c0, dir = k > 0 ? 1 : -1;
+    var k = Math.round(dy / 40), i = c0, dir = k > 0 ? 1 : -1;
     for (var j = 0; j < Math.abs(k); j++) i = step(i, dir);
     if (i !== cursor) setCursor(i, true);
   }, navTap);
