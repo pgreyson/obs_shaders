@@ -27,6 +27,17 @@
   @media (orientation: portrait) { .guide { display: none; } }
   #pic { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); display: block;
          width: min(var(--w), var(--sw), calc(var(--sh) * 32 / 9)); aspect-ratio: 32 / 9; }
+  /* The two eyes are separate boxes at the outer edges of the picture area, so a gap can be
+     left between them (--gap, the "Eye gap" row): each eye is then narrower by half the gap.
+     The eye picture is either squeezed into its box, or (.keep) keeps its 16:9 shape and
+     gets shorter instead. Each box shows one half of the same side-by-side frame. */
+  :root { --gap: 0px; }
+  .ebox { position: absolute; top: 50%; transform: translateY(-50%); overflow: hidden;
+          width: calc(50% - var(--gap) / 2); height: 100%; }
+  .keep .ebox { height: auto; aspect-ratio: 16 / 9; }
+  .ebox.l { left: 0; } .ebox.r { right: 0; }
+  .ebox img { position: absolute; top: 0; height: 100%; width: 200%; display: block; }
+  .ebox.l img { left: 0; } .ebox.r img { left: -100%; }
   #bar { z-index: 3; position: fixed; left: 0; right: 0; bottom: 0; display: none; gap: 8px; align-items: center;
          padding: 10px max(12px, env(safe-area-inset-left)) calc(10px + env(safe-area-inset-bottom));
          background: rgba(17, 20, 26, .88); }
@@ -47,9 +58,11 @@
          width: min(var(--w), var(--sw), calc(var(--sh) * 32 / 9)); aspect-ratio: 32 / 9; pointer-events: none;
          --ew: 400px; --pop: 0px; --base: 0px; font-size: calc(var(--ew) * 0.033); }
   body.hud #hud { display: block; }
-  .eye { position: absolute; top: 0; height: 100%; width: 50%; overflow: hidden; }
+  .eye { position: absolute; top: 50%; transform: translateY(-50%); height: 100%;
+         width: calc(50% - var(--gap) / 2); overflow: hidden; }
+  .keep .eye { height: auto; aspect-ratio: 16 / 9; }
   #eyeL { left: 0; --dx: calc(var(--pop) / 2); }
-  #eyeR { left: 50%; --dx: calc(var(--pop) / -2); }
+  #eyeR { right: 0; --dx: calc(var(--pop) / -2); }
   /* per eye, left to right: three big buttons (up / select / down), then the list. Drawn in
      both eyes at the same depth; touches are taken by two invisible zones (below), not by
      these elements. */
@@ -106,7 +119,7 @@
 <body>
 <div id="root">
 <div class="guide" id="gl"></div><div class="guide" id="gr"></div>
-<img id="pic" alt="">
+<div id="pic"><div class="ebox l"><img id="picL" alt=""></div><div class="ebox r"><img id="picR" alt=""></div></div>
 <div id="hud">
   <div class="eye" id="eyeL"><div class="nav"><div>&#9650;</div><div>&#9679;</div><div>&#9660;</div></div><div class="panel"><div class="phead"><span class="ppath"></span><span class="pfps"></span></div><div class="pwin"><div class="plist"></div></div></div></div>
   <div class="eye" id="eyeR"><div class="nav"><div>&#9650;</div><div>&#9679;</div><div>&#9660;</div></div><div class="panel"><div class="phead"><span class="ppath"></span><span class="pfps"></span></div><div class="pwin"><div class="plist"></div></div></div></div>
@@ -122,7 +135,7 @@
 </div>
 <div id="ctlwrap"></div>
 <script>
-var pic = document.getElementById('pic'), bar = document.getElementById('bar'),
+var pic = document.getElementById('picL'), picR = document.getElementById('picR'), bar = document.getElementById('bar'),
     stat = document.getElementById('stat'),
     fullBtn = document.getElementById('full');
 var seq = 0, shown = [], lastUrl = null, hideTimer = null;
@@ -240,7 +253,7 @@ function connect() {
       setStat(fps + ' · ' + Math.round(size / 1024) + ' KB', fps, true);
       if (document.hidden || paused) pending = true; else ask();
     };
-    pic.src = url;
+    pic.src = url; picR.src = url;
   };
   ws.onclose = function () {
     clearTimeout(waiting);
@@ -299,7 +312,7 @@ function valueOf(f, p) { var v = f.values ? f.values[p.key] : undefined; return 
 // looking through the viewer; remembered on this device. Until it has been set it starts at
 // the rig's global zero (canvas px, 1920 per eye) scaled to this screen.
 function sizeHud() {
-  var ew = hud.clientWidth / 2 || 400;
+  var ew = document.getElementById('eyeL').clientWidth || hud.clientWidth / 2 || 400;
   if (depth === null && model) {
     var zero = 0;
     eachFilter(function (tab, f) { if (f.name === 'global zero' && f.params[0]) zero = +valueOf(f, f.params[0]) || 0; });
@@ -316,6 +329,24 @@ var depthRow = { kind: 'local', label: 'Overlay depth', key: 'local:depth', min:
   get: function () { return depth || 0; },
   set: function (v) { depth = v; try { localStorage.setItem('huddepth', String(v)); } catch (e) {} sizeHud(); } };
 
+// Gap between the two eye pictures, % of the screen width (kept on this device), and
+// whether the narrower eyes keep their 16:9 shape.
+var gapPct = 0, keepAspect = true;
+try {
+  var gv = parseFloat(localStorage.getItem('gap')); if (gv >= 0 && gv <= 40) gapPct = gv;
+  keepAspect = localStorage.getItem('keep') !== '0';
+} catch (e) {}
+function applyGap() {
+  document.documentElement.style.setProperty('--gap', 'calc(var(--sw) * ' + (gapPct / 100).toFixed(4) + ')');
+  document.documentElement.classList.toggle('keep', keepAspect);
+}
+applyGap();
+var gapRow = { kind: 'local', label: 'Eye gap %', key: 'local:gap', min: 0, max: 40, step: 0.5,
+  get: function () { return gapPct; },
+  set: function (v) { gapPct = v; try { localStorage.setItem('gap', String(v)); } catch (e) {} applyGap(); sizeHud(); } };
+var keepRow = { kind: 'sw', label: 'Keep eye aspect', key: 'local:keep',
+  get: function () { return keepAspect; },
+  set: function (on) { keepAspect = on; try { localStorage.setItem('keep', on ? '1' : '0'); } catch (e) {} applyGap(); sizeHud(); } };
 var widthRow = { kind: 'local', label: 'Picture width %', key: 'local:picw', min: 40, max: 100, step: 0.5,
   get: function () { return picW === null ? (isPhone ? 70 : 100) : picW; },
   set: function (v) { picW = v; try { localStorage.setItem('picw', String(v)); } catch (e) {} applyPicW(); sizeHud(); } };
@@ -375,6 +406,8 @@ function makeRows() {
   function add(r, level, path) { r.level = level; r.path = path; out.push(r); }
   add(depthRow, 0, 'Overlay');
   add(qualityRow, 0, 'Stream · JPEG quality, higher = bigger frames');
+  add(gapRow, 0, 'Picture · gap between the eyes');
+  add(keepRow, 0, 'Picture · on: eyes stay 16:9, off: squeezed');
   add(widthRow, 0, 'Picture · screen ' + Math.round(window.innerWidth) + '×' + Math.round(window.innerHeight));
   out.push(fold('layers', 'Layers', 0, 'Layers'));
   if (open.layers) model.layers.forEach(function (l) {
@@ -523,7 +556,7 @@ function build() {
   });
   sizeHud();
   cursor = -1;
-  setCursor(start >= 0 ? start : Math.min(3, rows.length - 1), true);
+  setCursor(start >= 0 ? start : Math.min(5, rows.length - 1), true);
 }
 
 // Scrolling is done here, not by the browser, so both eyes' copies move in the same frame:
