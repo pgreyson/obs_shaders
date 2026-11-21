@@ -154,9 +154,11 @@ frames are grabbed only while a viewer is open). Full screen, both eyes, nothing
 the surface has no login, so reach it from outside through a VPN (e.g. Tailscale), never a port forward.
 
 **Stereo overlay:** the viewer's tap bar has an **Overlay** button. It draws one narrow, translucent
-control panel in each eye's picture (6 pt nearer than the screen plane), so it fuses into a single
-panel in a phone stereo viewer. Header: tap the name to choose a filter or toggle layers, on/off on
-the right. Rows: drag sideways to change a number, tap a switch or option. Faint until touched.
+list of named controls hard against the left edge of each eye's picture, so it fuses into a single
+panel in a phone stereo viewer. Its depth follows the rig's global zero (the panel sits where the
+picture is); *Overlay nearer / farther* in the bar trim it. Thumbs stay outside the pictures: the
+black margin on the left moves the highlight (drag) and acts on it (tap: open, flip, next option);
+the margin on the right is one vertical slider for the highlighted control. Faint until used.
 
 **HTTPS:** the same pages are on `https://Pauls-Mac-mini.local:8443/` (and the IP), for phones with
 Safari's HTTPS-only setting and for Home Screen icons. The certificate comes from a local authority
