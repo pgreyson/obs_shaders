@@ -10,21 +10,13 @@
 <style>
   html, body { margin: 0; height: 100%; background: #000; color: #ccd; overflow: hidden;
                font: 14px -apple-system, system-ui, sans-serif; -webkit-user-select: none; user-select: none; }
-  /* Alignment guides for a clip-on / Cardboard stereo viewer: two fixed vertical lines either
-     side of the screen centre, drawn over the picture. */
   * { touch-action: manipulation; }
-  .guide { position: fixed; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: #1c1c1c;
-           z-index: 2; pointer-events: none; }
-  #gl { left: calc(50% - 8.5px); }
-  #gr { left: calc(50% + 8.5px); }
   /* The picture is centred and can be smaller than the screen (black on all sides), so that
      the two eye pictures sit under the lenses of a phone viewer: their centres are half the
      picture width apart. */
   :root { --sw: 100vw; --sh: 100vh; --w: var(--sw); }
   :root.phone { --w: calc(var(--sw) * 0.70); }
   #root { position: fixed; top: 0; left: 0; width: var(--sw); height: var(--sh); overflow: hidden; }
-  /* the guide lines are for the phone viewer, which is used in landscape only */
-  @media (orientation: portrait) { .guide { display: none; } }
   #pic { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); display: block;
          width: min(var(--w), var(--sw), calc(var(--sh) * 32 / 9)); aspect-ratio: 32 / 9; }
   /* The two eyes are separate boxes at the outer edges of the picture area, so a gap can be
@@ -32,8 +24,10 @@
      The eye picture is either squeezed into its box, or (.keep) keeps its 16:9 shape and
      gets shorter instead. Each box shows one half of the same side-by-side frame. */
   :root { --gap: 0px; }
+  /* a hairline round each eye, like the frames on a stereo card (it replaced the two centre
+     alignment lines, 2026-11-21) */
   .ebox { position: absolute; top: 50%; transform: translateY(-50%); overflow: hidden;
-          width: calc(50% - var(--gap) / 2); height: 100%; }
+          width: calc(50% - var(--gap) / 2); height: 100%; box-shadow: 0 0 0 1px #4a4a4a; }
   .keep .ebox { height: auto; aspect-ratio: 16 / 9; }
   .ebox.l { left: 0; } .ebox.r { right: 0; }
   .ebox img { position: absolute; top: 0; height: 100%; width: 200%; display: block; }
@@ -125,7 +119,6 @@
 </head>
 <body>
 <div id="root">
-<div class="guide" id="gl"></div><div class="guide" id="gr"></div>
 <div id="pic"><div class="ebox l"><img id="picL" alt=""></div><div class="ebox r"><img id="picR" alt=""></div></div>
 <div id="hud">
   <div class="eye" id="eyeL"><div class="nav"><div>&#9650;</div><div>&#9679;</div><div>&#9660;</div></div><div class="panel"><div class="phead"><span class="ppath"></span><span class="pfps"></span></div><div class="pwin"><div class="plist"></div></div></div></div>
@@ -338,7 +331,7 @@ var depthRow = { kind: 'local', label: 'Overlay depth', key: 'local:depth', min:
 
 // Gap between the two eye pictures, % of the screen width (kept on this device), and
 // whether the narrower eyes keep their 16:9 shape.
-// default on a phone: a bit wider than the two guide lines (17 pt apart), about 22 pt
+// default on a phone: about 22 pt
 var gapPct = isPhone ? 2.5 : 0, keepAspect = true;
 try {
   var gv = parseFloat(localStorage.getItem('gap')); if (gv >= 0 && gv <= 40) gapPct = gv;

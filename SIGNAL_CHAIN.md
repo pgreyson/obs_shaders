@@ -205,7 +205,9 @@ the two eyes must not meet. `tools/stream_gap.py <percent>` shrinks each eye in 
 YouTube relays' `full_sbs` scene, keeping its 16:9 shape and its centre (the quarter points of
 the frame), which leaves black between the eyes (the given % of the stream width), half of
 that at each outer edge, and above/below. It is two cropped scene items of the virtual-camera
-input, no shader. Main, the Viture and the phone viewer page are not affected. `0` restores
+input, no shader. Main, the Viture and the phone viewer page are not affected. It also draws a hairline round each eye, as on a stereo card: a transparent picture
+(`obs_config/eye_frames/`, regenerated for each gap; source `Eye frames` on top of the scene; line
+width and grey are `LINE_PX` / `LINE_GREY` in the tool). `0` restores
 the plain picture, `show` prints the state. Set to 3 % on 2026-11-21: on a phone that is a little wider than the viewer page's two alignment lines (17 pt apart).
 
 ## Frame budget: the rig is GPU-bound

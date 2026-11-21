@@ -15,7 +15,7 @@ main nothing (two cropped scene items, no shader).
 
 Run with control_bridge/.venv/bin/python3.
 """
-import asyncio, os, sys
+import asyncio, os, struct, sys, zlib
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, '..', 'control_bridge'))
 import yaml, simpleobsws
@@ -23,6 +23,29 @@ import yaml, simpleobsws
 PW = yaml.safe_load(open(os.path.join(HERE, '..', 'control_bridge', 'config.yaml')))['obs_instances']['viture']['password']
 RELAYS = {"twitch": 4456, "youtube": 4457}
 SCENE, SOURCE = "full_sbs", "Viture Program (VirtualCam)"
+FRAMES = "Eye frames"            # image source: a hairline round each eye, as on a stereo card
+FRAME_DIR = os.path.join(HERE, '..', 'obs_config', 'eye_frames')
+LINE_PX, LINE_GREY = 2, 96       # on the 1920-wide stream
+
+
+def frames_png(cw, ch, boxes, path):
+    """Transparent cw x ch PNG with a LINE_PX outline just outside each box (x, y, w, h)."""
+    rows = [bytearray(cw * 4) for _ in range(ch)]
+    px = bytes((LINE_GREY, LINE_GREY, LINE_GREY, 255))
+    for x, y, w, h in boxes:
+        x0, y0, x1, y1 = int(round(x)) - LINE_PX, int(round(y)) - LINE_PX, int(round(x + w)) + LINE_PX, int(round(y + h)) + LINE_PX
+        for yy in range(max(0, y0), min(ch, y1)):
+            edge = yy < y0 + LINE_PX or yy >= y1 - LINE_PX
+            for xx in range(max(0, x0), min(cw, x1)):
+                if edge or xx < x0 + LINE_PX or xx >= x1 - LINE_PX:
+                    rows[yy][xx * 4:xx * 4 + 4] = px
+    raw = b''.join(b'\x00' + bytes(r) for r in rows)
+    def chunk(t, d):
+        return struct.pack('>I', len(d)) + t + d + struct.pack('>I', zlib.crc32(t + d) & 0xffffffff)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, 'wb') as f:
+        f.write(b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', cw, ch, 8, 6, 0, 0, 0))
+                + chunk(b'IDAT', zlib.compress(raw, 6)) + chunk(b'IEND', b''))
 
 
 async def apply(name, port, gap_pct):
@@ -41,8 +64,9 @@ async def apply(name, port, gap_pct):
 
     cw = (await call("GetVideoSettings"))["baseWidth"]
     ch = (await call("GetVideoSettings"))["baseHeight"]
-    items = sorted((i for i in (await call("GetSceneItemList", {"sceneName": SCENE}))["sceneItems"]
-                    if i["sourceName"] == SOURCE), key=lambda i: i["sceneItemId"])
+    all_items = (await call("GetSceneItemList", {"sceneName": SCENE}))["sceneItems"]
+    items = sorted((i for i in all_items if i["sourceName"] == SOURCE), key=lambda i: i["sceneItemId"])
+    frame_items = [i for i in all_items if i["sourceName"] == FRAMES]
     if not items:
         raise SystemExit(f"{name}: no '{SOURCE}' in scene {SCENE}")
     sw = int(items[0]["sceneItemTransform"]["sourceWidth"]) or 3840
@@ -64,6 +88,8 @@ async def apply(name, port, gap_pct):
         await xf(items[0]["sceneItemId"], {"cropLeft": 0, "cropRight": 0, "positionX": 0, "positionY": 0,
                                            "alignment": 5, "boundsType": "OBS_BOUNDS_SCALE_INNER",
                                            "boundsAlignment": 0, "boundsWidth": cw, "boundsHeight": ch})
+        for fi in frame_items:
+            await call("RemoveSceneItem", {"sceneName": SCENE, "sceneItemId": fi["sceneItemId"]})
         print(f"{name}: plain picture")
     else:
         if len(items) < 2:
@@ -78,7 +104,19 @@ async def apply(name, port, gap_pct):
                 "alignment": 5, "boundsType": "OBS_BOUNDS_STRETCH", "boundsAlignment": 0,
                 "boundsWidth": w, "boundsHeight": h,
                 "positionX": cw / 4 + k * cw / 2 - w / 2, "positionY": ch / 2 - h / 2})
-        print(f"{name}: gap {gap:.0f} px between the eyes, each eye {w:.0f} x {h:.0f} (of {cw / 2:.0f} x {cw / 2 * 9 / 16:.0f})")
+        # hairline round each eye: a transparent picture drawn over the two eyes
+        boxes = [(cw / 4 + k * cw / 2 - w / 2, ch / 2 - h / 2, w, h) for k in range(2)]
+        png = os.path.abspath(os.path.join(FRAME_DIR, f"eye_frames_{cw}x{ch}_{gap_pct:g}.png"))
+        frames_png(cw, ch, boxes, png)
+        if frame_items:
+            await call("SetInputSettings", {"inputName": FRAMES, "inputSettings": {"file": png}, "overlay": True})
+        else:
+            r = await ws.call(simpleobsws.Request("CreateInput", {"sceneName": SCENE, "inputName": FRAMES,
+                              "inputKind": "image_source", "inputSettings": {"file": png}, "sceneItemEnabled": True}))
+            if not r.ok():       # the input exists already (other scene / earlier run): reuse it
+                await call("SetInputSettings", {"inputName": FRAMES, "inputSettings": {"file": png}, "overlay": True})
+                await call("CreateSceneItem", {"sceneName": SCENE, "sourceName": FRAMES})
+        print(f"{name}: gap {gap:.0f} px between the eyes, each eye {w:.0f} x {h:.0f} (of {cw / 2:.0f} x {cw / 2 * 9 / 16:.0f}), hairline frames on")
     # scene item edits over the websocket do not mark the collection changed: nudge a save
     await call("CreateScene", {"sceneName": "zz_save_nudge"})
     await asyncio.sleep(0.5)
