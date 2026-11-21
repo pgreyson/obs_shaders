@@ -180,9 +180,17 @@ fullBtn.onclick = function () {
   }
 };
 
-// Picture width: fixed at 86.5 % of the screen width on a phone (set by eye against a
-// Cardboard-type viewer, 2026-11-20); full width on bigger screens.
-if (Math.max(screen.width, screen.height) < 1000) document.documentElement.classList.add('phone');
+// Picture width, as a share of the screen width: 86.5 % on a phone (set by eye against a
+// Cardboard-type viewer, 2026-11-20), full width on bigger screens, unless this device has
+// its own value from the overlay's "Picture width" row.
+var isPhone = Math.max(screen.width, screen.height) < 1000;
+if (isPhone) document.documentElement.classList.add('phone');
+var picW = null;
+try { var pw = parseFloat(localStorage.getItem('picw')); if (pw >= 40 && pw <= 100) picW = pw; } catch (e) {}
+function applyPicW() {
+  if (picW !== null) document.documentElement.style.setProperty('--w', 'calc(var(--sw) * ' + (picW / 100).toFixed(4) + ')');
+}
+applyPicW();
 
 function width() { return 2560; }      // 1280 per eye: about what a phone shows per eye
 
@@ -304,6 +312,10 @@ var depthRow = { kind: 'local', label: 'Overlay depth', key: 'local:depth', min:
   get: function () { return depth || 0; },
   set: function (v) { depth = v; try { localStorage.setItem('huddepth', String(v)); } catch (e) {} sizeHud(); } };
 
+var widthRow = { kind: 'local', label: 'Picture width %', key: 'local:picw', min: 40, max: 100, step: 0.5,
+  get: function () { return picW === null ? (isPhone ? 86.5 : 100) : picW; },
+  set: function (v) { picW = v; try { localStorage.setItem('picw', String(v)); } catch (e) {} applyPicW(); sizeHud(); } };
+
 function wake() {                       // full strength while in use, fades 2.5 s after
   hud.classList.add('live');
   clearTimeout(liveT);
@@ -354,6 +366,7 @@ function makeRows() {
   if (!model) return out;
   function add(r, level, path) { r.level = level; r.path = path; out.push(r); }
   add(depthRow, 0, 'Overlay');
+  add(widthRow, 0, 'Picture · screen ' + Math.round(window.innerWidth) + '×' + Math.round(window.innerHeight));
   out.push(fold('layers', 'Layers', 0, 'Layers'));
   if (open.layers) model.layers.forEach(function (l) {
     add(swRow(l.name, function () { return l.on; },
@@ -498,7 +511,7 @@ function build() {
   });
   sizeHud();
   cursor = -1;
-  setCursor(start >= 0 ? start : Math.min(1, rows.length - 1), true);
+  setCursor(start >= 0 ? start : Math.min(2, rows.length - 1), true);
 }
 
 // Scrolling is done here, not by the browser, so both eyes' copies move in the same frame:
