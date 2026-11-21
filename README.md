@@ -150,7 +150,7 @@ One web page with every filter parameter of main, for an iPad on the same WiFi:
 
 **Live view:** `http://<mac address>:8080/view` shows the program picture at up to 30 fps with
 well under a second of delay (JPEG frames sent over one WebSocket from a relay instance, so it costs main nothing;
-frames are grabbed only while a viewer is open). Full screen, both eyes, nothing over the picture; two fixed dark guide lines at the centre for aligning a phone stereo viewer; on a phone the picture is 86.5 % of the screen width for a Cardboard-type viewer (full width on bigger screens; the overlay's *Picture width %* row changes it per device); double tap anywhere to bring the stereo control overlay forward or hide it. LAN only:
+frames are grabbed only while a viewer is open). Full screen, both eyes, nothing over the picture; two fixed dark guide lines at the centre for aligning a phone stereo viewer; on a phone the picture is 70 % of the screen width for a phone stereo viewer (full width on bigger screens; the overlay's *Picture width %* row changes it per device); double tap anywhere to bring the stereo control overlay forward or hide it. LAN only:
 the surface has no login, so reach it from outside through a VPN (e.g. Tailscale), never a port forward.
 
 **Stereo overlay:** double tap anywhere in the viewer (with the overlay up, anywhere except its three buttons). It draws one narrow, translucent
@@ -158,7 +158,7 @@ list of named controls hard against the left edge of each eye's picture, so it f
 panel in a phone stereo viewer. Its depth is the *Overlay depth* row at the top of the list (one collapsible tree: tab > filter >
 section > control; set it through the viewer; it starts at the rig's global zero). The list is a picker
 wheel: the row on the centre line is the highlighted one. Sections start collapsed. The overlay
-hides while a value is being dragged. Three big buttons (up / select / down) and the list are
+hides for as long as the right thumb is down (except on *Overlay depth*). Three big buttons (up / select / down) and the list are
 drawn in both eyes. Touch goes by screen half: on the left, the far-left strip is the three
 buttons (up and down also own the corners above and below the picture; hold to repeat) and a drag
 anywhere else scrolls the list; on the right there are no buttons and a drag anywhere is the slider

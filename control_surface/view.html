@@ -21,7 +21,7 @@
      the two eye pictures sit under the lenses of a phone viewer: their centres are half the
      picture width apart. */
   :root { --sw: 100vw; --sh: 100vh; --w: var(--sw); }
-  :root.phone { --w: calc(var(--sw) * 0.865); }
+  :root.phone { --w: calc(var(--sw) * 0.70); }
   #root { position: fixed; top: 0; left: 0; width: var(--sw); height: var(--sh); overflow: hidden; }
   /* the guide lines are for the phone viewer, which is used in landscape only */
   @media (orientation: portrait) { .guide { display: none; } }
@@ -180,8 +180,8 @@ fullBtn.onclick = function () {
   }
 };
 
-// Picture width, as a share of the screen width: 86.5 % on a phone (set by eye against a
-// Cardboard-type viewer, 2026-11-20), full width on bigger screens, unless this device has
+// Picture width, as a share of the screen width: 70 % on a phone (set by eye through the
+// phone stereo viewer, 2026-11-20), full width on bigger screens, unless this device has
 // its own value from the overlay's "Picture width" row.
 var isPhone = Math.max(screen.width, screen.height) < 1000;
 if (isPhone) document.documentElement.classList.add('phone');
@@ -313,7 +313,7 @@ var depthRow = { kind: 'local', label: 'Overlay depth', key: 'local:depth', min:
   set: function (v) { depth = v; try { localStorage.setItem('huddepth', String(v)); } catch (e) {} sizeHud(); } };
 
 var widthRow = { kind: 'local', label: 'Picture width %', key: 'local:picw', min: 40, max: 100, step: 0.5,
-  get: function () { return picW === null ? (isPhone ? 86.5 : 100) : picW; },
+  get: function () { return picW === null ? (isPhone ? 70 : 100) : picW; },
   set: function (v) { picW = v; try { localStorage.setItem('picw', String(v)); } catch (e) {} applyPicW(); sizeHud(); } };
 
 function wake() {                       // full strength while in use, fades 2.5 s after
@@ -598,6 +598,9 @@ var grab = null;
     // numbers and option lists only: switches belong to the left thumb's middle button
     var sw = r && (r.kind === 'sw' || (r.kind === 'param' && r.p.type === 'bool'));
     grab = r && r.kind !== 'nav' && !sw ? { r: r, v0: grabValue(r) } : null;
+    // the overlay is out of the way for as long as the right thumb is down (except while
+    // setting the overlay's own depth, which has to be seen)
+    if (r !== depthRow) hud.classList.add('adjust');
   });
   rs.addEventListener('pointermove', function (e) {
     if (!down) return;
@@ -605,8 +608,6 @@ var grab = null;
     if (!moved && Math.abs(dy) < 6) return;
     moved = true; wake();
     if (!grab) return;
-    // out of the way while a value is being changed (not for the overlay's own depth)
-    if (grab.r.kind !== 'local') hud.classList.add('adjust');
     slide(grab.r, grab.v0, dy);
   });
   function end(isTap) {
