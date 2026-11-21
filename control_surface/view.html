@@ -369,6 +369,7 @@ function makeRows() {
   add(widthRow, 0, 'Picture · screen ' + Math.round(window.innerWidth) + '×' + Math.round(window.innerHeight));
   out.push(fold('layers', 'Layers', 0, 'Layers'));
   if (open.layers) model.layers.forEach(function (l) {
+    if (l.legacy) return;
     add(swRow(l.name, function () { return l.on; },
               function (on) { l.on = on; csend({ t: 'item', scene: l.scene, id: l.id, on: on }); }), 1, 'Layers');
   });

@@ -354,7 +354,7 @@ function makeLayers(tab) {
   head.append(el("div", "name", "Layers"), el("div", "pos", "top of stack first"),
     infoBtn(() => sheet("Layers", "Program scene “" + model.program + "”",
       [["p", "The layers that are mixed into the program, top of the stack first. A switch here shows or hides the whole layer (the same as the eye icon in OBS's Sources list). A hidden layer's filters do not run, so hiding a layer also frees its render time."]])));
-  for (const l of [...model.layers].reverse()) {
+  for (const l of [...model.layers].reverse().filter((l) => showLegacy || !l.legacy)) {
     const r = el("div", "lrow"), sw = el("button", "sw" + (l.on ? " on" : ""));
     sw.onclick = () => { l.on = !l.on; sw.classList.toggle("on", l.on); send({ t: "item", scene: l.scene, id: l.id, on: l.on }); };
     layerSw.set(K(l.scene, l.id), (on) => { l.on = on; sw.classList.toggle("on", on); });

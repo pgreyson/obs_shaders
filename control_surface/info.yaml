@@ -106,6 +106,9 @@ tabs:
       - title: Stereo render
         filters: [stereo splat, chromadepth, lumadepth OLD]
 
+# test / reference layers: hidden like legacy filters
+legacy_layers: [Oracle Preview, Test Pattern]
+
 layers:
   Video Capture Device: "The synth layer (Elgato capture and its whole chain, see the Synth tab). Bottom of the stack."
   Oracle Preview: "Still image from the reference renderer (tools/stereo_oracle.py), for comparing against the live splat. Normally hidden."

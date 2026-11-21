@@ -241,7 +241,8 @@ class Surface:
             if sc == program:
                 ltext = info.get("layers") or {}
                 layers = [{"scene": sc, "id": it["sceneItemId"], "name": it["sourceName"],
-                           "on": it["sceneItemEnabled"], "info": ltext.get(it["sourceName"], "")}
+                           "on": it["sceneItemEnabled"], "info": ltext.get(it["sourceName"], ""),
+                           "legacy": it["sourceName"] in (info.get("legacy_layers") or [])}
                           for it in sorted(items, key=lambda i: i["sceneItemIndex"])]
         for inp in (await o.call("GetInputList")).get("inputs", []):
             if inp["inputName"] not in names:
@@ -604,6 +605,9 @@ class Surface:
             st = {"obs": True}
             try:
                 s = await self.obs.call("GetStats")
+                if s.get("activeFps", 30) < 28 and time.monotonic() - getattr(self, "slow_at", 0) > 10:
+                    self.slow_at = time.monotonic()
+                    log(f"main slow: {s.get('activeFps', 0):.1f} fps, render {s.get('averageFrameRenderTime', 0):.1f} ms")
                 st.update(fps=round(s.get("activeFps", 0), 1), ms=round(s.get("averageFrameRenderTime", 0), 1),
                           cpu=round(s.get("cpuUsage", 0), 1), mem=round(s.get("memoryUsage", 0)))
                 st.update(await self.rec_status())
@@ -694,8 +698,14 @@ class Preview:
         """One viewer: each text message is "ready for the next frame" and carries the wanted
         width; answer with the next new frame as a binary message (or "none")."""
         seq = 0
+        who = conn.remote_address[0] if conn.remote_address else "?"
+        n, t0, wait, send = 0, time.monotonic(), 0.0, 0.0     # per 10 s: frames, time waiting on the viewer / sending
+        t_sent = None
         try:
             async for msg in conn:
+                now = time.monotonic()
+                if t_sent is not None:
+                    wait += now - t_sent          # viewer took this long to show the frame and ask again
                 try:
                     width = min(3840, max(320, int(msg)))
                 except (TypeError, ValueError):
@@ -703,7 +713,17 @@ class Preview:
                 jpg, new = await self.frame(width, seq)
                 if jpg and new != seq:
                     seq = new
+                    ts = time.monotonic()
                     await conn.send(jpg)
+                    t_sent = time.monotonic()
+                    send += t_sent - ts
+                    n += 1
+                    if t_sent - t0 >= 10:
+                        # a slow viewer shows up as a long "viewer" time; a slow rig as few frames with a short one
+                        if n / (t_sent - t0) < 25:
+                            log(f"viewer {who}: {n / (t_sent - t0):.0f} fps "
+                                f"(viewer+network {1000 * wait / n:.0f} ms per frame, send {1000 * send / n:.0f} ms)")
+                        n, t0, wait, send = 0, t_sent, 0.0, 0.0
                 else:
                     await conn.send("none")
         except Exception:
