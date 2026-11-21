@@ -81,7 +81,7 @@ done
 
 echo "Launching Viture instance (ws :$VITURE_WS_PORT)..."
 open -n "$OBS_APP_MAIN" --args \
-    --multi \
+    --multi --disable-shutdown-check \
     --profile "$VITURE_PROFILE" \
     --collection "$VITURE_COLLECTION" \
     --websocket_port "$VITURE_WS_PORT" \
@@ -93,7 +93,7 @@ sleep 3
 
 echo "Launching Twitch relay instance (ws :$PROJECTOR_WS_PORT)..."
 open -n "$OBS_APP_TWITCH" --args \
-    --multi \
+    --multi --disable-shutdown-check \
     --profile "$PROJECTOR_PROFILE" \
     --collection "$PROJECTOR_COLLECTION" \
     --websocket_port "$PROJECTOR_WS_PORT"
@@ -102,7 +102,7 @@ sleep 3
 
 echo "Launching YouTube instance (ws :$YOUTUBE_WS_PORT)..."
 open -n "$OBS_APP_YOUTUBE" --args \
-    --multi \
+    --multi --disable-shutdown-check \
     --profile "$YOUTUBE_PROFILE" \
     --collection "$YOUTUBE_COLLECTION" \
     --websocket_port "$YOUTUBE_WS_PORT"
@@ -111,7 +111,7 @@ sleep 3
 
 echo "Launching half-SBS projector instance (ws :$HALFSBS_WS_PORT)..."
 open -n "$OBS_APP_PROJECTOR" --args \
-    --multi \
+    --multi --disable-shutdown-check \
     --profile "$HALFSBS_PROFILE" \
     --collection "$HALFSBS_COLLECTION" \
     --websocket_port "$HALFSBS_WS_PORT"

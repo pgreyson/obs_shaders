@@ -9,7 +9,7 @@ for p in $PIDS; do kill -TERM "$p" 2>/dev/null || true; done
 for _ in $(seq 1 10); do pgrep -f "^/Applications/OBS.app/Contents/MacOS/OBS" >/dev/null || break; sleep 1; done
 for p in $(pgrep -f "^/Applications/OBS.app/Contents/MacOS/OBS" || true); do kill -KILL "$p" 2>/dev/null || true; done
 sleep 1
-open -n "/Applications/OBS.app" --args --multi --profile 'elegato->full_sbs' \
+open -n "/Applications/OBS.app" --args --multi --disable-shutdown-check --profile 'elegato->full_sbs' \
     --collection 'elegato->full_sbs' --websocket_port 4455 --startvirtualcam
 echo "main relaunched"
 # The bridge only connects to main at start-up: restart it once main's websocket answers,
