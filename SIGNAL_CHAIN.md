@@ -198,6 +198,17 @@ relay and pushed the 8 GB M2 into swap.
   chain. Stopped — starting it steals the Blackmagic from main.
 - In main: scene `camera_test`, the `Oracle Preview` and `Test Pattern` layers (off).
 
+## Frame budget: keep the OBS windows minimised
+
+The instances share one GPU, so load in the relays shows up as render time in main. Measured
+2026-11-21 with synth + stage + room on (main at 38.6 ms, 26 fps): freezing both relays gave
+30.8 ms; minimising the three OBS windows (which stops their preview draws) gave 33 ms and
+30 fps with no skipped frames; the phone viewer's frame grabs made no measurable difference.
+Per layer in main: synth chain ~18 ms (field smooth h+v 4.5 of it), stage ~11, room ~9 (about
+half of each camera is the `camera` pass). `launch_dual.sh` minimises the windows 20 s after
+launch; `tools/obs_windows.sh minimize|restore` does it by hand. With all three layers on
+there is no headroom left, so an open OBS window costs frames.
+
 ## Known failure: scrambled camera pictures after a power loss
 
 After the Mac and the Pis lost power together (2026-11-21), both UltraStudio boxes locked to
