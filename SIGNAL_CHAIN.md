@@ -198,6 +198,16 @@ relay and pushed the 8 GB M2 into swap.
   chain. Stopped — starting it steals the Blackmagic from main.
 - In main: scene `camera_test`, the `Oracle Preview` and `Test Pattern` layers (off).
 
+## Stream picture: gap between the eyes (Cardboard viewers)
+
+A phone in a Cardboard-type viewer has a divider between the lenses, so in the STREAMED picture
+the two eyes must not meet. `tools/stream_gap.py <percent>` shrinks each eye in the Twitch and
+YouTube relays' `full_sbs` scene, keeping its 16:9 shape and its centre (the quarter points of
+the frame), which leaves black between the eyes (the given % of the stream width), half of
+that at each outer edge, and above/below. It is two cropped scene items of the virtual-camera
+input, no shader. Main, the Viture and the phone viewer page are not affected. `0` restores
+the plain picture, `show` prints the state. Set to 4 % on 2026-11-21.
+
 ## Frame budget: the rig is GPU-bound
 
 Profiled 2026-11-21 (`sample` on main, `ioreg -c IOAccelerator` for utilisation): main's render
