@@ -338,7 +338,8 @@ var depthRow = { kind: 'local', label: 'Overlay depth', key: 'local:depth', min:
 
 // Gap between the two eye pictures, % of the screen width (kept on this device), and
 // whether the narrower eyes keep their 16:9 shape.
-var gapPct = 0, keepAspect = true;
+// default on a phone: a bit wider than the two guide lines (17 pt apart), about 22 pt
+var gapPct = isPhone ? 2.5 : 0, keepAspect = true;
 try {
   var gv = parseFloat(localStorage.getItem('gap')); if (gv >= 0 && gv <= 40) gapPct = gv;
   keepAspect = localStorage.getItem('keep') !== '0';
