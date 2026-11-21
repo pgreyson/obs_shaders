@@ -75,7 +75,12 @@
              border-radius: .25em; background: rgba(0, 0, 0, .40); border: 1px solid rgba(255, 255, 255, .16); }
   #hud.live .nav div { background: rgba(0, 0, 0, .62); }
   .nav div.press { background: rgba(70, 110, 200, .55) !important; }
-  .panel { position: absolute; left: calc(var(--base) + var(--dx)); top: 0; bottom: 0; width: 43%;
+  /* Pinned to the eye's left edge in BOTH eyes: the two copies are offset against each other
+     by --pop for depth, so the one that would start inside the frame is slid out past the
+     edge instead (clipped there), and the contents are padded by the same amount so no text
+     is cut. */
+  .panel { position: absolute; left: calc(var(--dx) - var(--base)); top: 0; bottom: 0; width: 43%;
+           padding-left: calc(2 * var(--base));
            display: flex; flex-direction: column; border-radius: .4em; overflow: hidden;
            background: rgba(0, 0, 0, .30); color: #a4a9b6; opacity: .22; transition: opacity .6s; }
   #hud.live .panel { opacity: .5; transition: opacity .1s; background: rgba(0, 0, 0, .55); }
