@@ -31,14 +31,14 @@ tabs:
       - title: Colour (also shapes depth)
         filters: [synth color]
       - title: Depth field
-        filters: [depth bake, field smooth h, field smooth v]
-      - title: Stereo render
+        filters: [depth bake]
+      - title: Stereo render (with depth-field smoothing)
         filters: [stereo splat]
       - title: After the stereo render
         filters: [stereo soften, pillar box]
       - title: Replaced (kept off for rollback)
         legacy: true
-        filters: [synth color OLD, palette, stereo displace]
+        filters: [synth color OLD, palette, stereo displace, field smooth h, field smooth v]
 
   - id: stage
     title: Stage camera
@@ -130,8 +130,8 @@ instances:
   "Video Capture Device/stereo displace": "Retired renderer, kept for comparison. Never enable it together with stereo splat: it would displace an image that is already a stereo pair."
   "Video Capture Device/pillar box": "Off since 2026-11-08: the 4:3 synth is deliberately stretched to the 16:9 eye so it matches the cameras and fills the projector."
   "Video Capture Device/stereo soften": "Off at the moment; its value is parked."
-  "Video Capture Device/field smooth h": "Horizontal half of the blur. Keep its sigma equal to field smooth v."
-  "Video Capture Device/field smooth v": "Vertical half of the blur. Keep its sigma equal to field smooth h."
+  "Video Capture Device/field smooth h": "Replaced on 2026-11-21 by the splat's Field smoothing control. Keep off, or the depth is smoothed twice."
+  "Video Capture Device/field smooth v": "Replaced on 2026-11-21 by the splat's Field smoothing control. Keep off, or the depth is smoothed twice."
   "Test Pattern/chromadepth": "Retired fragment-shader renderer on the bench layer. Enable only with stereo splat off."
   "Test Pattern/lumadepth OLD": "The first renderer (depth from brightness only), kept for reference. Enable only with the other renderers off."
   "Scene/stereo window": "Off since 2026-11-08: every layer already masks its own eyes, so this only narrowed the frame and cost a pass."
@@ -590,6 +590,24 @@ native:
           plane + thickness x (d - anchor)
       in canvas px, + = in front of the screen. Plane moves the whole field as one; Thickness is the depth range inside it; Anchor is the depth that stays put when Thickness changes. Display zero (Program tab) is added on top of all of this.
     params:
+      - key: smooth_sigma
+        type: float
+        min: 0
+        max: 24
+        step: 0.05
+        default: 0
+        label: Field smoothing (px)
+        section: Depth field smoothing
+        info: "Gaussian blur of the baked depth only (colours untouched), sigma in source px, 0 = off. Depth cliffs become ramps, so the render opens fewer black gaps beside bright detail and sloped edges stop tearing into steps. This replaced the two 'field smooth' filters on 2026-11-21 (same kernel, done inside the plugin, about 3 ms a frame cheaper)."
+      - key: mesh_step
+        type: int
+        min: 1
+        max: 16
+        step: 1
+        default: 1
+        label: Warp mesh spacing (px)
+        section: Depth field smoothing
+        info: "Warp mode only: the picture is moved on a mesh with one vertex every N px (1 = one per pixel). Colour is always full resolution; only the displacement gets coarser, which a smoothed depth field hides. At 4 the splat costs main about 3 ms a frame less than at 1 (measured 2026-11-21: 30 to 26.7 ms with all layers on). Use 1 with Field smoothing at 0 if depth edges must be pixel-exact."
       - key: plane_px
         type: float
         min: -300

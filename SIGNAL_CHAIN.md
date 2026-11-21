@@ -198,16 +198,24 @@ relay and pushed the 8 GB M2 into swap.
   chain. Stopped — starting it steals the Blackmagic from main.
 - In main: scene `camera_test`, the `Oracle Preview` and `Test Pattern` layers (off).
 
-## Frame budget: keep the OBS windows minimised
+## Frame budget: the rig is GPU-bound
 
-The instances share one GPU, so load in the relays shows up as render time in main. Measured
-2026-11-21 with synth + stage + room on (main at 38.6 ms, 26 fps): freezing both relays gave
-30.8 ms; minimising the three OBS windows (which stops their preview draws) gave 33 ms and
-30 fps with no skipped frames; the phone viewer's frame grabs made no measurable difference.
-Per layer in main: synth chain ~18 ms (field smooth h+v 4.5 of it), stage ~11, room ~9 (about
-half of each camera is the `camera` pass). `launch_dual.sh` minimises the windows 20 s after
-launch; `tools/obs_windows.sh minimize|restore` does it by hand. With all three layers on
-there is no headroom left, so an open OBS window costs frames.
+Profiled 2026-11-21 (`sample` on main, `ioreg -c IOAccelerator` for utilisation): main's render
+thread spends ~70 % of every frame waiting for the GPU (`gs_stagesurface_map` →
+`MTLCommandBuffer waitUntilCompleted`, once for the output frame and once in the splat), and the
+GPU sits at 82–88 % for the whole machine. So frame time follows TOTAL GPU load, from every OBS
+instance. Toggling a filter while main is over 33 ms overstates its cost several times (frames
+spill); measure under budget, alternating A/B, medians.
+
+- The biggest single load was the splat's per-pixel warp mesh: 8.3 M vertices a frame for both
+  eyes. `mesh_step` (plugin, warp mode) draws a connected mesh with a vertex every N px, colour
+  still per pixel: at 4, main went 30 → 26.7 ms and GPU 86 → 82 %, with synth + both cameras on
+  and all OBS windows open (0 skipped frames). Pictures at 1/2/4 match on the test image.
+- Field smoothing moved into the plugin (`smooth_sigma`, same kernel, same picture to ±3/255);
+  the two `field smooth` filters stay off. That did NOT save time (29.7 vs 29.1 ms).
+- Open OBS windows (previews) and the relays add GPU load; near the limit minimising windows
+  (`tools/obs_windows.sh minimize|restore`) recovered several ms, but it is no longer needed.
+- Under budget, each camera layer costs about 3.5 ms, the synth layer about 12.
 
 ## Known failure: scrambled camera pictures after a power loss
 

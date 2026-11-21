@@ -108,13 +108,13 @@ async def run(configs):
             "sourceName": SOURCE, "filterName": FILTER,
             "filterSettings": {**legacy_to_field(depth, 0.0), "mode": mode,
                                "fill": 3, "ssaa": False, "mlaa": True,
-                               "window": False,
+                               "window": False, "smooth_sigma": sigma,
                                "sync": True, "debug": 0}}))
-        # regional-depth smoothing: both separable passes get the same sigma
+        # regional-depth smoothing is inside the splat plugin (smooth_sigma, same two-pass
+        # kernel); the old separate filters must stay off or the field is smoothed twice
         for fname in ("field smooth h", "field smooth v"):
-            await ws.call(simpleobsws.Request("SetSourceFilterSettings", {
-                "sourceName": SOURCE, "filterName": fname,
-                "filterSettings": {"smoothing": sigma}}))
+            await ws.call(simpleobsws.Request("SetSourceFilterEnabled", {
+                "sourceName": SOURCE, "filterName": fname, "filterEnabled": False}))
         await asyncio.sleep(0.8)
         r = await ws.call(simpleobsws.Request("GetSourceScreenshot", {
             "sourceName": SOURCE, "imageFormat": "png",

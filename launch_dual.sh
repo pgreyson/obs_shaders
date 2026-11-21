@@ -122,9 +122,8 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 ( sleep 12; "$HERE/control_bridge/.venv/bin/python3" "$HERE/projector/projector.py" open \
       || echo "  (projector display not found — plug it in and run: projector/projector.py open)" ) &
 
-# Minimise the OBS windows once they are up: their previews cost main ~6 ms a frame
-# (tools/obs_windows.sh; `tools/obs_windows.sh restore` brings them back).
-( sleep 20; "$HERE/tools/obs_windows.sh" minimize ) &
+# Program output on the Viture + virtual camera check (tools/after_launch.py).
+( "$HERE/control_bridge/.venv/bin/python3" "$HERE/tools/after_launch.py" || true ) &
 
 # Audio watchdog: re-arms each instance's Elgato audio capture when it silently stalls
 # (tools/audio_watchdog.py). Detached so it outlives this shell; skipped if already running.

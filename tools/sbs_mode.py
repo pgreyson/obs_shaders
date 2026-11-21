@@ -28,7 +28,8 @@ import yaml, simpleobsws
 
 STATE = os.path.join(HERE, '.sbs_mode_state.json')
 SOURCE = "Video Capture Device"
-DEPTH_BLOCK = ["depth bake", "field smooth h", "field smooth v", "stereo splat", "stereo soften"]
+# field smoothing lives inside the splat plugin since 2026-11-21 (the two "field smooth" filters stay off)
+DEPTH_BLOCK = ["depth bake", "stereo splat", "stereo soften"]
 ALIGN = "sbs align"
 FALLBACK = {f: True for f in DEPTH_BLOCK}          # sane mono-mode defaults
 FALLBACK[ALIGN] = False

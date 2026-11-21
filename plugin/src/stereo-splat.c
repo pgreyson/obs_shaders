@@ -59,11 +59,15 @@ struct stereo_splat {
 	gs_eparam_t *p_anchor_d;
 	gs_eparam_t *p_vig_w;
 	gs_eparam_t *p_out_rows;
+	gs_eparam_t *p_smooth_sigma;
+	gs_eparam_t *p_smooth_step;
 
 	gs_texrender_t *input_rt;
 	gs_texrender_t *output_rt;
 	gs_texrender_t *fill_rt;
 	gs_texrender_t *fillv_rt;
+	gs_texrender_t *smh_rt; /* field smoothing, horizontal pass */
+	gs_texrender_t *smv_rt; /* field smoothing, vertical pass */
 	/* double-buffered: stage frame N, map frame N-1 — a same-frame map
 	   right after gs_stage_texture is a full GPU sync; two instances
 	   stalling each other measured 51ms/frame. One frame of stream
@@ -84,6 +88,15 @@ struct stereo_splat {
 	gs_vertbuffer_t *warp_vb;  /* tristrip: 2 verts per src col per row */
 	uint32_t *splat_colors;    /* owned by splat_vb->data */
 	uint32_t *warp_colors;     /* owned by warp_vb->data */
+	/* coarse connected warp mesh (mesh_step > 1): vertices every N px,
+	   see VSWarpMesh. mesh_col/mesh_y = each vertex's source column and
+	   output y, for the per-frame depth fill. */
+	gs_vertbuffer_t *mesh_vb;
+	uint32_t *mesh_colors;
+	uint16_t *mesh_col;
+	uint16_t *mesh_y;
+	size_t mesh_verts;
+	int vb_mesh_step;
 	size_t splat_verts;
 	size_t warp_verts;
 	uint32_t vb_width, vb_height;
@@ -101,7 +114,11 @@ struct stereo_splat {
 	float anchor;
 	float frame_inset_px;
 	float vignette_pct; /* depth vignette ramp width, % of frame */
+	float smooth_sigma; /* field smoothing of the baked depth, source px
+			       (0 = off); replaces the two "field smooth"
+			       shader filters */
 	int mode;       /* 0 = splat, 1 = warp */
+	int mesh_step;  /* warp: vertex spacing in px (1 = one per pixel) */
 	bool window;    /* floating window instead of edge taper */
 	int fill;       /* micro-fill width px (0 = off) */
 	bool ssaa;      /* 2x vertical supersampling of the splat */
@@ -147,8 +164,15 @@ static void splat_update(void *data, obs_data_t *settings)
 	s->frame_inset_px =
 		(float)obs_data_get_double(settings, "frame_inset_px");
 	s->mode = (int)obs_data_get_int(settings, "mode");
+	s->mesh_step = (int)obs_data_get_int(settings, "mesh_step");
+	if (s->mesh_step < 1)
+		s->mesh_step = 1;
+	if (s->mesh_step > 16)
+		s->mesh_step = 16;
 	s->vignette_pct =
 		(float)obs_data_get_double(settings, "vignette_pct");
+	s->smooth_sigma =
+		(float)obs_data_get_double(settings, "smooth_sigma");
 	s->window = obs_data_get_bool(settings, "window");
 	s->fill = (int)obs_data_get_int(settings, "fill");
 	s->ssaa = obs_data_get_bool(settings, "ssaa");
@@ -164,7 +188,9 @@ static void splat_defaults(obs_data_t *settings)
 	obs_data_set_default_double(settings, "anchor", 1.0);
 	obs_data_set_default_double(settings, "frame_inset_px", 48.0);
 	obs_data_set_default_double(settings, "vignette_pct", 0.0);
+	obs_data_set_default_double(settings, "smooth_sigma", 0.0);
 	obs_data_set_default_int(settings, "mode", 0);
+	obs_data_set_default_int(settings, "mesh_step", 1);
 	obs_data_set_default_bool(settings, "window", false);
 	obs_data_set_default_int(settings, "fill", 3);
 	obs_data_set_default_bool(settings, "ssaa", true);
@@ -189,6 +215,9 @@ static obs_properties_t *splat_properties(void *data)
 	obs_properties_add_float_slider(props, "vignette_pct",
 					obs_module_text("DepthVignette"), 0.0,
 					50.0, 0.5);
+	obs_properties_add_float_slider(props, "smooth_sigma",
+					obs_module_text("FieldSmooth"), 0.0,
+					24.0, 0.05);
 	obs_properties_add_float_slider(props, "frame_inset_px",
 					obs_module_text("FrameInset"), 0.0,
 					120.0, 1.0);
@@ -197,6 +226,8 @@ static obs_properties_t *splat_properties(void *data)
 		OBS_COMBO_FORMAT_INT);
 	obs_property_list_add_int(m, obs_module_text("ModeSplat"), 0);
 	obs_property_list_add_int(m, obs_module_text("ModeWarp"), 1);
+	obs_properties_add_int_slider(props, "mesh_step",
+				      obs_module_text("MeshStep"), 1, 16, 1);
 	obs_properties_add_bool(props, "window",
 				obs_module_text("FloatingWindow"));
 	obs_properties_add_int_slider(props, "fill",
@@ -223,6 +254,10 @@ static void splat_destroy(void *data)
 		gs_texrender_destroy(s->fill_rt);
 	if (s->fillv_rt)
 		gs_texrender_destroy(s->fillv_rt);
+	if (s->smh_rt)
+		gs_texrender_destroy(s->smh_rt);
+	if (s->smv_rt)
+		gs_texrender_destroy(s->smv_rt);
 	if (s->stage[0])
 		gs_stagesurface_destroy(s->stage[0]);
 	if (s->stage[1])
@@ -231,7 +266,11 @@ static void splat_destroy(void *data)
 		gs_vertexbuffer_destroy(s->splat_vb);
 	if (s->warp_vb)
 		gs_vertexbuffer_destroy(s->warp_vb);
+	if (s->mesh_vb)
+		gs_vertexbuffer_destroy(s->mesh_vb);
 	obs_leave_graphics();
+	bfree(s->mesh_col);
+	bfree(s->mesh_y);
 	bfree(s);
 }
 
@@ -247,6 +286,8 @@ static void *splat_create(obs_data_t *settings, obs_source_t *context)
 	s->output_rt = gs_texrender_create(GS_RGBA, GS_Z24_S8);
 	s->fill_rt = gs_texrender_create(GS_RGBA, GS_ZS_NONE);
 	s->fillv_rt = gs_texrender_create(GS_RGBA, GS_ZS_NONE);
+	s->smh_rt = gs_texrender_create(GS_RGBA, GS_ZS_NONE);
+	s->smv_rt = gs_texrender_create(GS_RGBA, GS_ZS_NONE);
 	obs_leave_graphics();
 	bfree(path);
 
@@ -273,6 +314,10 @@ static void *splat_create(obs_data_t *settings, obs_source_t *context)
 	s->p_anchor_d = gs_effect_get_param_by_name(s->effect, "anchor_d");
 	s->p_vig_w = gs_effect_get_param_by_name(s->effect, "vig_w");
 	s->p_out_rows = gs_effect_get_param_by_name(s->effect, "out_rows");
+	s->p_smooth_sigma =
+		gs_effect_get_param_by_name(s->effect, "smooth_sigma");
+	s->p_smooth_step =
+		gs_effect_get_param_by_name(s->effect, "smooth_step");
 
 	splat_update(s, settings);
 	return s;
@@ -371,12 +416,81 @@ static void rebuild_vertex_buffers(struct stereo_splat *s, uint32_t w,
 	s->warp_vb = gs_vertexbuffer_create(vbd, GS_DYNAMIC);
 	s->warp_verts = wn;
 
+	/* coarse warp mesh: one tristrip per band of N rows, 2 verts per
+	   vertex column (top y_j, bottom y_j+1), bands stitched with
+	   degenerates. Last column / row clamp to the frame edge. */
+	if (s->mesh_vb) {
+		gs_vertexbuffer_destroy(s->mesh_vb);
+		s->mesh_vb = NULL;
+	}
+	bfree(s->mesh_col);
+	bfree(s->mesh_y);
+	s->mesh_col = NULL;
+	s->mesh_y = NULL;
+	s->mesh_verts = 0;
+	uint32_t step = (uint32_t)(s->mesh_step < 1 ? 1 : s->mesh_step);
+	if (step > 1) {
+		uint32_t nc = (w - 1 + step - 1) / step + 1;
+		uint32_t nr = (h + step - 1) / step + 1;
+		size_t mn = ((size_t)nc * 2 + 2) * (nr - 1);
+		vbd = gs_vbdata_create();
+		vbd->num = mn;
+		vbd->points = bmalloc(mn * sizeof(struct vec3));
+		vbd->colors = bzalloc(mn * sizeof(uint32_t));
+		s->mesh_col = bmalloc(mn * sizeof(uint16_t));
+		s->mesh_y = bmalloc(mn * sizeof(uint16_t));
+		k = 0;
+		for (uint32_t j = 0; j + 1 < nr; j++) {
+			uint32_t y0 = j * step, y1 = (j + 1) * step;
+			if (y1 > h)
+				y1 = h;
+			for (uint32_t i = 0; i < nc; i++) {
+				uint32_t col = i * step;
+				if (col > w - 1)
+					col = w - 1;
+				float u = ((float)col + 0.5f) / (float)w;
+				for (int e = 0; e < 2; e++) {
+					uint32_t y = e ? y1 : y0;
+					vbd->points[k].x = u;
+					vbd->points[k].y = (float)y;
+					vbd->points[k].z = 0.0f;
+					s->mesh_col[k] = (uint16_t)col;
+					s->mesh_y[k] = (uint16_t)y;
+					k++;
+				}
+			}
+			/* stitch: repeat the last vert, then the first of the
+			   next band (or the last again on the final band) */
+			vbd->points[k] = vbd->points[k - 1];
+			s->mesh_col[k] = s->mesh_col[k - 1];
+			s->mesh_y[k] = s->mesh_y[k - 1];
+			k++;
+			if (j + 2 < nr) {
+				vbd->points[k].x = 0.5f / (float)w;
+				vbd->points[k].y = (float)y1;
+				vbd->points[k].z = 0.0f;
+				s->mesh_col[k] = 0;
+				s->mesh_y[k] = (uint16_t)y1;
+			} else {
+				vbd->points[k] = vbd->points[k - 1];
+				s->mesh_col[k] = s->mesh_col[k - 1];
+				s->mesh_y[k] = s->mesh_y[k - 1];
+			}
+			k++;
+		}
+		s->mesh_colors = vbd->colors;
+		s->mesh_vb = gs_vertexbuffer_create(vbd, GS_DYNAMIC);
+		s->mesh_verts = mn;
+	}
+	s->vb_mesh_step = s->mesh_step;
+
 	s->vb_width = w;
 	s->vb_height = h;
 	s->vb_ssaa = ssaa;
 	obs_log(LOG_INFO,
-		"stereo splat: rebuilt grids %ux%u (splat %zu pts, warp %zu verts)",
-		w, h, s->splat_verts, s->warp_verts);
+		"stereo splat: rebuilt grids %ux%u (splat %zu pts, warp %zu verts, mesh step %d: %zu verts)",
+		w, h, s->splat_verts, s->warp_verts, s->mesh_step,
+		s->mesh_verts);
 }
 
 /* Oracle vertical crop: output row -> source row (the CPU color fill
@@ -397,8 +511,8 @@ static inline uint32_t vy_row(uint32_t out_row, uint32_t out_h,
 
 /* Stream the staged input into the active buffer's COLOR array:
    rgb = splat color, a = the bake's encoded depth (a = 0.5 + d/2). */
-static bool fill_colors(struct stereo_splat *s, bool warp, uint32_t w,
-			uint32_t h, float f0)
+static bool fill_colors(struct stereo_splat *s, bool warp, bool mesh,
+			uint32_t w, uint32_t h, float f0)
 {
 	uint8_t *px;
 	uint32_t linesize;
@@ -406,7 +520,20 @@ static bool fill_colors(struct stereo_splat *s, bool warp, uint32_t w,
 	if (!gs_stagesurface_map(s->stage[s->stage_idx ^ 1], &px, &linesize))
 		return false;
 
-	if (!warp) {
+	if (mesh) {
+		/* coarse mesh: one texel (depth in alpha) per vertex */
+		uint32_t *dst = s->mesh_colors;
+		for (size_t k = 0; k < s->mesh_verts; k++) {
+			uint32_t y = s->mesh_y[k];
+			if (y > h - 1)
+				y = h - 1;
+			const uint32_t *src =
+				(const uint32_t *)(px +
+						   (size_t)vy_row(y, h, h, f0) *
+							   linesize);
+			dst[k] = src[s->mesh_col[k]];
+		}
+	} else if (!warp) {
 		uint32_t out_h = s->vb_ssaa ? h * 2 : h;
 		uint32_t *dst = s->splat_colors;
 		for (uint32_t row = 0; row < out_h; row++) {
@@ -467,7 +594,7 @@ static void splat_render(void *data, gs_effect_t *unused_effect)
 	}
 
 	if (!s->splat_vb || s->vb_width != w || s->vb_height != h ||
-	    s->vb_ssaa != s->ssaa)
+	    s->vb_ssaa != s->ssaa || s->vb_mesh_step != s->mesh_step)
 		rebuild_vertex_buffers(s, w, h, s->ssaa);
 
 	/* ---- pass 1: grab the filter input (bake output) ---- */
@@ -496,6 +623,39 @@ static void splat_render(void *data, gs_effect_t *unused_effect)
 		return;
 	}
 
+	/* ---- pass 1a: field smoothing (blur of the baked depth in alpha,
+	   h then v; rgb untouched). Everything downstream reads the result
+	   as its input. ---- */
+	if (s->smooth_sigma > 0.0f && s->debug != 2) {
+		gs_texrender_t *rts[2] = {s->smh_rt, s->smv_rt};
+		struct vec2 sdims;
+		vec2_set(&sdims, (float)w, (float)h);
+		gs_blend_state_push();
+		gs_blend_function(GS_BLEND_ONE, GS_BLEND_ZERO);
+		for (int pass = 0; pass < 2; pass++) {
+			struct vec2 step;
+			vec2_set(&step, pass == 0 ? 1.0f / (float)w : 0.0f,
+				 pass == 0 ? 0.0f : 1.0f / (float)h);
+			gs_texrender_reset(rts[pass]);
+			if (!gs_texrender_begin(rts[pass], w, h))
+				break;
+			gs_ortho(0.0f, (float)w, 0.0f, (float)h, -100.0f,
+				 100.0f);
+			gs_effect_set_texture(s->p_image, input_tex);
+			gs_effect_set_vec2(s->p_dims, &sdims);
+			gs_effect_set_float(s->p_smooth_sigma,
+					    s->smooth_sigma);
+			gs_effect_set_vec2(s->p_smooth_step, &step);
+			while (gs_effect_loop(s->effect, "Smooth"))
+				gs_draw_sprite(input_tex, 0, w, h);
+			gs_texrender_end(rts[pass]);
+			gs_texture_t *t = gs_texrender_get_texture(rts[pass]);
+			if (t)
+				input_tex = t;
+		}
+		gs_blend_state_pop();
+	}
+
 	/* ---- pass 1b: stage the input and stream the COLOR attribute
 	   (vertex texture fetch is broken on Apple GL — see header) ---- */
 	/* fi = frame inset in source-u units: fi/span = inset_px/eye. With
@@ -509,6 +669,7 @@ static void splat_render(void *data, gs_effect_t *unused_effect)
 	float disp_s0 = (s->anchor * s->thickness_px - s->plane_px) * span_f /
 			(2.0f * FIELD_EYE_PX);
 	bool warp_mode = (s->mode == 1 && s->debug == 0);
+	bool mesh_mode = warp_mode && s->mesh_step > 1 && s->mesh_vb;
 	if (s->debug < 2 || s->debug == 5) {
 		gs_stage_texture(s->stage[s->stage_idx], input_tex);
 		if (s->sync) {
@@ -523,17 +684,22 @@ static void splat_render(void *data, gs_effect_t *unused_effect)
 			obs_source_skip_video_filter(s->context);
 			return;
 		}
-		if (!fill_colors(s, warp_mode, w, h, f0)) {
+		if (!fill_colors(s, warp_mode, mesh_mode, w, h, f0)) {
 			obs_source_skip_video_filter(s->context);
 			return;
 		}
 		if (!s->sync)
 			s->stage_idx ^= 1;
 		struct gs_vb_data stream = {0};
-		stream.num = warp_mode ? s->warp_verts : s->splat_verts;
-		stream.colors = warp_mode ? s->warp_colors : s->splat_colors;
-		gs_vertexbuffer_flush_direct(warp_mode ? s->warp_vb
-						       : s->splat_vb,
+		stream.num = mesh_mode ? s->mesh_verts
+				       : warp_mode ? s->warp_verts
+						   : s->splat_verts;
+		stream.colors = mesh_mode ? s->mesh_colors
+					  : warp_mode ? s->warp_colors
+						      : s->splat_colors;
+		gs_vertexbuffer_flush_direct(mesh_mode ? s->mesh_vb
+						       : warp_mode ? s->warp_vb
+								   : s->splat_vb,
 					     &stream);
 	}
 
@@ -578,6 +744,8 @@ static void splat_render(void *data, gs_effect_t *unused_effect)
 			tech_name = "DebugQ";
 		else if (s->debug == 1)
 			tech_name = "Debug";
+		else if (mesh_mode)
+			tech_name = "WarpMesh";
 		else if (warp_mode)
 			tech_name = "Warp";
 		else
@@ -585,8 +753,12 @@ static void splat_render(void *data, gs_effect_t *unused_effect)
 		gs_technique_t *tech =
 			gs_effect_get_technique(s->effect, tech_name);
 
-		gs_vertbuffer_t *vb = warp_mode ? s->warp_vb : s->splat_vb;
-		size_t nverts = warp_mode ? s->warp_verts : s->splat_verts;
+		gs_vertbuffer_t *vb = mesh_mode ? s->mesh_vb
+						: warp_mode ? s->warp_vb
+							    : s->splat_vb;
+		size_t nverts = mesh_mode ? s->mesh_verts
+					  : warp_mode ? s->warp_verts
+						      : s->splat_verts;
 		enum gs_draw_mode dm = warp_mode ? GS_TRISTRIP : GS_LINES;
 
 		for (int eye = 0; eye < 2; eye++) {

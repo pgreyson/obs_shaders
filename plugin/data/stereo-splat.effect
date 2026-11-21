@@ -49,6 +49,8 @@ uniform float shift0;    // per-eye constant shift (source u)
 uniform float anchor_d;  // anchor depth (0 back .. 1 front): what the vignette flattens to
 uniform float vig_w;     // depth vignette ramp width, fraction of the visible frame (0 = off)
 uniform float out_rows;  // rows in the vertex grid (output height incl. supersampling)
+uniform float smooth_sigma; // field smoothing sigma (source px, 0 = off)
+uniform float2 smooth_step; // one texel along the blur axis (uv)
 
 sampler_state pointSampler {
 	Filter    = Point;
@@ -182,6 +184,33 @@ WarpOut VSWarp(VertIn v_in)
 	float zw = -100.0 + d * 200.0;
 	v_out.pos = mul(float4(out_x, out_y, zw, 1.0), ViewProj);
 	v_out.uv = float2(u, (src_row(out_row) + 0.5) / dims.y);
+	return v_out;
+}
+
+// Warp on a COARSE connected mesh (mesh_step > 1): vertices every N source
+// px in x and every N output rows in y, joined in both directions, so depth
+// is interpolated between them. pos.y is the vertex's output y (a row
+// boundary), pos.z unused. Colour is still sampled per fragment from the
+// full-resolution picture, so only the DISPLACEMENT is coarser, and with a
+// smoothed depth field that is not visible. 1/N^2 of the vertices: the
+// per-pixel mesh (8.3 M vertices a frame for both eyes) was the largest
+// single GPU load of the rig (measured 2026-11-21).
+WarpOut VSWarpMesh(VertIn v_in)
+{
+	WarpOut v_out;
+	float u = clamp(v_in.pos.x, PIC_LO, PIC_HI);
+	float y = v_in.pos.y;
+	float d = clamp(2.0 * (v_in.col.a - 0.5), 0.0, 1.0);
+	float dt = shape(d, u, y - 0.5);
+	float dest = u + eye_sign * (dt * f0 - shift0);
+	float q = (dest - vis_lo) / span;
+	float out_x = eye_base + clamp(q, 0.0, 1.0) * eye_w;
+
+	float zw = -100.0 + d * 200.0;
+	v_out.pos = mul(float4(out_x, y, zw, 1.0), ViewProj);
+	// continuous form of src_row(): at a fragment centre (row + 0.5) the
+	// point sampler lands on the same source row
+	v_out.uv = float2(u, inset + (y / dims.y) * (1.0 - 2.0 * inset));
 	return v_out;
 }
 
@@ -392,6 +421,53 @@ float4 PSPresent(WarpOut v_in) : TARGET
 		return float4(cc.rgb, 1.0);
 	}
 	return float4(texel.rgb, 1.0);
+}
+
+// ---- field smoothing: Gaussian blur of the baked depth (alpha) only ----
+// The same kernel as chromadepth_smooth.shader / stereo_oracle.field_smooth()
+// (21 taps, sigma_eff^2 = round(2 sigma^2)/2, taps stride above sigma 3 so they
+// cover +-3 sigma, edge-clamped, linear taps), run as two passes (h, then v)
+// into RGBA8 targets, so the 8-bit steps between the passes are the same as
+// when these were two obs-shaderfilter filters. Inside the plugin a pass costs
+// about 0.5 ms; as a separate filter it cost 2.2 ms. dims = texture size.
+float4 PSSmooth(WarpOut v_in) : TARGET
+{
+	float4 center = image.SampleLevel(pointSampler, v_in.uv, 0.0);
+	float n = round(2.0 * smooth_sigma * smooth_sigma);
+	if (n < 0.5)
+		return center;
+	float sig2 = n * 0.5;
+	float2 lo = float2(0.5 / dims.x, 0.5 / dims.y);
+	float2 hi = float2(1.0, 1.0) - lo;
+	float spacing = max(1.0, smooth_sigma / 3.0);
+	float acc = 0.0;
+	float wsum = 0.0;
+	for (int i = -10; i <= 10; i++) {
+		float fi = float(i) * spacing;
+		float w = exp(-(fi * fi) / (2.0 * sig2));
+		float2 t = clamp(v_in.uv + fi * smooth_step, lo, hi);
+		acc += w * image.SampleLevel(linearSampler, t, 0.0).a;
+		wsum += w;
+	}
+	return float4(center.rgb, acc / wsum);
+}
+
+technique Smooth
+{
+	pass
+	{
+		vertex_shader = VSSprite(v_in);
+		pixel_shader  = PSSmooth(v_in);
+	}
+}
+
+technique WarpMesh
+{
+	pass
+	{
+		vertex_shader = VSWarpMesh(v_in);
+		pixel_shader  = PSWarp(v_in);
+	}
 }
 
 technique Fill
