@@ -127,22 +127,18 @@ var pic = document.getElementById('pic'), bar = document.getElementById('bar'),
 var seq = 0, shown = [], lastUrl = null, hideTimer = null;
 
 // The picture fills the screen with nothing over it. A double tap anywhere brings the stereo
-// control overlay forward or hides it. A single tap shows the bar; another tap, or 5 s
-// without touching it, hides it again (a single tap waits a moment to see if a second follows).
+// control overlay forward or hides it; a single tap does nothing. (The old bottom bar is not
+// stereoscopic, so it is no longer shown: its buttons are rows at the end of the overlay list.)
 function showUi(on) {
   document.body.classList.toggle('ui', on);
   clearTimeout(hideTimer);
   if (on) hideTimer = setTimeout(function () { showUi(false); }, 5000);
 }
-var tapT = null, stripUp = 0;
+var tapAt = -1e9, stripUp = 0;
 function tap() {
-  if (tapT) {
-    clearTimeout(tapT); tapT = null;
-    showUi(false);
-    hudOn = !hudOn; applyHud();
-  } else {
-    tapT = setTimeout(function () { tapT = null; showUi(!document.body.classList.contains('ui')); }, 320);
-  }
+  var now = Date.now();
+  if (now - tapAt < 400) { tapAt = -1e9; hudOn = !hudOn; applyHud(); }
+  else tapAt = now;
 }
 document.addEventListener('click', function (e) {
   if (e.target.closest && e.target.closest('.panel, .strip, .nav, .vs')) return;
@@ -381,6 +377,9 @@ function makeRows() {
   });
   // last row: the full control page (for when the list here is not enough)
   out.push({ kind: 'nav', key: 'full', level: 0, path: 'Full controls', label: 'Full controls', note: '›', go: openControls });
+  if (goFull && !navigator.standalone) {
+    out.push({ kind: 'nav', key: 'fs', level: 0, path: 'Full screen', label: 'Full screen', note: '›', go: function () { fullBtn.onclick(); } });
+  }
   return out;
 }
 function rowText(r) {
