@@ -24,10 +24,17 @@
      The eye picture is either squeezed into its box, or (.keep) keeps its 16:9 shape and
      gets shorter instead. Each box shows one half of the same side-by-side frame. */
   :root { --gap: 0px; }
-  /* a hairline round each eye, like the frames on a stereo card (it replaced the two centre
-     alignment lines, 2026-11-21) */
   .ebox { position: absolute; top: 50%; transform: translateY(-50%); overflow: hidden;
-          width: calc(50% - var(--gap) / 2); height: 100%; box-shadow: 0 0 0 1px #4a4a4a; }
+          width: calc(50% - var(--gap) / 2); height: 100%; }
+  /* A hairline round each eye, like the frames on a stereo card (it replaced the two centre
+     alignment lines, 2026-11-21). The two frames are offset against each other by --pop, the
+     same amount as the control overlay, so the frame floats in the plane of the controls. */
+  :root { --pop: 0px; }
+  .frame { position: absolute; top: 50%; width: calc(50% - var(--gap) / 2); height: 100%;
+           box-shadow: 0 0 0 1px #4a4a4a; pointer-events: none; }
+  .keep .frame { height: auto; aspect-ratio: 16 / 9; }
+  .frame.l { left: 0; transform: translate(calc(var(--pop) / 2), -50%); }
+  .frame.r { right: 0; transform: translate(calc(var(--pop) / -2), -50%); }
   .keep .ebox { height: auto; aspect-ratio: 16 / 9; }
   .ebox.l { left: 0; } .ebox.r { right: 0; }
   .ebox img { position: absolute; top: 0; height: 100%; width: 200%; display: block; }
@@ -119,7 +126,7 @@
 </head>
 <body>
 <div id="root">
-<div id="pic"><div class="ebox l"><img id="picL" alt=""></div><div class="ebox r"><img id="picR" alt=""></div></div>
+<div id="pic"><div class="ebox l"><img id="picL" alt=""></div><div class="ebox r"><img id="picR" alt=""></div><div class="frame l"></div><div class="frame r"></div></div>
 <div id="hud">
   <div class="eye" id="eyeL"><div class="nav"><div>&#9650;</div><div>&#9679;</div><div>&#9660;</div></div><div class="panel"><div class="phead"><span class="ppath"></span><span class="pfps"></span></div><div class="pwin"><div class="plist"></div></div></div></div>
   <div class="eye" id="eyeR"><div class="nav"><div>&#9650;</div><div>&#9679;</div><div>&#9660;</div></div><div class="panel"><div class="phead"><span class="ppath"></span><span class="pfps"></span></div><div class="pwin"><div class="plist"></div></div></div></div>
@@ -321,6 +328,7 @@ function sizeHud() {
   var pop = depth || 0;
   hud.style.setProperty('--ew', ew + 'px');
   hud.style.setProperty('--pop', pop.toFixed(1) + 'px');
+  document.documentElement.style.setProperty('--pop', pop.toFixed(1) + 'px');   // the eye frames share it
   hud.style.setProperty('--base', (Math.abs(pop) / 2).toFixed(1) + 'px');   // keeps both copies inside their eye
   if (rows[cursor] && rows[cursor].els) place(winH() / 2 - centreOf(cursor), false);
 }
@@ -714,6 +722,7 @@ function applyHud() {
 }
 overlayBtn.onclick = function () { hudOn = !hudOn; applyHud(); };
 applyHud();
+sizeHud();        // also sets the eye frames' depth when the overlay is off
 </script>
 </body>
 </html>
