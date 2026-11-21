@@ -124,6 +124,7 @@ main { padding: 12px 12px calc(40px + env(safe-area-inset-bottom)); max-width: 1
     <span class="grow"></span>
     <span class="pill" id="saved" style="visibility:hidden">saved in OBS</span>
     <a class="pill" href="/view" style="text-decoration:none">View</a>
+    <button class="pill" id="full">Full screen</button>
     <button class="pill" id="reload">Reload</button>
   </div>
   <div class="tabs" id="tabs"></div>
@@ -434,6 +435,17 @@ function render() {
   }
 }
 $("#reload").onclick = () => send({ t: "reload" });
+// Full screen where the browser allows it (iPad Safari, desktop). iPhone Safari does not:
+// there the page runs without browser bars when opened from a Home Screen icon.
+{
+  const root = document.documentElement, go = root.requestFullscreen || root.webkitRequestFullscreen;
+  if (!go || navigator.standalone) $("#full").style.display = "none";
+  $("#full").onclick = () => {
+    if (document.fullscreenElement || document.webkitFullscreenElement)
+      (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    else try { go.call(root); } catch (e) {}
+  };
+}
 connect();
 </script>
 </body>
