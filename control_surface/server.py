@@ -702,6 +702,12 @@ def make_http(preview):
             body, ctype, code, reason = (HERE / "index.html").read_bytes(), "text/html; charset=utf-8", 200, "OK"
         elif path == "/view":
             body, ctype, code, reason = (HERE / "view.html").read_bytes(), "text/html; charset=utf-8", 200, "OK"
+        elif path == "/manifest.json":
+            # one web app covering both pages, so a Home Screen icon stays chrome-free on either
+            body = json.dumps({"name": "Rig", "short_name": "Rig", "start_url": "/view", "scope": "/",
+                               "display": "standalone", "background_color": "#000000",
+                               "theme_color": "#000000"}).encode()
+            ctype, code, reason = "application/manifest+json", 200, "OK"
         elif path == "/ca.crt" and (CERTS / "ca.crt").exists():
             # the local authority's public certificate: install + trust it once per phone/iPad
             body, ctype, code, reason = (CERTS / "ca.crt").read_bytes(), "application/x-x509-ca-cert", 200, "OK"

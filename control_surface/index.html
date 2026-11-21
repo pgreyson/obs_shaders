@@ -6,6 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="OBS surface">
+<link rel="manifest" href="/manifest.json">
 <title>OBS surface</title>
 <style>
 :root {
@@ -123,7 +124,7 @@ main { padding: 12px 12px calc(40px + env(safe-area-inset-bottom)); max-width: 1
     <span id="relays" style="display:contents"></span>
     <span class="grow"></span>
     <span class="pill" id="saved" style="visibility:hidden">saved in OBS</span>
-    <a class="pill" href="/view" style="text-decoration:none">View</a>
+    <a class="pill" id="view" href="/view" style="text-decoration:none">View</a>
     <button class="pill" id="full">Full screen</button>
     <button class="pill" id="reload">Reload</button>
   </div>
@@ -435,6 +436,10 @@ function render() {
   }
 }
 $("#reload").onclick = () => send({ t: "reload" });
+// Opened inside the viewer (its Controls button): View hands back to it instead of navigating.
+$("#view").onclick = (e) => {
+  if (window.parent !== window) { e.preventDefault(); window.parent.postMessage("view", location.origin); }
+};
 // Full screen where the browser allows it (iPad Safari, desktop). iPhone Safari does not:
 // there the page runs without browser bars when opened from a Home Screen icon.
 {

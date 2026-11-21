@@ -35,7 +35,15 @@
   button.on { background: #2d5fd0; border-color: #2d5fd0; color: #fff; }
   #stat { margin-left: auto; color: #8a93a6; font-variant-numeric: tabular-nums; }
   #stat.bad { color: #ff8a70; }
+  /* The control page opens inside this page (no navigation), so a Home Screen web app keeps
+     running without iOS adding its browser bar. */
+  #ctlwrap { position: fixed; inset: 0; z-index: 5; background: #0e1013; display: none; }
+  #ctlwrap.on { display: block; }
+  #ctl { position: absolute; border: 0; top: env(safe-area-inset-top); left: env(safe-area-inset-left);
+         width: calc(100% - env(safe-area-inset-left) - env(safe-area-inset-right));
+         height: calc(100% - env(safe-area-inset-top)); }
 </style>
+<link rel="manifest" href="/manifest.json">
 </head>
 <body>
 <div id="root">
@@ -43,10 +51,11 @@
 <img id="pic" alt="">
 <div id="bar">
   <button id="full">Full screen</button>
-  <a class="btn" href="/">Controls</a>
+  <button id="controls">Controls</button>
   <span id="stat">connecting…</span>
 </div>
 </div>
+<div id="ctlwrap"></div>
 <script>
 var pic = document.getElementById('pic'), bar = document.getElementById('bar'),
     stat = document.getElementById('stat'),
@@ -85,7 +94,7 @@ function width() { return 2560; }      // 1280 per eye: about what a phone shows
 // Frames arrive over one WebSocket as binary JPEGs. The page asks for the next frame only
 // when the previous one is on screen, so the rate follows what the link and phone can do
 // (up to the rig's 30 fps) and frames never queue up behind each other.
-var ws = null, pending = null, waiting = null;
+var ws = null, pending = null, waiting = null, paused = false;
 
 function ask() {
   if (ws && ws.readyState === 1) {
@@ -115,7 +124,7 @@ function connect() {
       while (shown.length && now - shown[0] > 2000) shown.shift();
       stat.className = '';
       stat.textContent = (shown.length / 2).toFixed(0) + ' fps · ' + Math.round(size / 1024) + ' KB';
-      if (document.hidden) pending = true; else ask();
+      if (document.hidden || paused) pending = true; else ask();
     };
     pic.src = url;
   };
@@ -130,6 +139,24 @@ document.addEventListener('visibilitychange', function () {
   if (!document.hidden && pending) { pending = null; ask(); }
 });
 connect();
+
+// Controls: load the control page in a frame over the picture and stop asking for frames
+// while it is up. Its View button posts "view" back, which removes the frame again.
+var ctlwrap = document.getElementById('ctlwrap');
+document.getElementById('controls').onclick = function (e) {
+  e.stopPropagation();
+  showUi(false);
+  paused = true;
+  ctlwrap.innerHTML = '<iframe id="ctl" src="/"></iframe>';
+  ctlwrap.className = 'on';
+};
+window.addEventListener('message', function (e) {
+  if (e.origin !== location.origin || e.data !== 'view') return;
+  ctlwrap.className = '';
+  ctlwrap.innerHTML = '';
+  paused = false;
+  if (pending) { pending = null; ask(); }
+});
 </script>
 </body>
 </html>
