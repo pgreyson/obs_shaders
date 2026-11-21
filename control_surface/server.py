@@ -525,42 +525,6 @@ class Surface:
             (HERE / spec["state"]).write_text(json.dumps({k: v}))
         except Exception as e:
             log("virtual state not saved:", e)
-        if k == "zero_px":
-            # the stream's hairline eye frames sit at the global-zero depth: move them along
-            self.zero_latest = v
-            if not getattr(self, "zero_task", None) or self.zero_task.done():
-                self.zero_task = asyncio.create_task(self.stream_frames())
-
-    async def stream_frames(self):
-        """Put the two "Eye frames" scene items of each streaming relay at the global-zero depth
-        (set up by tools/stream_gap.py: one frame picture per eye, a little larger than the eye).
-        Runs until the latest value has been applied."""
-        while True:
-            zero = self.zero_latest
-            for name in ("Twitch", "YouTube"):
-                r = self.relays.get(name)
-                if not r or not r.ok:
-                    continue
-                try:
-                    items = (await r.call("GetSceneItemList", {"sceneName": "full_sbs"}))["sceneItems"]
-                    eyes = sorted((i for i in items if i.get("inputKind") == "macos-avcapture"),
-                                  key=lambda i: i["sceneItemTransform"]["positionX"])
-                    frames = sorted((i for i in items if i["sourceName"] == "Eye frames"),
-                                    key=lambda i: i["sceneItemId"])
-                    if len(eyes) != 2 or len(frames) != 2:
-                        continue
-                    w = eyes[0]["sceneItemTransform"]["boundsWidth"]
-                    line = (frames[0]["sceneItemTransform"]["sourceWidth"] - w) / 2
-                    d = zero * w / 1920.0
-                    for k in range(2):
-                        x = eyes[k]["sceneItemTransform"]["positionX"] - line + (d / 2 if k == 0 else -d / 2)
-                        await r.call("SetSceneItemTransform", {"sceneName": "full_sbs",
-                                     "sceneItemId": frames[k]["sceneItemId"],
-                                     "sceneItemTransform": {"positionX": x}})
-                except Exception as e:
-                    log(f"eye frames on {name}:", repr(e))
-            if self.zero_latest == zero:
-                return
 
     def to_bridge(self, msg):
         try:

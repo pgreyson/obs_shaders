@@ -28,13 +28,18 @@
           width: calc(50% - var(--gap) / 2); height: 100%; }
   /* A hairline round each eye, like the frames on a stereo card (it replaced the two centre
      alignment lines, 2026-11-21). The two frames are offset against each other by --pop, the
-     same amount as the control overlay, so the frame floats in the plane of the controls. */
-  :root { --pop: 0px; }
-  .frame { position: absolute; top: 50%; width: calc(50% - var(--gap) / 2); height: 100%;
-           box-shadow: 0 0 0 1px #4a4a4a; pointer-events: none; }
-  .keep .frame { height: auto; aspect-ratio: 16 / 9; }
-  .frame.l { left: 0; transform: translate(calc(var(--pop) / 2), -50%); }
-  .frame.r { right: 0; transform: translate(calc(var(--pop) / -2), -50%); }
+     same amount as the control overlay (nothing to do with the rig's global zero), so the
+     frame floats in the plane of the controls. Each frame is LARGER than its eye picture by
+     that offset plus a margin (--fa each side), so in both eyes the whole picture lies inside
+     it. Each lives in a clipping box that ends at the centre line, so a frame can never show
+     in the other eye's half; with too small a gap its inner edge is cut off instead. */
+  :root { --pop: 0px; --fa: 4px; --fm: 4px; --eyew: 100px; --eyeh: 100px; }
+  .half { position: absolute; top: -100vh; bottom: -100vh; overflow: hidden; pointer-events: none; }
+  .half.l { left: -100vw; right: 50%; } .half.r { left: 50%; right: -100vw; }
+  .frame { position: absolute; top: 50%; box-sizing: border-box; border: 1px solid #4a4a4a;
+           width: calc(var(--eyew) + 2 * var(--fa)); height: calc(var(--eyeh) + 2 * var(--fm)); }
+  .half.l .frame { right: calc(var(--gap) / 2 - var(--fa)); transform: translate(calc(var(--pop) / 2), -50%); }
+  .half.r .frame { left: calc(var(--gap) / 2 - var(--fa)); transform: translate(calc(var(--pop) / -2), -50%); }
   .keep .ebox { height: auto; aspect-ratio: 16 / 9; }
   .ebox.l { left: 0; } .ebox.r { right: 0; }
   .ebox img { position: absolute; top: 0; height: 100%; width: 200%; display: block; }
@@ -126,7 +131,7 @@
 </head>
 <body>
 <div id="root">
-<div id="pic"><div class="ebox l"><img id="picL" alt=""></div><div class="ebox r"><img id="picR" alt=""></div><div class="frame l"></div><div class="frame r"></div></div>
+<div id="pic"><div class="ebox l"><img id="picL" alt=""></div><div class="ebox r"><img id="picR" alt=""></div><div class="half l"><div class="frame"></div></div><div class="half r"><div class="frame"></div></div></div>
 <div id="hud">
   <div class="eye" id="eyeL"><div class="nav"><div>&#9650;</div><div>&#9679;</div><div>&#9660;</div></div><div class="panel"><div class="phead"><span class="ppath"></span><span class="pfps"></span></div><div class="pwin"><div class="plist"></div></div></div></div>
   <div class="eye" id="eyeR"><div class="nav"><div>&#9650;</div><div>&#9679;</div><div>&#9660;</div></div><div class="panel"><div class="phead"><span class="ppath"></span><span class="pfps"></span></div><div class="pwin"><div class="plist"></div></div></div></div>
@@ -318,6 +323,10 @@ function valueOf(f, p) { var v = f.values ? f.values[p.key] : undefined; return 
 // points (+ = nearer). Set with the "Overlay depth" row at the top of the list while
 // looking through the viewer; remembered on this device. Until it has been set it starts at
 // the rig's global zero (canvas px, 1920 per eye) scaled to this screen.
+var FRAME_MARGIN = 4;      // points between an eye picture and its hairline frame
+// the smallest eye gap (% of screen width) at which both frames stay whole: each reaches
+// towards the centre by the overlay depth plus the margin
+function gapNeeded() { return 2 * (Math.max(0, depth || 0) + FRAME_MARGIN + 1) / (window.innerWidth || 1) * 100; }
 function sizeHud() {
   var ew = document.getElementById('eyeL').clientWidth || hud.clientWidth / 2 || 400;
   if (depth === null && model) {
@@ -328,7 +337,13 @@ function sizeHud() {
   var pop = depth || 0;
   hud.style.setProperty('--ew', ew + 'px');
   hud.style.setProperty('--pop', pop.toFixed(1) + 'px');
-  document.documentElement.style.setProperty('--pop', pop.toFixed(1) + 'px');   // the eye frames share it
+  // the eye frames share the depth, and are bigger than the eye picture by it (see the CSS)
+  var rs_ = document.documentElement.style, eb = document.querySelector('.ebox');
+  rs_.setProperty('--pop', pop.toFixed(1) + 'px');
+  rs_.setProperty('--fa', (Math.abs(pop) / 2 + FRAME_MARGIN).toFixed(1) + 'px');
+  rs_.setProperty('--fm', FRAME_MARGIN + 'px');
+  rs_.setProperty('--eyew', eb.clientWidth + 'px');
+  rs_.setProperty('--eyeh', eb.clientHeight + 'px');
   hud.style.setProperty('--base', (Math.abs(pop) / 2).toFixed(1) + 'px');   // keeps both copies inside their eye
   if (rows[cursor] && rows[cursor].els) place(winH() / 2 - centreOf(cursor), false);
 }
@@ -415,7 +430,7 @@ function makeRows() {
   function add(r, level, path) { r.level = level; r.path = path; out.push(r); }
   add(depthRow, 0, 'Overlay');
   add(qualityRow, 0, 'Stream · JPEG quality, higher = bigger frames');
-  add(gapRow, 0, 'Picture · gap between the eyes');
+  add(gapRow, 0, 'Picture · eye gap, frames need ' + gapNeeded().toFixed(1) + ' %');
   add(keepRow, 0, 'Picture · on: eyes stay 16:9, off: squeezed');
   add(widthRow, 0, 'Picture · screen ' + Math.round(window.innerWidth) + '×' + Math.round(window.innerHeight));
   out.push(fold('layers', 'Layers', 0, 'Layers'));

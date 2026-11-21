@@ -206,10 +206,10 @@ YouTube relays' `full_sbs` scene, keeping its 16:9 shape and its centre (the qua
 the frame), which leaves black between the eyes (the given % of the stream width), half of
 that at each outer edge, and above/below. It is two cropped scene items of the virtual-camera
 input, no shader. Main, the Viture and the phone viewer page are not affected. It also draws a hairline round each eye, as on a stereo card: one transparent frame picture
-(`obs_config/eye_frames/`, regenerated for each gap; source `Eye frames`, one scene item per eye;
-line width and grey are `LINE_PX` / `LINE_GREY` in the tool). The frames sit at the GLOBAL ZERO
-depth and follow it live: `control_surface/server.py` (`stream_frames`) moves the two items
-whenever the Global zero control changes. `0` restores
+(`obs_config/eye_frames/`, regenerated when needed; source `Eye frames`, one scene item per eye;
+`LINE_PX` / `LINE_GREY` / `MARGIN_PX` in the tool). The frames are larger than the eye pictures and
+sit at the screen plane unless `--frame-depth <px>` is given; they do not follow global zero
+(tried and dropped the same day). `0` restores
 the plain picture, `show` prints the state. Set to 3 % on 2026-11-21: on a phone that is a little wider than the viewer page's two alignment lines (17 pt apart).
 
 ## Frame budget: the rig is GPU-bound

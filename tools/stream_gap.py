@@ -12,15 +12,13 @@ main nothing (two cropped scene items, no shader).
   tools/stream_gap.py 0          back to the plain picture
   tools/stream_gap.py show
   tools/stream_gap.py 4 --relay youtube
-  tools/stream_gap.py 4 --frame-depth 0     hairline frames at the screen plane
+  tools/stream_gap.py 4 --frame-depth 20    hairline frames 20 px in front of the screen plane
 
-The hairline frames are drawn at the rig's GLOBAL ZERO depth by default (the value in
-control_surface/.display_zero.json, canvas px at 1920 per eye, scaled to the eye's size on the
-stream): the left eye's frame moves right and the right eye's left by half of it each. Each
-frame is its own scene item, and the control surface (control_surface/server.py, stream_frames)
-moves the two items whenever Global zero changes, so they follow it live; --frame-depth sets a
-fixed depth until Global zero is next moved. If the offset is larger than the gap, the two
-frames cross in the middle; the tool says so.
+The hairline frames are larger than the eye pictures (MARGIN_PX all round) and sit at the
+screen plane unless --frame-depth says otherwise (canvas px at 1920 per eye, + = in front; the
+left eye's frame moves right and the right eye's left by half of it each, and both grow by the
+offset so each still contains its whole eye picture). They do NOT follow the rig's global zero
+(tried and dropped 2026-11-21). If a frame would cross the centre line the tool says so.
 
 Run with control_bridge/.venv/bin/python3.
 """
@@ -35,21 +33,12 @@ SCENE, SOURCE = "full_sbs", "Viture Program (VirtualCam)"
 FRAMES = "Eye frames"            # image source: a hairline round each eye, as on a stereo card
 FRAME_DIR = os.path.join(HERE, '..', 'obs_config', 'eye_frames')
 LINE_PX, LINE_GREY = 2, 96       # on the 1920-wide stream
-ZERO_FILE = os.path.join(HERE, '..', 'control_surface', '.display_zero.json')
-
-
-def global_zero():
-    try:
-        import json
-        return float(json.load(open(ZERO_FILE))["zero_px"])
-    except Exception:
-        return 0.0
+MARGIN_PX = 6                    # between an eye picture and its frame
 
 
 def frame_png(w, h, path):
-    """One frame: a transparent picture of w+2L x h+2L with an L-wide outline (the w x h hole
-    is where the eye picture shows through)."""
-    cw, ch = int(round(w)) + 2 * LINE_PX, int(round(h)) + 2 * LINE_PX
+    """One frame: a transparent w x h picture with a LINE_PX outline along its edge."""
+    cw, ch = int(round(w)), int(round(h))
     px = bytes((LINE_GREY, LINE_GREY, LINE_GREY, 255))
     full = bytearray(px * cw)
     side = bytearray(cw * 4)
@@ -122,12 +111,17 @@ async def apply(name, port, gap_pct, frame_depth=None):
                 "boundsWidth": w, "boundsHeight": h,
                 "positionX": cw / 4 + k * cw / 2 - w / 2, "positionY": ch / 2 - h / 2})
         # hairline round each eye: a transparent picture drawn over the two eyes
-        depth = global_zero() if frame_depth is None else frame_depth      # canvas px, + = in front
-        d = depth * w / 1920.0                                             # on the stream
-        png = os.path.abspath(os.path.join(FRAME_DIR, f"eye_frame_{w:.0f}x{h:.0f}.png"))
-        print(f"{name}: frames at depth {depth:g} px (global zero {global_zero():g}) = {d:.0f} px on the stream"
-              + (f"; wider than the {gap:.0f} px gap, so the frames cross in the middle (gap of {100 * d / cw:.1f} % or more avoids it)" if d > gap else ""))
-        frame_png(w, h, png)
+        depth = frame_depth or 0.0                       # canvas px, + = in front
+        d = depth * w / 1920.0                           # on the stream
+        ax = abs(d) / 2 + MARGIN_PX + LINE_PX            # frame reaches this far past the eye, each side
+        ay = MARGIN_PX + LINE_PX
+        fw, fh = w + 2 * ax, h + 2 * ay
+        png = os.path.abspath(os.path.join(FRAME_DIR, f"eye_frame_{fw:.0f}x{fh:.0f}.png"))
+        reach = abs(d) + MARGIN_PX + LINE_PX             # towards the centre line
+        print(f"{name}: frames {fw:.0f} x {fh:.0f} at depth {depth:g} px ({d:.0f} px on the stream)"
+              + (f"; they reach {reach:.0f} px into the {gap:.0f} px gap and cross the centre line "
+                 f"(a gap of {100 * 2 * reach / cw:.1f} % or more avoids it)" if reach > gap / 2 else ""))
+        frame_png(fw, fh, png)
         ids = sorted(i["sceneItemId"] for i in frame_items)
         if not ids:
             r = await ws.call(simpleobsws.Request("CreateInput", {"sceneName": SCENE, "inputName": FRAMES,
@@ -142,8 +136,8 @@ async def apply(name, port, gap_pct, frame_depth=None):
         for k, item_id in enumerate(ids[:2]):
             await xf(item_id, {"cropLeft": 0, "cropRight": 0, "alignment": 5, "boundsType": "OBS_BOUNDS_NONE",
                                "scaleX": 1.0, "scaleY": 1.0, "rotation": 0,
-                               "positionX": cw / 4 + k * cw / 2 - w / 2 - LINE_PX + (d / 2 if k == 0 else -d / 2),
-                               "positionY": ch / 2 - h / 2 - LINE_PX})
+                               "positionX": cw / 4 + k * cw / 2 - w / 2 - ax + (d / 2 if k == 0 else -d / 2),
+                               "positionY": ch / 2 - h / 2 - ay})
         print(f"{name}: gap {gap:.0f} px between the eyes, each eye {w:.0f} x {h:.0f} (of {cw / 2:.0f} x {cw / 2 * 9 / 16:.0f}), hairline frames on")
     # scene item edits over the websocket do not mark the collection changed: nudge a save
     await call("CreateScene", {"sceneName": "zz_save_nudge"})
