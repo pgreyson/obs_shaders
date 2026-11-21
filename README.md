@@ -155,8 +155,10 @@ the surface has no login, so reach it from outside through a VPN (e.g. Tailscale
 
 **Stereo overlay:** the viewer's tap bar has an **Overlay** button. It draws one narrow, translucent
 list of named controls hard against the left edge of each eye's picture, so it fuses into a single
-panel in a phone stereo viewer. Its depth follows the rig's global zero (the panel sits where the
-picture is); *Overlay nearer / farther* in the bar trim it. Everything is drawn in both eyes:
+panel in a phone stereo viewer. Its depth is the *Overlay depth* row on the overlay's own filters &
+layers page (set it through the viewer; it starts at the rig's global zero). The list is a picker
+wheel: the row on the centre line is the highlighted one. Sections start collapsed. The overlay
+hides while the slider is being dragged. Everything is drawn in both eyes:
 a nav column left of the list (tap up / select / down, or drag to move the highlight) for the left
 thumb on the left eye's copy, and one vertical slider at the right edge of each eye for the right
 thumb on the right eye's copy; it changes the highlighted control. The black margins beside them
