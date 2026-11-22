@@ -1,6 +1,6 @@
 tools/.sbs_mode_state.json
 depth_sidecar/.venv/
-depth_sidecar/rectify.npz
+archive/room_depth/rectify.npz
 control_bridge/.cv_offsets.json
 control_surface/.display_zero.json
 control_surface/certs/

@@ -471,18 +471,6 @@ shaders:
         label: Wheel shape
         section: Colour to depth
         info: "0 = smooth cosine wheel: seamless, but two hues share each depth, and which hues pair up changes with rotation. 1 = sawtooth wheel: every hue has its own depth and rotation is a pure cyclic shift, at the cost of one seam where neighbouring hues jump from near to far."
-      room_mix:
-        label: Room mix
-        section: Room depth (unused)
-        info: "Blends the synth's own depth with a measured depth map of the physical room from the depth sidecar (source 'StereoPi Depth'). 0 = synth depth only. The sidecar is stopped at present, so leave at 0."
-      room_mode:
-        label: Room coupling
-        section: Room depth (unused)
-        info: "How the room map combines with the synth depth when Room mix is up. 0 = crossfade (room replaces synth depth), 1 = sculpt (synth forms only come forward on near room surfaces), 2 = relief (near room surfaces bulge out of the synth field). Fractions blend neighbours."
-      room_gain:
-        label: Room gain
-        section: Room depth (unused)
-        info: "Scale of the room map against the synth depth. Above 1 exaggerates the room's relief. No effect while Room mix is 0."
       debug_mode:
         label: Debug
         section: Debug

@@ -99,7 +99,7 @@ Virtual Camera for the relays. Scene `Scene`, bottom to top:
    OBS does not autosave such a change — `camera_chain.py` creates and removes a scratch scene
    afterwards, which does trigger the save (check the collection file's mtime if in doubt). Blend **normal**, so the keyed statue occludes the synth. Depth synthesis is
    off here: the camera already carries real stereo. **Trim sbs align / camera out on
-   `stage` / `room`, not on the inputs** — the depth sidecar screenshots the raw stage input.
+   `stage` / `room`, not on the inputs**, so the raw inputs stay unfiltered.
 
 **Stereo field: one scale for all three layers (2026-11-14).** Unit everywhere: displayed
 disparity = x_left − x_right in CANVAS px (1920 per eye), **+ = in front of the screen, − = behind**.
@@ -143,17 +143,10 @@ Audio: `Mic/Aux` unmuted, *monitor and output*, monitoring device = system defau
 ### Live control
 - `control_bridge` writes CV → filter properties every pass. Knobs are relative to the touch surface (2026-11-18): a value set on the surface becomes the meaning of the knob's current position (`remap(cv) + offset`, clamped to the mapping's `limits`); offsets persist in `control_bridge/.cv_offsets.json`, cleared from the surface. Launch detached with
   nohup and **its `.venv` python** (system python lacks numpy).
-- **Camera alignment** (`camera_align` on the ch0 mapping): `depth_sidecar` publishes
-  the camera's displayed-disparity percentiles (p5/p50/p95, source px) to
-  `/tmp/stereopi_depth_stats.json`; the bridge solves splat `depth`/`convergence`.
-  Modes via `tools/synth_plane.py`: **behind** (default: synth front plane `gap_px`
-  behind the statue's far plane, knob = how far it recedes), `front PX`, `match`
-  (synth spans the statue's depth, knob = fraction), `off`. Stale stats → `off`.
-  The splat's **convergence slider** in the OBS filter panel acts as a persistent
-  OFFSET on the solved convergence (bridge polls it; `synth_plane.py offset 0` resets).
-- `depth bake` can also take the sidecar's depth map (`room_depth`, Syphon source
-  `StereoPi Depth`); `room_mix` is 0 and the sidecar runs the cheap stereo-only engine,
-  so the depth map is currently unused.
+- Room depth (draping the synth over a measured depth map of the room: `depth_sidecar`,
+  the `StereoPi Depth` Syphon source and `depth bake`'s `room_*` controls) was shelved on
+  2026-11-22 and pulled out of the live chain; everything needed to bring it back is in
+  [`archive/room_depth/`](archive/room_depth/README.md).
 - `tools/sbs_mode.py on|off` switches main's synth chain for SBS *input* (camera on the
   Elgato) — not used in the current topology; harmless.
 
@@ -188,7 +181,6 @@ relay and pushed the 8 GB M2 into swap.
 | daemon | launch | log |
 |---|---|---|
 | control bridge | `control_bridge/.venv/bin/python3 control_bridge/bridge.py` | `/tmp/owl_bridge.log` (`camera_align:` lines) |
-| depth sidecar (stats-only, stage camera) | `depth_sidecar/.venv/bin/python3 depth_sidecar/depth_sidecar.py --engine sgbm --fps 1.5 --cv-threads 2 --grab-width 1920 --align-source stage --align-source-width 3840` | `/tmp/depth_sidecar.log` |
 | YouTube watchdog | `youtube_live/.venv/bin/python3 youtube_live/yt_live.py watch` | `/tmp/yt_live.log` |
 | touch control surface (iPad, `http://<mac>:8080/`) | `control_bridge/.venv/bin/python3 control_surface/server.py` (started by `launch_dual.sh`) | `/tmp/control_surface.log` |
 
@@ -343,8 +335,6 @@ ceiling; keep relays shader-free and prefer VideoToolbox. OBS pinned to 32.1.2.
 ## Open items
 
 - Camera convergence (`sbs align` on `camera_chain`) is tied to the current zoom;
-  auto-converge from the sidecar's median disparity is the natural next step.
+  auto-converge from a measured median disparity (`tools/stereo_field.py converge`) is the natural next step.
 - Google OAuth app for `youtube_live` is still in *Testing*: re-run `yt_live.py auth`
   weekly until "Publish app" is enabled.
-- The depth sidecar's full (fused) engine is too expensive for this machine while
-  four OBS instances run; bring it back only if `room_depth` is used.

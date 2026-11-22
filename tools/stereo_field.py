@@ -19,7 +19,8 @@ and the splat's plane_px / thickness_px.
   stereo_field.py set plane|thickness|anchor VALUE
         write one splat control directly.
 
-Run with the depth sidecar's venv (it has OpenCV):
+Run with the OpenCV venv, which still lives at depth_sidecar/.venv (the sidecar itself is
+archived in archive/room_depth/):
   depth_sidecar/.venv/bin/python3 tools/stereo_field.py status
 Nothing runs continuously: re-run converge / snap after re-zooming or moving a camera.
 """
