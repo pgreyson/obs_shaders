@@ -587,6 +587,15 @@ native:
         label: Field smoothing (px)
         section: Depth field smoothing
         info: "Gaussian blur of the baked depth only (colours untouched), sigma in source px, 0 = off. Depth cliffs become ramps, so the render opens fewer black gaps beside bright detail and sloped edges stop tearing into steps. This replaced the two 'field smooth' filters on 2026-11-21 (same kernel, done inside the plugin, about 3 ms a frame cheaper)."
+      - key: smooth_follow
+        type: float
+        min: 0
+        max: 12
+        step: 0.1
+        default: 0
+        label: Smoothing follows thickness
+        section: Depth field smoothing
+        info: "Extra depth smoothing that grows as Thickness opens up: sigma px per 100 px of thickness. The smoothing actually used is whichever is larger, Field smoothing or this x thickness / 100. Without it a colour edge that looks fine at thickness 60 turns into a hard stepped cut in one eye and a smeared band in the other at 150+, because the same depth step is moved further apart. Around 6 keeps edges clean up to the top of the thickness range; 0 = off."
       - key: mesh_step
         type: int
         min: 1

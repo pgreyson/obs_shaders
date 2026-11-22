@@ -109,6 +109,7 @@ async def run(configs):
             "filterSettings": {**legacy_to_field(depth, 0.0), "mode": mode,
                                "fill": 3, "ssaa": False, "mlaa": True,
                                "window": False, "smooth_sigma": sigma,
+                               "smooth_follow": 0.0,
                                "sync": True, "debug": 0}}))
         # regional-depth smoothing is inside the splat plugin (smooth_sigma, same two-pass
         # kernel); the old separate filters must stay off or the field is smoothed twice

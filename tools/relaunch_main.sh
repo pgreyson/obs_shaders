@@ -18,7 +18,7 @@ until nc -z localhost 4455 2>/dev/null; do sleep 2; done
 sleep 5
 # anchored: an unanchored "bridge.py" also matches (and kills) any shell whose command line
 # merely mentions it, including the one running this script from a tool
-pkill -f "python3 bridge\.py$" 2>/dev/null || pkill -f "control_bridge/bridge\.py$" 2>/dev/null || true
+pkill -f "[Pp]ython3? bridge\.py$" 2>/dev/null || pkill -f "control_bridge/bridge\.py$" 2>/dev/null || true
 "$(dirname "$0")/../control_bridge/.venv/bin/python3" "$(dirname "$0")/after_launch.py" || true
 sleep 1
 ( cd "$(dirname "$0")/../control_bridge" && nohup .venv/bin/python3 bridge.py > /tmp/owl_bridge.log 2>&1 < /dev/null & )

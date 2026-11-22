@@ -117,6 +117,13 @@ struct stereo_splat {
 	float smooth_sigma; /* field smoothing of the baked depth, source px
 			       (0 = off); replaces the two "field smooth"
 			       shader filters */
+	float smooth_follow; /* extra smoothing that grows with thickness:
+				sigma px per 100 px of thickness_px. The
+				sigma used is max(smooth_sigma, this *
+				thickness / 100), so a depth step never
+				gets steeper on screen as the field opens
+				up (steep steps fold in one eye and tear
+				in the other). 0 = off. */
 	int mode;       /* 0 = splat, 1 = warp */
 	int mesh_step;  /* warp: vertex spacing in px (1 = one per pixel) */
 	bool window;    /* floating window instead of edge taper */
@@ -173,6 +180,8 @@ static void splat_update(void *data, obs_data_t *settings)
 		(float)obs_data_get_double(settings, "vignette_pct");
 	s->smooth_sigma =
 		(float)obs_data_get_double(settings, "smooth_sigma");
+	s->smooth_follow =
+		(float)obs_data_get_double(settings, "smooth_follow");
 	s->window = obs_data_get_bool(settings, "window");
 	s->fill = (int)obs_data_get_int(settings, "fill");
 	s->ssaa = obs_data_get_bool(settings, "ssaa");
@@ -189,6 +198,7 @@ static void splat_defaults(obs_data_t *settings)
 	obs_data_set_default_double(settings, "frame_inset_px", 48.0);
 	obs_data_set_default_double(settings, "vignette_pct", 0.0);
 	obs_data_set_default_double(settings, "smooth_sigma", 0.0);
+	obs_data_set_default_double(settings, "smooth_follow", 0.0);
 	obs_data_set_default_int(settings, "mode", 0);
 	obs_data_set_default_int(settings, "mesh_step", 1);
 	obs_data_set_default_bool(settings, "window", false);
@@ -218,6 +228,9 @@ static obs_properties_t *splat_properties(void *data)
 	obs_properties_add_float_slider(props, "smooth_sigma",
 					obs_module_text("FieldSmooth"), 0.0,
 					24.0, 0.05);
+	obs_properties_add_float_slider(props, "smooth_follow",
+					obs_module_text("FieldSmoothFollow"),
+					0.0, 12.0, 0.1);
 	obs_properties_add_float_slider(props, "frame_inset_px",
 					obs_module_text("FrameInset"), 0.0,
 					120.0, 1.0);
@@ -626,7 +639,12 @@ static void splat_render(void *data, gs_effect_t *unused_effect)
 	/* ---- pass 1a: field smoothing (blur of the baked depth in alpha,
 	   h then v; rgb untouched). Everything downstream reads the result
 	   as its input. ---- */
-	if (s->smooth_sigma > 0.0f && s->debug != 2) {
+	float sigma_eff = s->smooth_follow * fabsf(s->thickness_px) / 100.0f;
+	if (sigma_eff < s->smooth_sigma)
+		sigma_eff = s->smooth_sigma;
+	if (sigma_eff > 30.0f) /* the 21-tap kernel's useful limit */
+		sigma_eff = 30.0f;
+	if (sigma_eff > 0.0f && s->debug != 2) {
 		gs_texrender_t *rts[2] = {s->smh_rt, s->smv_rt};
 		struct vec2 sdims;
 		vec2_set(&sdims, (float)w, (float)h);
@@ -643,8 +661,7 @@ static void splat_render(void *data, gs_effect_t *unused_effect)
 				 100.0f);
 			gs_effect_set_texture(s->p_image, input_tex);
 			gs_effect_set_vec2(s->p_dims, &sdims);
-			gs_effect_set_float(s->p_smooth_sigma,
-					    s->smooth_sigma);
+			gs_effect_set_float(s->p_smooth_sigma, sigma_eff);
 			gs_effect_set_vec2(s->p_smooth_step, &step);
 			while (gs_effect_loop(s->effect, "Smooth"))
 				gs_draw_sprite(input_tex, 0, w, h);
