@@ -9,7 +9,7 @@ pkill -TERM -f "$P" 2>/dev/null || true
 for _ in $(seq 1 10); do pgrep -f "$P" >/dev/null || break; sleep 1; done
 pkill -KILL -f "$P" 2>/dev/null || true
 sleep 1
-open -n "/Applications/OBS Projector.app" --args --multi --profile 'full_sbs->projector' \
+open -n "/Applications/OBS Projector.app" --args --multi --disable-shutdown-check --profile 'full_sbs->projector' \
     --collection 'full_sbs->projector' --websocket_port 4458
 sleep 12
 "$HERE/control_bridge/.venv/bin/python3" "$HERE/projector/projector.py" open || echo "projector display not found"
