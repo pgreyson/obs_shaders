@@ -15,7 +15,7 @@
 // relaxed. tools/stereo_field.py zero N [--keep] sets it from the shell.
 
 uniform float zero_px<
-    string label = "Display zero (px, + = toward viewer)";
+    string label = "Display zero (px)";
     string widget_type = "slider";
     float minimum = -100.0;
     float maximum = 300.0;

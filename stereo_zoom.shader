@@ -6,7 +6,7 @@
 // The zoom slider is 0-1 (matching CV control); it remaps to 0.1x..4.0x.
 
 uniform float zoom<
-    string label = "Zoom (L=out, R=in)";
+    string label = "Zoom";
     string widget_type = "slider";
     float minimum = 0.0;
     float maximum = 1.0;

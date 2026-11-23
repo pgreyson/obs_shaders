@@ -13,7 +13,7 @@
 // no tap-separation ghosting (the synth_color 4-tap trap).
 
 uniform float soften<
-    string label = "Soften (0 = off)";
+    string label = "Soften";
     string widget_type = "slider";
     float minimum = 0.0;
     float maximum = 1.0;

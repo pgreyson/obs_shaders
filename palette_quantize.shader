@@ -35,7 +35,7 @@
 // passthrough (repo convention).
 
 uniform float size<
-    string label = "Hue peaks N (continuous)";
+    string label = "Hue peaks N";
     string widget_type = "slider";
     float minimum = 1.0;
     float maximum = 16.0;
@@ -43,7 +43,7 @@ uniform float size<
 > = 6.0;
 
 uniform float rotation<
-    string label = "Rotation (peak phase around the wheel)";
+    string label = "Rotation";
     string widget_type = "slider";
     float minimum = 0.0;
     float maximum = 1.0;
@@ -51,7 +51,7 @@ uniform float rotation<
 > = 0.0;
 
 uniform float hue_pull<
-    string label = "Hue pull (softmax temp: 0 = off, 1 = sharp)";
+    string label = "Hue pull";
     string widget_type = "slider";
     float minimum = 0.0;
     float maximum = 1.0;
@@ -59,7 +59,7 @@ uniform float hue_pull<
 > = 0.0;
 
 uniform float skew<
-    string label = "Skew (0 = symmetric, up = lognormal-ish peaks)";
+    string label = "Skew";
     string widget_type = "slider";
     float minimum = 0.0;
     float maximum = 1.0;
@@ -67,7 +67,7 @@ uniform float skew<
 > = 0.0;
 
 uniform float luma_peaks<
-    string label = "Luma peaks (continuous tonal strata)";
+    string label = "Luma peaks";
     string widget_type = "slider";
     float minimum = 1.0;
     float maximum = 8.0;
@@ -75,7 +75,7 @@ uniform float luma_peaks<
 > = 3.0;
 
 uniform float luma_pull<
-    string label = "Luma pull (0 = off)";
+    string label = "Luma pull";
     string widget_type = "slider";
     float minimum = 0.0;
     float maximum = 1.0;
@@ -83,7 +83,7 @@ uniform float luma_pull<
 > = 0.0;
 
 uniform float black_floor<
-    string label = "Black floor (crush tonal field down — old black point)";
+    string label = "Black floor";
     string widget_type = "slider";
     float minimum = 0.0;
     float maximum = 1.0;
@@ -91,7 +91,7 @@ uniform float black_floor<
 > = 0.0;
 
 uniform float chroma_pull<
-    string label = "Chroma pull toward target (0 = off)";
+    string label = "Chroma pull";
     string widget_type = "slider";
     float minimum = 0.0;
     float maximum = 1.0;
@@ -99,7 +99,7 @@ uniform float chroma_pull<
 > = 0.0;
 
 uniform float chroma_target<
-    string label = "Chroma target (saturation the pull moves toward)";
+    string label = "Chroma target";
     string widget_type = "slider";
     float minimum = 0.0;
     float maximum = 1.0;

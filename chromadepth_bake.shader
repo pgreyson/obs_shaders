@@ -39,7 +39,7 @@
 //   color_weight  — 0 = pure lumadepth, 1 = vivid pixels ride the hue wheel
 
 uniform float hue_rotation<
-    string label = "Hue rotation (which hue is near)";
+    string label = "Hue rotation";
     string widget_type = "slider";
     float minimum = 0.0;
     float maximum = 1.0;
@@ -47,7 +47,7 @@ uniform float hue_rotation<
 > = 0.0;
 
 uniform float color_weight<
-    string label = "Color weight (0 = lumadepth, 1 = chromadepth)";
+    string label = "Color weight";
     string widget_type = "slider";
     float minimum = 0.0;
     float maximum = 1.0;
@@ -63,7 +63,7 @@ uniform float color_weight<
 // N distinct evenly-spread planes at every rotation — at the cost of one
 // seam where adjacent hues span near->far. Blend to taste.
 uniform float wheel_shape<
-    string label = "Wheel shape (0 = smooth cosine, 1 = distribution-preserving saw)";
+    string label = "Wheel shape";
     string widget_type = "slider";
     float minimum = 0.0;
     float maximum = 1.0;
@@ -79,7 +79,7 @@ uniform float wheel_shape<
 // dim colour stays on its hue plane until it is effectively black. 0 = the
 // oracle-pinned behaviour (tools/stereo_oracle.py knows only 0).
 uniform float dark_hold<
-    string label = "Dark hold (0 = dim colour sinks to the back, 1 = stays on its hue plane)";
+    string label = "Dark hold";
     string widget_type = "slider";
     float minimum = 0.0;
     float maximum = 1.0;
@@ -88,7 +88,7 @@ uniform float dark_hold<
 
 // 1 = render the baked field as grayscale (diff GPU field vs oracle).
 uniform float debug_mode<
-    string label = "Debug (0 = off, 1 = field probe)";
+    string label = "Debug";
     string widget_type = "slider";
     float minimum = 0.0;
     float maximum = 1.0;

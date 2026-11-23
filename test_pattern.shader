@@ -16,7 +16,7 @@
 // depth bulge can be imperceptible on them while random dots make ANY
 // disparity field unambiguously visible.
 uniform float noise_mode<
-    string label = "Pattern (0 = colour sweep, 1 = random dots, 2 = convergence blocks)";
+    string label = "Pattern";
     string widget_type = "slider";
     float minimum = 0.0;
     float maximum = 2.0;

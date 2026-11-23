@@ -23,7 +23,7 @@
 // the filter sits on (camera_chain = canvas px).
 
 uniform float key_amount<
-    string label = "Key amount (0 = no key / plain mix, 1 = full key)";
+    string label = "Key amount";
     string widget_type = "slider";
     float minimum = 0.0;
     float maximum = 1.0;
@@ -31,7 +31,7 @@ uniform float key_amount<
 > = 1.0;
 
 uniform float key_source<
-    string label = "Key on: 0 = luma, 1 = chroma (saturation), 2 = max of both";
+    string label = "Key source";
     string widget_type = "slider";
     float minimum = 0.0;
     float maximum = 2.0;
@@ -39,7 +39,7 @@ uniform float key_source<
 > = 0.0;
 
 uniform float key_gain<
-    string label = "Key input: gain (key signal only, not the picture)";
+    string label = "Key gain";
     string widget_type = "slider";
     float minimum = 0.0;
     float maximum = 4.0;
@@ -47,7 +47,7 @@ uniform float key_gain<
 > = 1.0;
 
 uniform float key_gamma<
-    string label = "Key input: gamma (>1 lifts shadows into the key)";
+    string label = "Key gamma";
     string widget_type = "slider";
     float minimum = 0.2;
     float maximum = 4.0;
@@ -55,7 +55,7 @@ uniform float key_gamma<
 > = 1.0;
 
 uniform float key_contrast<
-    string label = "Key input: contrast about mid grey";
+    string label = "Key contrast";
     string widget_type = "slider";
     float minimum = 0.0;
     float maximum = 4.0;
@@ -63,7 +63,7 @@ uniform float key_contrast<
 > = 1.0;
 
 uniform float key_brightness<
-    string label = "Key input: brightness offset";
+    string label = "Key brightness";
     string widget_type = "slider";
     float minimum = -1.0;
     float maximum = 1.0;
@@ -71,7 +71,7 @@ uniform float key_brightness<
 > = 0.0;
 
 uniform float luma_min<
-    string label = "Key: threshold (key signal below this is background)";
+    string label = "Key threshold";
     string widget_type = "slider";
     float minimum = 0.0;
     float maximum = 1.0;
@@ -87,7 +87,7 @@ uniform float luma_smooth<
 > = 0.012;
 
 uniform float fill_radius<
-    string label = "Fill: max hole half-width (px)";
+    string label = "Fill radius (px)";
     string widget_type = "slider";
     float minimum = 0.0;
     float maximum = 120.0;
@@ -95,7 +95,7 @@ uniform float fill_radius<
 > = 40.0;
 
 uniform float fill_cover<
-    string label = "Fill: fraction of directions that must hit foreground";
+    string label = "Fill cover";
     string widget_type = "slider";
     float minimum = 0.5;
     float maximum = 1.0;
@@ -103,7 +103,7 @@ uniform float fill_cover<
 > = 0.8;
 
 uniform float fill_steps<
-    string label = "Fill: samples per ray (quality vs GPU)";
+    string label = "Fill steps";
     string widget_type = "slider";
     float minimum = 2.0;
     float maximum = 24.0;

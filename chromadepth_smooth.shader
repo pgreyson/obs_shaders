@@ -29,7 +29,7 @@
 // covering ±3σ: room-depth sculpting wants σ 12-24 so the statue-edge
 // macro-cliff becomes a ramp wider than the splat's disocclusion gap.
 uniform float smoothing<
-    string label = "Field smoothing sigma (px, 0 = off)";
+    string label = "Smoothing (px)";
     string widget_type = "slider";
     float minimum = 0.0;
     float maximum = 24.0;
@@ -37,7 +37,7 @@ uniform float smoothing<
 > = 0.0;
 
 uniform float direction<
-    string label = "Pass direction (0 = horizontal, 1 = vertical)";
+    string label = "Pass direction";
     string widget_type = "slider";
     float minimum = 0.0;
     float maximum = 1.0;

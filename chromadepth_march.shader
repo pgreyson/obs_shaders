@@ -33,7 +33,7 @@ uniform float depth<
 // Test-harness probe (leave at 0): 1 = show the baked field as grayscale;
 // 2 = path trace (each exit returns float4(path, crossings/8, dmax, 1)).
 uniform float debug_mode<
-    string label = "Debug (0 = off, 1 = field probe, 2 = path trace)";
+    string label = "Debug";
     string widget_type = "slider";
     float minimum = 0.0;
     float maximum = 4.0;

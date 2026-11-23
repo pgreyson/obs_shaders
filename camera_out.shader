@@ -25,96 +25,96 @@
 // Shows the signal exactly as it arrives from the key: no window, feather,
 // grading, hue work or opacity. For checking what the stage is being given.
 uniform bool bypass<
-    string label = "BYPASS: show the incoming signal, no processing";
+    string label = "Bypass";
 > = false;
 
 // ---- 1. stereo window --------------------------------------------------
 uniform float window_width<
-    string label = "Stereo window width, both eyes (px; 0 = off)";
+    string label = "Window width (px)";
     string widget_type = "slider";
     float minimum = 0.0; float maximum = 1920.0; float step = 1.0;
 > = 0.0;
 uniform float window_shift<
-    string label = "Stereo window shift, both eyes (px, + = right)";
+    string label = "Window shift (px)";
     string widget_type = "slider";
     float minimum = -600.0; float maximum = 600.0; float step = 1.0;
 > = 0.0;
 uniform float window_offset<
-    string label = "Stereo window L/R offset (px, + = floats in front)";
+    string label = "Window L/R offset (px)";
     string widget_type = "slider";
     float minimum = -400.0; float maximum = 400.0; float step = 1.0;
 > = 0.0;
 uniform float mask_top<
-    string label = "Both eyes: crop at the TOP (px)";
+    string label = "Crop top (px)";
     string widget_type = "slider";
     float minimum = 0.0; float maximum = 400.0; float step = 1.0;
 > = 0.0;
 uniform float mask_bottom<
-    string label = "Both eyes: crop at the BOTTOM (px)";
+    string label = "Crop bottom (px)";
     string widget_type = "slider";
     float minimum = 0.0; float maximum = 400.0; float step = 1.0;
 > = 0.0;
 uniform float vignette<
-    string label = "Edge feather / vignette (px, 0 = hard edge)";
+    string label = "Edge feather (px)";
     string widget_type = "slider";
     float minimum = 0.0; float maximum = 400.0; float step = 1.0;
 > = 0.0;
 
 // ---- 2. grading (1.0 / 0 = neutral) -------------------------------------
 uniform float soften<
-    string label = "Soften (small full blur, 0 = off)";
+    string label = "Soften";
     string widget_type = "slider";
     float minimum = 0.0; float maximum = 1.0; float step = 0.01;
 > = 0.0;
 uniform float black_level<
-    string label = "Black level crush (0 = off)";
+    string label = "Black level crush";
     string widget_type = "slider";
     float minimum = 0.0; float maximum = 1.0; float step = 0.01;
 > = 0.0;
 uniform float gain<
-    string label = "Gain (multiply, 1 = neutral)";
+    string label = "Gain";
     string widget_type = "slider";
     float minimum = 0.0; float maximum = 2.0; float step = 0.01;
 > = 1.0;
 uniform float contrast<
-    string label = "Contrast about mid grey (1 = neutral)";
+    string label = "Contrast";
     string widget_type = "slider";
     float minimum = 0.0; float maximum = 3.0; float step = 0.01;
 > = 1.0;
 uniform float gamma<
-    string label = "Gamma (1 = neutral, >1 brighter mids)";
+    string label = "Gamma";
     string widget_type = "slider";
     float minimum = 0.2; float maximum = 4.0; float step = 0.01;
 > = 1.0;
 uniform float brightness<
-    string label = "Brightness offset (0 = neutral)";
+    string label = "Brightness";
     string widget_type = "slider";
     float minimum = -1.0; float maximum = 1.0; float step = 0.01;
 > = 0.0;
 uniform float saturation<
-    string label = "Saturation (1 = neutral, 0 = mono)";
+    string label = "Saturation";
     string widget_type = "slider";
     float minimum = 0.0; float maximum = 3.0; float step = 0.01;
 > = 1.0;
 uniform float hue_shift<
-    string label = "Hue shift (degrees, 0 = neutral)";
+    string label = "Hue shift";
     string widget_type = "slider";
     float minimum = -180.0; float maximum = 180.0; float step = 0.5;
 > = 0.0;
 
 // ---- 3. hue concentration (palette_quantize, hue only) --------------------
 uniform float hue_peaks<
-    string label = "Hue peaks N (continuous)";
+    string label = "Hue peaks N";
     string widget_type = "slider";
     float minimum = 1.0; float maximum = 16.0; float step = 0.1;
 > = 6.0;
 uniform float hue_pull<
-    string label = "Hue pull toward the peaks (0 = off, 1 = discrete)";
+    string label = "Hue pull";
     string widget_type = "slider";
     float minimum = 0.0; float maximum = 1.0; float step = 0.01;
 > = 0.0;
 uniform float hue_phase<
-    string label = "Hue peak phase (0..1 = one turn of the wheel)";
+    string label = "Hue peak phase";
     string widget_type = "slider";
     float minimum = 0.0; float maximum = 1.0; float step = 0.01;
 > = 0.0;

@@ -58,7 +58,7 @@ uniform float right_y<
 // negative pushes it back. tools/stereo_field.py converge sets this from a
 // measurement so a chosen part of the subject lands on the screen plane.
 uniform float convergence<
-    string label = "Convergence (px; + = toward viewer, - = away)";
+    string label = "Convergence (px)";
     string widget_type = "slider";
     float minimum = -300.0;
     float maximum = 300.0;
@@ -71,7 +71,7 @@ uniform float convergence<
 // eyes: only the region visible to both survives. Hard edge; camera_out's
 // window + vignette normally sit inside it.
 uniform bool mask_common<
-    string label = "Mask to the region both eyes can see";
+    string label = "Mask to common";
 > = true;
 
 float4 mainImage(VertData v_in) : TARGET

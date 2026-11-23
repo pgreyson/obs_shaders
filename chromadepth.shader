@@ -43,7 +43,7 @@ uniform float depth<
 > = 0.5;
 
 uniform float hue_rotation<
-    string label = "Hue rotation (which hue is near)";
+    string label = "Hue rotation";
     string widget_type = "slider";
     float minimum = 0.0;
     float maximum = 1.0;
@@ -51,7 +51,7 @@ uniform float hue_rotation<
 > = 0.0;
 
 uniform float color_weight<
-    string label = "Color weight (0 = lumadepth, 1 = chromadepth)";
+    string label = "Color weight";
     string widget_type = "slider";
     float minimum = 0.0;
     float maximum = 1.0;
@@ -62,7 +62,7 @@ uniform float color_weight<
 // exact depth field as grayscale, texel-aligned — lets the harness diff
 // the GPU field against the oracle's post-lift depths directly.
 uniform float debug_mode<
-    string label = "Debug (0 = off, 1 = field probe, 2 = path trace)";
+    string label = "Debug";
     string widget_type = "slider";
     float minimum = 0.0;
     float maximum = 2.0;

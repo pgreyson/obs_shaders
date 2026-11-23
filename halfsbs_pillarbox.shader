@@ -26,13 +26,13 @@ uniform float aspect_correction<
 // output goes 1:1 to a half-SBS display (e.g. a 3D projector that
 // natively consumes half-SBS).
 uniform bool half_sbs<
-    string label = "Half SBS (compensate for 2x downstream stretch)";
+    string label = "Half SBS";
 > = true;
 
 // Right-eye routing cue — redundant when the display driver shows its own
 // 3D indicator, so off by default.
 uniform bool sync_indicator<
-    string label = "Sync indicator (right-eye corner square)";
+    string label = "Sync indicator";
 > = false;
 
 float4 mainImage(VertData v_in) : TARGET

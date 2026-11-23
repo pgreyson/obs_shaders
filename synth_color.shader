@@ -19,7 +19,7 @@
 // contrast -> gamma -> saturation -> hue rotate.
 
 uniform float black_level<
-    string label = "Black level crush (0 = off)";
+    string label = "Black level crush";
     string widget_type = "slider";
     float minimum = 0.0;
     float maximum = 1.0;
@@ -27,7 +27,7 @@ uniform float black_level<
 > = 0.0;
 
 uniform float contrast<
-    string label = "Contrast (0.5 = neutral)";
+    string label = "Contrast";
     string widget_type = "slider";
     float minimum = 0.0;
     float maximum = 1.0;
@@ -35,7 +35,7 @@ uniform float contrast<
 > = 0.5;
 
 uniform float gamma<
-    string label = "Gamma (0.5 = neutral)";
+    string label = "Gamma";
     string widget_type = "slider";
     float minimum = 0.0;
     float maximum = 1.0;
@@ -43,7 +43,7 @@ uniform float gamma<
 > = 0.5;
 
 uniform float saturation<
-    string label = "Saturation (0.5 = neutral, 0 = mono)";
+    string label = "Saturation";
     string widget_type = "slider";
     float minimum = 0.0;
     float maximum = 1.0;
@@ -51,7 +51,7 @@ uniform float saturation<
 > = 0.5;
 
 uniform float hue_shift<
-    string label = "Hue rotate (0.5 = neutral, full wheel range)";
+    string label = "Hue rotate";
     string widget_type = "slider";
     float minimum = 0.0;
     float maximum = 1.0;
@@ -59,7 +59,7 @@ uniform float hue_shift<
 > = 0.5;
 
 uniform float chroma_smooth<
-    string label = "Chroma smoothing (denoise color, keep luma sharp)";
+    string label = "Chroma smoothing";
     string widget_type = "slider";
     float minimum = 0.0;
     float maximum = 1.0;
@@ -67,7 +67,7 @@ uniform float chroma_smooth<
 > = 0.0;
 
 uniform float soften<
-    string label = "Soften (small full blur)";
+    string label = "Soften";
     string widget_type = "slider";
     float minimum = 0.0;
     float maximum = 1.0;

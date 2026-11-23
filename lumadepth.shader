@@ -27,7 +27,7 @@ uniform float depth<
 > = 0.5;
 
 uniform float luma_anchor<
-    string label = "Luma anchor (which luma is at screen)";
+    string label = "Luma anchor";
     string widget_type = "slider";
     float minimum = 0.0;
     float maximum = 1.0;
@@ -35,7 +35,7 @@ uniform float luma_anchor<
 > = 0.85;
 
 uniform float falloff<
-    string label = "Falloff (depth curve steepness)";
+    string label = "Falloff";
     string widget_type = "slider";
     float minimum = 0.0;
     float maximum = 1.0;

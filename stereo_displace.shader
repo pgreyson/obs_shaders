@@ -32,7 +32,7 @@ uniform float contrast<
 > = 0.0;
 
 uniform float mode<
-    string label = "Mode (L=luma, R=chromadepth)";
+    string label = "Mode";
     string widget_type = "slider";
     float minimum = 0.0;
     float maximum = 1.0;
