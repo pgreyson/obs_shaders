@@ -19,7 +19,7 @@ uniform float noise_mode<
     string label = "Pattern";
     string widget_type = "slider";
     float minimum = 0.0;
-    float maximum = 2.0;
+    float maximum = 3.0;
     float step = 1.0;
 > = 0.0;
 
@@ -45,6 +45,23 @@ float3 hsv2rgb3(float h, float s, float v) {
 float4 mainImage(VertData v_in) : TARGET
 {
     float2 uv = v_in.uv;
+    if (noise_mode > 2.5) {
+        // SYNTH BARS — what the real synth picture is made of, which the flat
+        // blocks are not: soft-edged bright bars on black, each with a hue
+        // gradient across its body (violet core to pink edge) and a dim halo of
+        // a DIFFERENT hue (olive) around it, bending and fading down the frame.
+        // Hue depth puts a bar's body and its own halo on different planes, so
+        // this is the case where one eye sees the halo left of the bar and the
+        // other sees it on the right (seen live 2026-11-22).
+        float u = uv.x + 0.035 * sin(uv.y * 9.42);
+        float cell = frac(u * 5.0) - 0.5;
+        float body = exp(-cell * cell / (2.0 * 0.07 * 0.07));
+        float halo = exp(-cell * cell / (2.0 * 0.17 * 0.17));
+        float env = 0.25 + 0.75 * abs(cos(uv.y * 4.71));
+        float3 cb = hsv2rgb3(lerp(0.90, 0.76, body), 0.65, body * env);
+        float3 ch = hsv2rgb3(0.17, 0.70, 0.22 * halo * (1.0 - body) * env);
+        return float4(cb + ch, 1.0);
+    }
     if (noise_mode > 1.5) {
         // CONVERGENCE BLOCKS — the same layout tools/convergence_test.py measures.
         // Discrete flat hues (each one depth plane, hard edges between them) with
