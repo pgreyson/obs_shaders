@@ -651,6 +651,15 @@ static void splat_render(void *data, gs_effect_t *unused_effect)
 		gs_blend_state_push();
 		gs_blend_function(GS_BLEND_ONE, GS_BLEND_ZERO);
 		for (int pass = 0; pass < 2; pass++) {
+			/* The thickness-following part is horizontal only:
+			   parallax is horizontal, so only depth slope along x
+			   folds or tears. Blurring it vertically as well bent
+			   vertical edges into mirrored curves in the two eyes
+			   near every horizontal depth boundary. */
+			float pass_sigma = pass == 0 ? sigma_eff
+						     : s->smooth_sigma;
+			if (pass_sigma <= 0.0f)
+				continue;
 			struct vec2 step;
 			vec2_set(&step, pass == 0 ? 1.0f / (float)w : 0.0f,
 				 pass == 0 ? 0.0f : 1.0f / (float)h);
@@ -661,7 +670,7 @@ static void splat_render(void *data, gs_effect_t *unused_effect)
 				 100.0f);
 			gs_effect_set_texture(s->p_image, input_tex);
 			gs_effect_set_vec2(s->p_dims, &sdims);
-			gs_effect_set_float(s->p_smooth_sigma, sigma_eff);
+			gs_effect_set_float(s->p_smooth_sigma, pass_sigma);
 			gs_effect_set_vec2(s->p_smooth_step, &step);
 			while (gs_effect_loop(s->effect, "Smooth"))
 				gs_draw_sprite(input_tex, 0, w, h);
