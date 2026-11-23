@@ -644,7 +644,7 @@ native:
         default: 0
         label: Depth vignette (%)
         section: Stereo field
-        info: "Flattens depth toward the frame edges. Depth relative to the anchor ramps from zero at all four edges to full once this percentage of the frame inward. The edges sit flat at the plane (no conflict with the frame) and the centre can carry more thickness. 0 = off."
+        info: "Flattens depth toward the left and right frame edges. Depth relative to the anchor ramps from zero at those edges to full once this percentage of the frame inward. The edges sit flat at the plane, where the floating window is, so both eyes see the same material there whatever Anchor and Thickness do. Top and bottom are not flattened (that bent vertical edges opposite ways in the two eyes). 0 = off."
       - key: frame_inset_px
         type: float
         min: 0
@@ -659,7 +659,7 @@ native:
         default: false
         label: Floating window
         section: Framing
-        info: "Off: depth is tapered to zero near the left and right edges so nothing pokes through the frame. On: full depth right to the edge, and instead a black strip is drawn at the left eye's left edge and the right eye's right edge, which makes the frame itself float in front."
+        info: "Off: depth is tapered to zero near the left and right edges so nothing pokes through the frame. On: full depth to the edge, and black strips mask whatever only one eye would see at the left and right edges, so both eyes show the same material there. The strips are as wide as the edge content's disparity: Plane when Depth vignette is on (recommended), otherwise the front of the field. They swap sides when that is behind the screen."
       - key: mode
         type: int
         min: 0

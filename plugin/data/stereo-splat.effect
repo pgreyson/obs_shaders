@@ -95,21 +95,20 @@ float edge_taper(float x)
 }
 
 // DEPTH VIGNETTE (not in the oracle; 0 = off = oracle-identical): depth
-// relative to the anchor is scaled by a smoothstep that is 0 at the frame
-// edge and 1 once vig_w of the frame inward, on all four sides. At the
-// edges the field is flat at plane_px, so the frame never fights the
-// depth and the centre can carry more thickness.
+// relative to the anchor is scaled by a smoothstep that is 0 at the LEFT and
+// RIGHT frame edges and 1 once vig_w of the frame inward. At those edges the
+// field is flat at plane_px, so the frame never fights the depth and the
+// floating window (which sits at plane_px) is exact there.
+// Sides only: it used to ramp at the top and bottom too, where horizontal
+// parallax has no frame conflict to solve, and there it bent every vertical
+// edge, opposite ways in the two eyes (measured: 60 px at thickness 250).
 float vignette(float u, float row)
 {
 	if (vig_w <= 0.0)
 		return 1.0;
 	float hx = min(u - vis_lo, (vis_lo + span) - u) / span;
-	float hy = min(row + 0.5, out_rows - (row + 0.5)) / out_rows;
 	float a = clamp(hx / vig_w, 0.0, 1.0);
-	float b = clamp(hy / vig_w, 0.0, 1.0);
-	a = a * a * (3.0 - 2.0 * a);
-	b = b * b * (3.0 - 2.0 * b);
-	return a * b;
+	return a * a * (3.0 - 2.0 * a);
 }
 float shape(float d, float u, float row)
 {

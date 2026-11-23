@@ -847,33 +847,66 @@ static void splat_render(void *data, gs_effect_t *unused_effect)
 			gs_set_scissor_rect(NULL);
 		}
 
-		/* floating window: black strips, L eye left edge / R eye
-		   right edge, width = f0-equivalent in eye pixels. Drawn
-		   nearest (depth cleared region untouched elsewhere). */
-		if (s->window && f0 > 0.0f) {
-			float strip_w = f0 / span * eye_w;
-			gs_effect_t *solid =
-				obs_get_base_effect(OBS_EFFECT_SOLID);
-			gs_eparam_t *color = gs_effect_get_param_by_name(
-				solid, "color");
-			struct vec4 black;
-			vec4_set(&black, 0.0f, 0.0f, 0.0f, 1.0f);
-			gs_effect_set_vec4(color, &black);
-			gs_enable_depth_test(false);
-			while (gs_effect_loop(solid, "Solid")) {
-				gs_matrix_push();
-				gs_matrix_identity();
-				gs_matrix_translate3f(0.0f, 0.0f, 0.0f);
-				gs_draw_sprite(NULL, 0, (uint32_t)strip_w,
-					       out_h);
-				gs_matrix_pop();
-				gs_matrix_push();
-				gs_matrix_identity();
-				gs_matrix_translate3f((float)w - strip_w,
-						      0.0f, 0.0f);
-				gs_draw_sprite(NULL, 0, (uint32_t)strip_w,
-					       out_h);
-				gs_matrix_pop();
+		/* Floating window: black strips that make both eyes show the
+		   SAME material at the left and right edges. Content at
+		   disparity D (canvas px, + = in front) is shifted +D/2 in
+		   the left eye and -D/2 in the right, so at each side one eye
+		   shows a strip |D| wide that the other cannot see. Masking
+		   that strip puts the window at the content's own depth:
+		     D > 0: left eye's left edge, right eye's right edge
+		     D < 0: left eye's right edge, right eye's left edge
+		   D is the edge content's disparity: plane_px when the depth
+		   vignette flattens the edges to the anchor plane; otherwise
+		   the front of the field if it is in front of the screen,
+		   else the back of the field if that is behind it.
+		   (Was a fixed strip of the frame margin on the D > 0 sides,
+		   right for one plane setting only, and 1 px short at the
+		   right eye's edge: a lit sliver only that eye saw.) */
+		if (s->window) {
+			float d_edge = s->plane_px;
+			if (s->vignette_pct <= 0.0f) {
+				float d_front = s->plane_px + s->thickness_px *
+								      (1.0f - s->anchor);
+				float d_back = s->plane_px -
+					       s->thickness_px * s->anchor;
+				if (d_front < d_back) {
+					float t = d_front;
+					d_front = d_back;
+					d_back = t;
+				}
+				d_edge = d_front > 0.0f ? d_front
+							: (d_back < 0.0f ? d_front : 0.0f);
+			}
+			float sw = ceilf(fabsf(d_edge) * eye_w / FIELD_EYE_PX);
+			if (sw > eye_w * 0.25f)
+				sw = eye_w * 0.25f;
+			/* x of the two strips: outer edges for D > 0, the
+			   inner (centre seam) edges for D < 0 */
+			float x0 = d_edge > 0.0f ? 0.0f : eye_w - sw;
+			float x1 = d_edge > 0.0f ? (float)w - sw : eye_w;
+			if (sw >= 1.0f) {
+				gs_effect_t *solid =
+					obs_get_base_effect(OBS_EFFECT_SOLID);
+				gs_eparam_t *color = gs_effect_get_param_by_name(
+					solid, "color");
+				struct vec4 black;
+				vec4_set(&black, 0.0f, 0.0f, 0.0f, 1.0f);
+				gs_effect_set_vec4(color, &black);
+				gs_enable_depth_test(false);
+				while (gs_effect_loop(solid, "Solid")) {
+					gs_matrix_push();
+					gs_matrix_identity();
+					gs_matrix_translate3f(x0, 0.0f, 0.0f);
+					gs_draw_sprite(NULL, 0, (uint32_t)sw,
+						       out_h);
+					gs_matrix_pop();
+					gs_matrix_push();
+					gs_matrix_identity();
+					gs_matrix_translate3f(x1, 0.0f, 0.0f);
+					gs_draw_sprite(NULL, 0, (uint32_t)sw,
+						       out_h);
+					gs_matrix_pop();
+				}
 			}
 		}
 
