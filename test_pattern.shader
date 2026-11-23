@@ -16,10 +16,10 @@
 // depth bulge can be imperceptible on them while random dots make ANY
 // disparity field unambiguously visible.
 uniform float noise_mode<
-    string label = "Random-dot mode (0 = color bands, 1 = dots)";
+    string label = "Pattern (0 = colour sweep, 1 = random dots, 2 = convergence blocks)";
     string widget_type = "slider";
     float minimum = 0.0;
-    float maximum = 1.0;
+    float maximum = 2.0;
     float step = 1.0;
 > = 0.0;
 
@@ -45,6 +45,22 @@ float3 hsv2rgb3(float h, float s, float v) {
 float4 mainImage(VertData v_in) : TARGET
 {
     float2 uv = v_in.uv;
+    if (noise_mode > 1.5) {
+        // CONVERGENCE BLOCKS — the same layout tools/convergence_test.py measures.
+        // Discrete flat hues (each one depth plane, hard edges between them) with
+        // a random vertical-stripe brightness texture: it leaves hue and
+        // saturation alone, so it does not change depth, and gives the eyes fine
+        // vertical marks to fuse. Rows: 8 flat bands / continuous hue ramp /
+        // the 8 bands fading to black. In a correct pair every stripe is a
+        // straight vertical line in both eyes and each band is one flat plane.
+        float stripe = 0.55 + 0.45 * hash12(float2(floor(uv.x / (6.0 * uv_pixel_interval.x)), 3.7));
+        float band_h = (floor(uv.x * 8.0) + 0.5) / 8.0;
+        if (uv.y < 0.3333)
+            return float4(hsv2rgb3(band_h, 1.0, stripe), 1.0);
+        if (uv.y < 0.6667)
+            return float4(hsv2rgb3(uv.x, 1.0, stripe), 1.0);
+        return float4(hsv2rgb3(band_h, 1.0, stripe * (1.0 - (uv.y - 0.6667) / 0.3333)), 1.0);
+    }
     if (noise_mode > 0.5) {
         float2 cell = floor(uv / (dot_size * uv_pixel_interval));
         float n = step(0.5, hash12(cell));

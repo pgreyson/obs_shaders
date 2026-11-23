@@ -205,8 +205,8 @@ shaders:
     params:
       noise_mode:
         label: Pattern
-        options: {0: Colour bands, 1: Random dots}
-        info: "Which test frame to generate. Colour bands test the colour-to-depth mapping; random dots make the shape of the depth field visible without any colour cue."
+        options: {0: Colour sweep, 1: Random dots, 2: Convergence blocks}
+        info: "Which test frame to generate. Colour sweep tests the colour-to-depth mapping; random dots make the shape of the depth field visible without any colour cue. Convergence blocks are flat colour blocks with hard edges and a fine stripe texture (8 bands, a hue ramp, 8 bands fading to black): each block should be one flat plane and every stripe a straight vertical line in both eyes. It is the pattern tools/convergence_test.py measures."
       dot_size:
         label: Dot size (px)
         info: "Size of the random dots in source pixels. Only used in random-dot mode. Larger dots are easier to fuse; smaller dots show finer depth detail."
