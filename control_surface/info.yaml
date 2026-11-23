@@ -600,6 +600,12 @@ native:
         label: Smoothing follows thickness
         section: Depth field smoothing
         info: "Extra depth smoothing that grows as Thickness opens up: sigma px per 100 px of thickness. The smoothing actually used is whichever is larger, Field smoothing or this x thickness / 100. Without it a colour edge that looks fine at thickness 60 turns into a hard stepped cut in one eye and a smeared band in the other at 150+, because the same depth step is moved further apart. Around 6 keeps edges clean up to the top of the thickness range; 0 = off."
+      - key: smooth_lit
+        type: bool
+        default: false
+        label: Smoothing ignores black
+        section: Depth field smoothing
+        info: "On: black pixels carry no weight in the depth smoothing and take their depth from lit neighbours. Black has nothing to show, but the bake puts it at the far back, so without this every fade to black drags the still-lit picture backwards: stripes lean as they dim, opposite ways in the two eyes. Only acts where smoothing is active."
       - key: mesh_step
         type: int
         min: 1

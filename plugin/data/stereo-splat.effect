@@ -51,6 +51,7 @@ uniform float vig_w;     // depth vignette ramp width, fraction of the visible f
 uniform float out_rows;  // rows in the vertex grid (output height incl. supersampling)
 uniform float smooth_sigma; // field smoothing sigma (source px, 0 = off)
 uniform float2 smooth_step; // one texel along the blur axis (uv)
+uniform float smooth_lit;   // 1 = black pixels carry no weight in the smoothing
 
 sampler_state pointSampler {
 	Filter    = Point;
@@ -445,7 +446,16 @@ float4 PSSmooth(WarpOut v_in) : TARGET
 		float fi = float(i) * spacing;
 		float w = exp(-(fi * fi) / (2.0 * sig2));
 		float2 t = clamp(v_in.uv + fi * smooth_step, lo, hi);
-		acc += w * image.SampleLevel(linearSampler, t, 0.0).a;
+		float4 tap = image.SampleLevel(linearSampler, t, 0.0);
+		// "Black has no depth": a pixel with nothing to show must not
+		// pull its lit neighbours toward the back plane (the bake gives
+		// black depth 0), and takes its own depth from them instead.
+		// Without this every fade to black is a depth slope: stripes
+		// leaned as they dimmed, opposite ways in the two eyes.
+		if (smooth_lit > 0.5)
+			w *= 0.002 + smoothstep(0.06, 0.16,
+						max(tap.r, max(tap.g, tap.b)));
+		acc += w * tap.a;
 		wsum += w;
 	}
 	return float4(center.rgb, acc / wsum);

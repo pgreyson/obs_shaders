@@ -61,6 +61,7 @@ struct stereo_splat {
 	gs_eparam_t *p_out_rows;
 	gs_eparam_t *p_smooth_sigma;
 	gs_eparam_t *p_smooth_step;
+	gs_eparam_t *p_smooth_lit;
 
 	gs_texrender_t *input_rt;
 	gs_texrender_t *output_rt;
@@ -130,6 +131,7 @@ struct stereo_splat {
 	int fill;       /* micro-fill width px (0 = off) */
 	bool ssaa;      /* 2x vertical supersampling of the splat */
 	bool mlaa;      /* reveal-edge MLAA in the present pass */
+	bool smooth_lit; /* smoothing ignores black pixels */
 	bool sync;      /* true = same-frame readback (correct for
 			   on-demand/screenshot sources); false = one-frame
 			   latency, no GPU sync stall (live chains) */
@@ -210,6 +212,7 @@ static void splat_update(void *data, obs_data_t *settings)
 	s->fill = (int)obs_data_get_int(settings, "fill");
 	s->ssaa = obs_data_get_bool(settings, "ssaa");
 	s->mlaa = obs_data_get_bool(settings, "mlaa");
+	s->smooth_lit = obs_data_get_bool(settings, "smooth_lit");
 	s->sync = obs_data_get_bool(settings, "sync");
 	s->debug = (int)obs_data_get_int(settings, "debug");
 }
@@ -230,6 +233,7 @@ static void splat_defaults(obs_data_t *settings)
 	obs_data_set_default_int(settings, "fill", 3);
 	obs_data_set_default_bool(settings, "ssaa", true);
 	obs_data_set_default_bool(settings, "mlaa", false);
+	obs_data_set_default_bool(settings, "smooth_lit", false);
 	obs_data_set_default_bool(settings, "sync", true);
 	obs_data_set_default_int(settings, "debug", 0);
 }
@@ -275,6 +279,8 @@ static obs_properties_t *splat_properties(void *data)
 				      obs_module_text("MicroFill"), 0, 5, 1);
 	obs_properties_add_bool(props, "ssaa", obs_module_text("SSAA"));
 	obs_properties_add_bool(props, "mlaa", obs_module_text("MLAA"));
+	obs_properties_add_bool(props, "smooth_lit",
+				obs_module_text("SmoothLit"));
 	obs_properties_add_bool(props, "sync", obs_module_text("SyncReadback"));
 	obs_properties_add_int_slider(props, "debug",
 				      obs_module_text("DebugDepth"), 0, 5, 1);
@@ -359,6 +365,8 @@ static void *splat_create(obs_data_t *settings, obs_source_t *context)
 		gs_effect_get_param_by_name(s->effect, "smooth_sigma");
 	s->p_smooth_step =
 		gs_effect_get_param_by_name(s->effect, "smooth_step");
+	s->p_smooth_lit =
+		gs_effect_get_param_by_name(s->effect, "smooth_lit");
 
 	splat_update(s, settings);
 	return s;
@@ -720,6 +728,8 @@ static void splat_render(void *data, gs_effect_t *unused_effect)
 			gs_effect_set_vec2(s->p_dims, &sdims);
 			gs_effect_set_float(s->p_smooth_sigma, sig[pass]);
 			gs_effect_set_vec2(s->p_smooth_step, &step);
+			gs_effect_set_float(s->p_smooth_lit,
+					    s->smooth_lit ? 1.0f : 0.0f);
 			while (gs_effect_loop(s->effect, "Smooth"))
 				gs_draw_sprite(input_tex, 0, w, h);
 			gs_texrender_end(rt);
