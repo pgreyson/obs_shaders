@@ -223,7 +223,17 @@ class Surface:
             return params, text.get("info", ""), sh["header"], Path(path).name
         nat = (info.get("native") or {}).get(kind)
         if nat:
-            return [dict(p) for p in nat.get("params", [])], nat.get("info", ""), "", ""
+            params = [dict(p) for p in nat.get("params", [])]
+            for p in params:
+                # a slider whose useful range is set by another setting of the same filter
+                # (splat thickness and plane stop at the convergence budget): show that
+                # range, so the slider has no dead travel past the limit
+                b = settings.get(p.get("max_from") or p.get("range_from") or "")
+                if isinstance(b, (int, float)) and b > 0:
+                    p["max"] = min(p["max"], b)
+                    if p.get("range_from"):
+                        p["min"] = max(p["min"], -b)
+            return params, nat.get("info", ""), "", ""
         return [], "", "", ""
 
     async def build(self):

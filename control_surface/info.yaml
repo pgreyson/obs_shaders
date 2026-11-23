@@ -623,6 +623,7 @@ native:
         default: 0
         label: Plane (px)
         section: Stereo field
+        range_from: budget_px
         info: "Where the anchor depth sits, in canvas px of disparity. + = in front of the screen, - = behind. A pure sideways shift of the two eyes against each other: it moves the whole synth field nearer or farther without changing its shape. Same unit as camera Convergence."
       - key: thickness_px
         type: float
@@ -632,7 +633,8 @@ native:
         default: 30
         label: Thickness (px)
         section: Stereo field
-        info: "Total depth range of the synth field: the disparity difference between the nearest and farthest depth. 0 = flat picture at the plane. Driven by CV channel 0 over 0-80 px; above about 80 the two eyes differ too much to fuse."
+        max_from: budget_px
+        info: "Total depth range of the synth field: the disparity difference between the nearest and farthest depth. 0 = flat picture at the plane. Driven by CV channel 0. It stops at the Convergence budget, and this slider ends there too (reload the page after changing the budget); raise the budget if you want more depth."
       - key: anchor
         type: float
         min: 0
