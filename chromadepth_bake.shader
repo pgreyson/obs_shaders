@@ -70,6 +70,22 @@ uniform float wheel_shape<
     float step = 0.01;
 > = 0.0;
 
+// Dark hold. By default chroma confidence is ABSOLUTE chroma (max-min), so a
+// saturated colour that fades to black slides off its hue plane toward the
+// luma^3 baseline (the far back) over the value range 0.30..0.06 — a depth
+// ramp across every fade. At large splat thickness that ramp is a shear of
+// hundreds of px, mirrored between the eyes (user saw opposite slants in the
+// dim part of the test pattern). 1 = confidence from SATURATION instead: a
+// dim colour stays on its hue plane until it is effectively black. 0 = the
+// oracle-pinned behaviour (tools/stereo_oracle.py knows only 0).
+uniform float dark_hold<
+    string label = "Dark hold (0 = dim colour sinks to the back, 1 = stays on its hue plane)";
+    string widget_type = "slider";
+    float minimum = 0.0;
+    float maximum = 1.0;
+    float step = 0.01;
+> = 0.0;
+
 // 1 = render the baked field as grayscale (diff GPU field vs oracle).
 uniform float debug_mode<
     string label = "Debug (0 = off, 1 = field probe)";
@@ -117,7 +133,12 @@ float wheel_depth(float h) {
 
 // Oracle depth — UNCAPPED (the march caps at read for its h-test).
 float depth_of_uncapped(float3 c, float delta, float hue, float luma) {
-    float confidence = smoothstep(0.06, 0.30, delta) * color_weight;
+    float conf_abs = smoothstep(0.06, 0.30, delta);
+    float cmax_c = max(c.r, max(c.g, c.b));
+    float conf_sat = smoothstep(0.20, 0.60, delta / max(cmax_c, 0.0001))
+                   * smoothstep(0.02, 0.07, cmax_c);
+    float confidence = lerp(conf_abs, max(conf_abs, conf_sat), dark_hold)
+                     * color_weight;
     float luma_base = luma * luma * luma;
     return lerp(luma_base, wheel_depth(hue), confidence);
 }

@@ -471,6 +471,10 @@ shaders:
         label: Wheel shape
         section: Colour to depth
         info: "0 = smooth cosine wheel: seamless, but two hues share each depth, and which hues pair up changes with rotation. 1 = sawtooth wheel: every hue has its own depth and rotation is a pure cyclic shift, at the cost of one seam where neighbouring hues jump from near to far."
+      dark_hold:
+        label: Dark hold
+        section: Colour to depth
+        info: "0 = a colour that fades to black sinks toward the back as it dims, so every fade is a depth slope (at high thickness the two eyes see it slanting opposite ways). 1 = a dim colour stays on its hue's depth until it is effectively black."
       debug_mode:
         label: Debug
         section: Debug
