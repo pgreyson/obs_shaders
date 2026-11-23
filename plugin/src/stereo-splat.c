@@ -642,40 +642,60 @@ static void splat_render(void *data, gs_effect_t *unused_effect)
 	float sigma_eff = s->smooth_follow * fabsf(s->thickness_px) / 100.0f;
 	if (sigma_eff < s->smooth_sigma)
 		sigma_eff = s->smooth_sigma;
-	if (sigma_eff > 30.0f) /* the 21-tap kernel's useful limit */
-		sigma_eff = 30.0f;
+	if (sigma_eff > 80.0f)
+		sigma_eff = 80.0f;
 	if (sigma_eff > 0.0f && s->debug != 2) {
+		/* Passes: horizontal (sigma_eff), then vertical (smooth_sigma).
+		   The thickness-following part is horizontal only: parallax
+		   is horizontal, so only depth slope along x folds or tears;
+		   blurring it vertically as well bent vertical edges into
+		   mirrored curves in the two eyes near every horizontal depth
+		   boundary.
+		   One 21-tap pass is sound up to sigma 30 (tap spacing 10 px).
+		   Above that the horizontal blur is split in two: sigma 30
+		   first, then the remainder sqrt(sigma^2 - 30^2) on the
+		   already band-limited result, where its wider tap spacing
+		   (up to 25 px) no longer aliases. At thickness 400 the 30 px
+		   cap left band steps at a slope above 1 px/px: still folding. */
+		float sig[3];
+		int horiz[3];
+		int np = 0;
+		if (sigma_eff > 30.0f) {
+			sig[np] = 30.0f;
+			horiz[np++] = 1;
+			sig[np] = sqrtf(sigma_eff * sigma_eff - 900.0f);
+			horiz[np++] = 1;
+		} else {
+			sig[np] = sigma_eff;
+			horiz[np++] = 1;
+		}
+		if (s->smooth_sigma > 0.0f) {
+			sig[np] = s->smooth_sigma;
+			horiz[np++] = 0;
+		}
 		gs_texrender_t *rts[2] = {s->smh_rt, s->smv_rt};
 		struct vec2 sdims;
 		vec2_set(&sdims, (float)w, (float)h);
 		gs_blend_state_push();
 		gs_blend_function(GS_BLEND_ONE, GS_BLEND_ZERO);
-		for (int pass = 0; pass < 2; pass++) {
-			/* The thickness-following part is horizontal only:
-			   parallax is horizontal, so only depth slope along x
-			   folds or tears. Blurring it vertically as well bent
-			   vertical edges into mirrored curves in the two eyes
-			   near every horizontal depth boundary. */
-			float pass_sigma = pass == 0 ? sigma_eff
-						     : s->smooth_sigma;
-			if (pass_sigma <= 0.0f)
-				continue;
+		for (int pass = 0; pass < np; pass++) {
+			gs_texrender_t *rt = rts[pass & 1];
 			struct vec2 step;
-			vec2_set(&step, pass == 0 ? 1.0f / (float)w : 0.0f,
-				 pass == 0 ? 0.0f : 1.0f / (float)h);
-			gs_texrender_reset(rts[pass]);
-			if (!gs_texrender_begin(rts[pass], w, h))
+			vec2_set(&step, horiz[pass] ? 1.0f / (float)w : 0.0f,
+				 horiz[pass] ? 0.0f : 1.0f / (float)h);
+			gs_texrender_reset(rt);
+			if (!gs_texrender_begin(rt, w, h))
 				break;
 			gs_ortho(0.0f, (float)w, 0.0f, (float)h, -100.0f,
 				 100.0f);
 			gs_effect_set_texture(s->p_image, input_tex);
 			gs_effect_set_vec2(s->p_dims, &sdims);
-			gs_effect_set_float(s->p_smooth_sigma, pass_sigma);
+			gs_effect_set_float(s->p_smooth_sigma, sig[pass]);
 			gs_effect_set_vec2(s->p_smooth_step, &step);
 			while (gs_effect_loop(s->effect, "Smooth"))
 				gs_draw_sprite(input_tex, 0, w, h);
-			gs_texrender_end(rts[pass]);
-			gs_texture_t *t = gs_texrender_get_texture(rts[pass]);
+			gs_texrender_end(rt);
+			gs_texture_t *t = gs_texrender_get_texture(rt);
 			if (t)
 				input_tex = t;
 		}
