@@ -195,6 +195,25 @@ Settings > switch on "Rig Control Local CA".
 - Changes are saved into the scene collection a few seconds after the last touch.
 - No login: anyone on the network can move the controls.
 
+## Stereo regression suite (`tools/convergence_cases.py`)
+
+Every stereo defect that has been seen is kept as a focused test case, so a fix for one
+does not quietly break another.
+
+    depth_sidecar/.venv/bin/python3 tools/convergence_cases.py
+
+It renders `test_patterns/cases.png` (one panel per defect) and any real frames in
+`test_patterns/fixtures/` off-air through the depth bake and splat with fixed settings,
+measures each case, and writes a side-by-side sheet to `/tmp/convergence_cases.png`.
+Cases are `fixed` (must pass; a failure is a regression, exit code 1) or `open` (known,
+not solved yet).
+
+The rule: when a defect shows up, add the case first, see it fail, then fix, then run the
+whole suite. If the defect only shows on real material, save the raw frame and the filter
+settings as a fixture (`<name>.png` + `<name>.json`). The on-air `test pattern` filter
+shows the same picture as Pattern 4 (Cases). `tools/convergence_test.py` is the older
+single-pattern tracker (shift maps for one setting).
+
 ## Analog control via the OWL-ACDC
 
 The Rebel Technology **OWL-ACDC** is a DC-coupled USB audio interface (4 in, 4 out, 48 kHz). With it patched into the synth rack, modular CV can drive OBS shader parameters in real time, the same way it already drives Structure's onboard shaders.

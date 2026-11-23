@@ -1,0 +1,56 @@
+{
+ "synth color": {
+  "black_floor": 0.54,
+  "black_level": 0.14,
+  "chroma_pull": 0.7,
+  "chroma_smooth": 0.22,
+  "chroma_target": 0.44,
+  "contrast": 0.43,
+  "from_file": true,
+  "gamma": 0.37,
+  "hue_pull": 0.6,
+  "hue_shift": 0.47,
+  "luma_peaks": 3.4,
+  "luma_pull": 1.0,
+  "rotation": 0.13369697600603103,
+  "saturation": 0.54,
+  "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/synth_color_palette.shader",
+  "size": 9.4,
+  "skew": 0.45,
+  "soften": 0.34
+ },
+ "depth bake": {
+  "color_weight": 1.0,
+  "dark_hold": 1.0,
+  "debug_mode": 0.0,
+  "from_file": true,
+  "hue_rotation": 0.0,
+  "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/chromadepth_bake.shader",
+  "wheel_shape": 1.0
+ },
+ "stereo splat": {
+  "anchor": 0.0,
+  "budget_px": 300.0,
+  "debug": 0,
+  "fill": 1,
+  "frame_inset_px": 120.0,
+  "mesh_step": 4,
+  "mlaa": true,
+  "mode": 0,
+  "perspective_px": 0.0,
+  "plane_px": -236.5,
+  "smooth_follow": 6.0,
+  "smooth_lit": true,
+  "smooth_sigma": 0.0,
+  "ssaa": false,
+  "sync": false,
+  "thickness_px": 157.5,
+  "vignette_pct": 0.0,
+  "window": true
+ },
+ "stereo soften": {
+  "from_file": true,
+  "shader_file_name": "/Users/paulgreyson/Dev/obs_shaders/stereo_soften.shader",
+  "soften": 0.66
+ }
+}

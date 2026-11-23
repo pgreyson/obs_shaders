@@ -19,7 +19,7 @@ uniform float noise_mode<
     string label = "Pattern";
     string widget_type = "slider";
     float minimum = 0.0;
-    float maximum = 3.0;
+    float maximum = 4.0;
     float step = 1.0;
 > = 0.0;
 
@@ -30,6 +30,13 @@ uniform float dot_size<
     float maximum = 8.0;
     float step = 1.0;
 > = 3.0;
+
+// Pattern 4 shows this picture: test_patterns/cases.png, written by
+// tools/convergence_cases.py (one panel per stereo defect). Set the file once in
+// the filter panel; the regression suite measures the same picture off-air.
+uniform texture2d cases_image<
+    string label = "Cases image";
+>;
 
 float hash12(float2 p) {
     return frac(sin(dot(p, float2(127.1, 311.7))) * 43758.5453);
@@ -45,6 +52,8 @@ float3 hsv2rgb3(float h, float s, float v) {
 float4 mainImage(VertData v_in) : TARGET
 {
     float2 uv = v_in.uv;
+    if (noise_mode > 3.5)
+        return float4(cases_image.Sample(textureSampler, uv).rgb, 1.0);
     if (noise_mode > 2.5) {
         // SYNTH BARS — what the real synth picture is made of, which the flat
         // blocks are not: soft-edged bright bars on black, each with a hue
