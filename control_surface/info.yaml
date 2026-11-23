@@ -636,6 +636,15 @@ native:
         label: Anchor
         section: Stereo field
         info: "Which depth holds still when Thickness changes. 1 = the front of the field stays at the plane and everything recedes behind it; 0 = the back stays and everything comes forward; 0.5 = the field opens equally both ways."
+      - key: budget_px
+        type: float
+        min: 0
+        max: 300
+        step: 1
+        default: 0
+        label: Convergence budget (px)
+        section: Stereo field
+        info: "The one safety limit. The largest disparity any part of the picture may have in front of or behind the screen, and so the largest total depth. Thickness stops at this value, and Plane stops where the front or back of the field would pass it, whatever the sliders or the CV knob say. Set it once for the display (about 60 is gentle, 150 is strong) and Thickness, Plane and Anchor can no longer produce a picture the eyes cannot fuse. 0 = no limit."
       - key: vignette_pct
         type: float
         min: 0

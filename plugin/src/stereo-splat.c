@@ -168,6 +168,30 @@ static void splat_update(void *data, obs_data_t *settings)
 	s->thickness_px = (float)obs_data_get_double(settings, "thickness_px");
 	s->plane_px = (float)obs_data_get_double(settings, "plane_px");
 	s->anchor = (float)obs_data_get_double(settings, "anchor");
+	/* CONVERGENCE BUDGET (0 = off). The largest disparity, in canvas px,
+	   that any part of the field may have in front of or behind the
+	   screen, and so also the largest total depth. Thickness is clamped to
+	   it and Plane is clamped so the whole field [plane - anchor*T,
+	   plane + (1-anchor)*T] stays inside +-budget. Applied here, to the
+	   values every later stage reads, so no source of control (OBS panel,
+	   touch surface, CV knob) can push the picture out of the fusable
+	   range: at thickness 600 / plane 198 the eyes were shown largely
+	   different halves of the picture. */
+	float budget = (float)obs_data_get_double(settings, "budget_px");
+	if (budget > 0.0f) {
+		float a = s->anchor < 0.0f ? 0.0f
+					   : (s->anchor > 1.0f ? 1.0f : s->anchor);
+		if (s->thickness_px > budget)
+			s->thickness_px = budget;
+		if (s->thickness_px < 0.0f)
+			s->thickness_px = 0.0f;
+		float lo = -budget + a * s->thickness_px;
+		float hi = budget - (1.0f - a) * s->thickness_px;
+		if (s->plane_px < lo)
+			s->plane_px = lo;
+		if (s->plane_px > hi)
+			s->plane_px = hi;
+	}
 	s->frame_inset_px =
 		(float)obs_data_get_double(settings, "frame_inset_px");
 	s->mode = (int)obs_data_get_int(settings, "mode");
@@ -194,6 +218,7 @@ static void splat_defaults(obs_data_t *settings)
 {
 	obs_data_set_default_double(settings, "thickness_px", 30.0);
 	obs_data_set_default_double(settings, "plane_px", 0.0);
+	obs_data_set_default_double(settings, "budget_px", 0.0);
 	obs_data_set_default_double(settings, "anchor", 1.0);
 	obs_data_set_default_double(settings, "frame_inset_px", 48.0);
 	obs_data_set_default_double(settings, "vignette_pct", 0.0);
@@ -213,6 +238,9 @@ static obs_properties_t *splat_properties(void *data)
 {
 	UNUSED_PARAMETER(data);
 	obs_properties_t *props = obs_properties_create();
+	obs_properties_add_float_slider(props, "budget_px",
+					obs_module_text("Budget"), 0.0, 300.0,
+					1.0);
 	obs_properties_add_float_slider(props, "plane_px",
 					obs_module_text("Plane"), -300.0,
 					300.0, 0.5);

@@ -43,7 +43,7 @@ mappings:
     # bridge never writes. out_range is the performance budget: 58 px = 3 % of the eye
     # width is a comfortable total for the whole program, cameras included.
     out_range: [ 0.0, 80.0]
-    limits:    [ 0.0, 600.0]   # clamp for value = cv + offset (relative knobs)
+    limits:    [ 0.0, 150.0]   # clamp for value = cv + offset (relative knobs)
     targets:
       - instance: viture
         source: "Video Capture Device"
