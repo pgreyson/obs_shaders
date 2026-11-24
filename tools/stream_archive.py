@@ -1,21 +1,23 @@
 #!/usr/bin/env python3
-"""stream_archive — keep a continuous copy of the Twitch stream on the Archive volume.
+"""stream_archive — continuous full-resolution recording of the program, kept 30 days.
 
-The Twitch relay (:4456) records the stream it is already encoding (profile: AdvOut
-RecEncoder = none, i.e. "use stream encoder"; hybrid MP4; a new file every 60 min) into a
-LOCAL folder, so a sleeping or unmounted file server never stops the recording. This daemon
+A dedicated OBS instance, `full_sbs->archive` (:4460, `OBS Archive.app`), shows main's virtual
+camera at 3840x1080 and does nothing but record it: HEVC (VideoToolbox hardware), 15 Mbit/s,
+hybrid MP4, a new file every 60 min, into a LOCAL folder, so a sleeping or unmounted file
+server never stops the recording. Main is not involved: its Record button stays ProRes and
+can run at the same time. This daemon
 
-  * starts that recording whenever the relay is up and not recording;
+  * starts the recording whenever the archive instance is up and not recording;
   * moves every finished file to ARCHIVE_DIR/YYYY-MM/ (copy to *.part, compare sizes, rename,
     then delete the local file) and simply catches up later if the share is away;
+  * deletes archived files older than KEEP_DAYS (only its own files under ARCHIVE_DIR);
   * stops the recording if the local disk runs low (share away for too long);
-  * stops it and refuses to restart if the file grows much faster than the stream — that
-    means the relay is still using its old ProRes recording encoder (OBS only picks up a
-    changed RecEncoder at launch) and the relay needs a relaunch;
+  * stops it and refuses to restart if the file grows far faster than expected (wrong
+    recording encoder; OBS reads the encoder only at launch);
   * warns when the Archive volume is WARN_USED_PCT full (log, and STATUS for the control
     surface, which shows it in its status bar).
 
-About 6.1 Mbit/s = 2.7 GB/h = 66 GB/day.
+15 Mbit/s = 6.8 GB/h = 162 GB/day = 4.9 TB for 30 days.
 
 Run detached (see launch_dual.sh):
   nohup control_bridge/.venv/bin/python3 tools/stream_archive.py > /tmp/stream_archive.log 2>&1 &
@@ -25,14 +27,15 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "control_bridge"))
 import yaml, simpleobsws                     # noqa: E402
 
-PORT = 4456
-LOCAL_DIR = os.path.expanduser("~/Movies/twitch_capture")
+PORT = 4460
+LOCAL_DIR = os.path.expanduser("~/Movies/archive_capture")
 ARCHIVE_VOLUME = "/Volumes/Archive"
-ARCHIVE_DIR = os.path.join(ARCHIVE_VOLUME, "obs_twitch_capture")
+ARCHIVE_DIR = os.path.join(ARCHIVE_VOLUME, "obs_archive")
+KEEP_DAYS = 30.0              # archived files older than this are deleted
 STATUS = "/tmp/stream_archive.json"
 WARN_USED_PCT = 50.0          # warn when the Archive volume is this full
 MIN_LOCAL_GB = 6.0            # stop recording below this much free local disk
-MAX_MBIT = 25.0               # a stream-encoder file runs ~6; ProRes runs ~80
+MAX_MBIT = 40.0               # the HEVC file runs ~15; ProRes at this size runs ~270
 SETTLE_S = 90.0               # a file untouched this long (and not the newest) is finished
 TICK_S = 30.0
 EXTS = (".mp4", ".mov", ".mkv")
@@ -74,6 +77,28 @@ def move_one(path):
     return dest, size
 
 
+def expire():
+    """Delete archived recordings older than KEEP_DAYS. Only files with our extensions, only
+    inside ARCHIVE_DIR's month folders."""
+    gone = []
+    if not (os.path.ismount(ARCHIVE_VOLUME) and os.path.isdir(ARCHIVE_DIR)):
+        return gone
+    cutoff = time.time() - KEEP_DAYS * 86400
+    for month in sorted(os.listdir(ARCHIVE_DIR)):
+        mdir = os.path.join(ARCHIVE_DIR, month)
+        if not os.path.isdir(mdir):
+            continue
+        for n in sorted(os.listdir(mdir)):
+            p = os.path.join(mdir, n)
+            if n.lower().endswith(EXTS) and os.path.isfile(p) and os.path.getmtime(p) < cutoff:
+                gb = os.path.getsize(p) / 1e9
+                os.remove(p)
+                gone.append((n, gb))
+        if not os.listdir(mdir):
+            os.rmdir(mdir)
+    return gone
+
+
 class Archive:
     def __init__(self):
         self.ws = None
@@ -97,7 +122,7 @@ class Archive:
         await asyncio.wait_for(self.ws.connect(), 5)
         await asyncio.wait_for(self.ws.wait_until_identified(), 5)
         self.blocked = False          # a new connection may be a relaunched relay
-        log("connected to the Twitch relay")
+        log("connected to the archive instance")
 
     async def recording(self):
         """Keep the relay recording; returns True while a file is open."""
@@ -109,8 +134,8 @@ class Archive:
             if mbit > MAX_MBIT:
                 await self.call("StopRecord")
                 self.blocked = True
-                log(f"recording stopped: {mbit:.0f} Mbit/s is not the stream encoder. "
-                    "Relaunch the Twitch relay so it picks up RecEncoder = none.")
+                log(f"recording stopped: {mbit:.0f} Mbit/s is not the HEVC archive encoder. "
+                    "Check the profile's RecEncoder and run tools/relaunch_archive.sh.")
                 return False
             if free < MIN_LOCAL_GB:
                 await self.call("StopRecord")
@@ -118,7 +143,7 @@ class Archive:
                 return False
             return True
         if self.blocked:
-            self.say("blocked", "not recording: the Twitch relay needs a relaunch (wrong recording encoder)")
+            self.say("blocked", "not recording: wrong recording encoder on the archive instance (tools/relaunch_archive.sh)")
         elif free < MIN_LOCAL_GB + 2:
             self.say("lowdisk", f"not recording: only {free:.1f} GB free locally")
         else:
@@ -159,7 +184,7 @@ class Archive:
                 rec = await self.recording()
             except Exception as e:
                 relay = False
-                self.say("relay", f"Twitch relay not answering ({e!r})", 600)
+                self.say("relay", f"archive instance not answering ({e!r})", 600)
                 try:
                     if self.ws:
                         await self.ws.disconnect()
@@ -167,6 +192,13 @@ class Archive:
                     pass
                 self.ws = None
             backlog = await self.mover(rec)
+            if time.time() - self.said.get("_expire", 0) > 3600:
+                self.said["_expire"] = time.time()
+                try:
+                    for n, gb in await asyncio.to_thread(expire):
+                        log(f"expired {n} ({gb:.2f} GB, older than {KEEP_DAYS:g} days)")
+                except Exception as e:
+                    log(f"expiry failed ({e!r})")
             st = {"t": time.time(), "relay": relay, "recording": rec, "blocked": self.blocked,
                   "backlog_gb": round(backlog, 1), "warn": ""}
             if os.path.ismount(ARCHIVE_VOLUME):
@@ -178,10 +210,12 @@ class Archive:
                     self.say("full", "WARNING: " + st["warn"])
             else:
                 st["warn"] = "Archive share not mounted"
+            if not relay:
+                st["warn"] = "Archive instance not running"
             if self.blocked:
-                st["warn"] = "Stream archive off: Twitch relay needs a relaunch"
+                st["warn"] = "Archive off: wrong recording encoder"
             elif relay and not rec:
-                st["warn"] = st["warn"] or "Stream archive not recording"
+                st["warn"] = st["warn"] or "Archive not recording"
             try:
                 with open(STATUS + ".tmp", "w") as f:
                     json.dump(st, f)

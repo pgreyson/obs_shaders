@@ -116,6 +116,19 @@ open -n "$OBS_APP_PROJECTOR" --args \
     --collection "$HALFSBS_COLLECTION" \
     --websocket_port "$HALFSBS_WS_PORT"
 
+sleep 3
+
+# Archive instance (:4460): main's virtual camera at 3840x1080, records HEVC continuously
+# (started and moved to /Volumes/Archive by tools/stream_archive.py). Streams nowhere.
+if [ -d "/Applications/OBS Archive.app" ]; then
+  echo "Launching archive instance (ws :4460)..."
+  open -n "/Applications/OBS Archive.app" --args \
+      --multi --disable-shutdown-check \
+      --profile 'full_sbs->archive' \
+      --collection 'full_sbs->archive' \
+      --websocket_port 4460
+fi
+
 # Fullscreen the program output on the projector display (best effort: skipped if
 # no projector-looking display is attached).
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -139,8 +152,8 @@ if ! pgrep -f tools/pi_watchdog.py >/dev/null; then
   echo "pi watchdog started (log: /tmp/pi_watchdog.log)"
 fi
 
-# Stream archive: the Twitch relay records its own stream locally in hourly files and
-# tools/stream_archive.py moves them to /Volumes/Archive. Detached; skipped if already running.
+# Stream archive: keeps the archive instance recording, moves finished hourly files to
+# /Volumes/Archive, expires them after 30 days. Detached; skipped if already running.
 if ! pgrep -f tools/stream_archive.py >/dev/null; then
   nohup "$HERE/control_bridge/.venv/bin/python3" "$HERE/tools/stream_archive.py" > /tmp/stream_archive.log 2>&1 &
   echo "stream archive started (log: /tmp/stream_archive.log)"

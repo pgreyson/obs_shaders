@@ -224,17 +224,22 @@ The CV-to-OBS bridge lives at [`control_bridge/`](control_bridge/). It reads CV 
 
 TBD.
 
-## Continuous stream archive (`tools/stream_archive.py`)
+## Continuous archive (`tools/stream_archive.py`)
 
-The Twitch relay records the stream it is already encoding (profile `AdvOut`: `RecEncoder = none`,
-hybrid MP4, a new file every 60 min) into `~/Movies/twitch_capture`; no second encode. The detached
-daemon `tools/stream_archive.py` (started by `launch_dual.sh`, log `/tmp/stream_archive.log`) keeps
-that recording running and moves each finished hour to `/Volumes/Archive/obs_twitch_capture/YYYY-MM/`
-(copy, size check, then delete locally). If the share is away the files wait locally and the
-recording stops only when the local disk falls below 6 GB. About 2.7 GB/h, 66 GB/day.
+A fifth OBS instance, `full_sbs->archive` (ws :4460, `OBS Archive.app`, bundle id
+`com.obsproject.obs-studio.archive`), shows main's virtual camera at 3840x1080 in one scene and only
+records: HEVC (VideoToolbox hardware) CBR 15 Mbit/s, hybrid MP4, a new file every 60 min, into
+`~/Movies/archive_capture`. Main is untouched: its Record button is still ProRes (to
+`/Volumes/Workspace/obs_recordings`) and can run at the same time.
 
-It warns when the Archive volume is 50 % full: in the log and as a pill in the control surface's
-status bar (which also shows "Archive NN%" when all is well). OBS reads the recording encoder only
-at launch: after changing it, run `tools/relaunch_twitch.sh` (Twitch drops for about 30 s). The
-daemon stops a recording that runs far above the stream bitrate, which is what a relay still on
-its old ProRes recording encoder produces.
+The detached daemon `tools/stream_archive.py` (started by `launch_dual.sh`, log
+`/tmp/stream_archive.log`) keeps that recording running, moves each finished hour to
+`/Volumes/Archive/obs_archive/YYYY-MM/` (copy, size check, then delete locally) and deletes archived
+files older than 30 days. If the share is away the files wait locally and the recording stops only
+when the local disk falls below 6 GB. 6.8 GB/h, 162 GB/day, 4.9 TB for the 30 days.
+
+It warns when the Archive volume is 50 % full, the share is unmounted or the recording is off: in
+the log and as a pill in the control surface's status bar ("Archive NN%" when all is well).
+`tools/relaunch_archive.sh` restarts only this instance. The first launch of the clone asks for
+microphone and camera access on the mini's screen; until both are allowed the instance sits at
+"OBS is not ready".
