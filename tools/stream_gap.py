@@ -32,7 +32,7 @@ RELAYS = {"twitch": 4456, "youtube": 4457}
 SCENE, SOURCE = "full_sbs", "Viture Program (VirtualCam)"
 FRAMES = "Eye frames"            # image source: a hairline round each eye, as on a stereo card
 FRAME_DIR = os.path.join(HERE, '..', 'obs_config', 'eye_frames')
-LINE_PX, LINE_GREY = 2, 96       # on the 1920-wide stream
+LINE_PX, LINE_GREY = 2, 48       # on the 1920-wide stream
 MARGIN_PX = 6                    # between an eye picture and its frame
 
 
@@ -116,7 +116,7 @@ async def apply(name, port, gap_pct, frame_depth=None):
         ax = abs(d) / 2 + MARGIN_PX + LINE_PX            # frame reaches this far past the eye, each side
         ay = MARGIN_PX + LINE_PX
         fw, fh = w + 2 * ax, h + 2 * ay
-        png = os.path.abspath(os.path.join(FRAME_DIR, f"eye_frame_{fw:.0f}x{fh:.0f}.png"))
+        png = os.path.abspath(os.path.join(FRAME_DIR, f"eye_frame_{fw:.0f}x{fh:.0f}_g{LINE_GREY}.png"))
         reach = abs(d) + MARGIN_PX + LINE_PX             # towards the centre line
         print(f"{name}: frames {fw:.0f} x {fh:.0f} at depth {depth:g} px ({d:.0f} px on the stream)"
               + (f"; they reach {reach:.0f} px into the {gap:.0f} px gap and cross the centre line "
