@@ -36,7 +36,7 @@
   :root { --pop: 0px; --fa: 4px; --fm: 4px; --eyew: 100px; --eyeh: 100px; }
   .half { position: absolute; top: -100vh; bottom: -100vh; overflow: hidden; pointer-events: none; }
   .half.l { left: -100vw; right: 50%; } .half.r { left: 50%; right: -100vw; }
-  .frame { position: absolute; top: 50%; box-sizing: border-box; border: 1px solid #4a4a4a;
+  .frame { position: absolute; top: 50%; box-sizing: border-box; border: 1px solid #303030;
            width: calc(var(--eyew) + 2 * var(--fa)); height: calc(var(--eyeh) + 2 * var(--fm)); }
   .half.l .frame { right: calc(var(--gap) / 2 - var(--fa)); transform: translate(calc(var(--pop) / 2), -50%); }
   .half.r .frame { left: calc(var(--gap) / 2 - var(--fa)); transform: translate(calc(var(--pop) / -2), -50%); }
