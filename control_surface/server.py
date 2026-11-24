@@ -644,6 +644,13 @@ class Surface:
                         r.ok = False
                         self.relay_state[name] = "down"
             st["relays"] = getattr(self, "relay_state", {})
+            try:      # tools/stream_archive.py: continuous Twitch-stream capture to the Archive volume
+                ar = json.loads(Path("/tmp/stream_archive.json").read_text())
+                st["archive"] = ({"rec": ar.get("recording"), "warn": ar.get("warn") or "",
+                                  "backlog": ar.get("backlog_gb", 0), "used": ar.get("archive_used_pct")}
+                                 if time.time() - ar.get("t", 0) < 120 else {"rec": False, "warn": "Stream archive daemon not running"})
+            except Exception:
+                pass
             self.status = st
             await self.send_all({"t": "status", **st})
             try:

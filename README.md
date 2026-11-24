@@ -223,3 +223,18 @@ The CV-to-OBS bridge lives at [`control_bridge/`](control_bridge/). It reads CV 
 ## License
 
 TBD.
+
+## Continuous stream archive (`tools/stream_archive.py`)
+
+The Twitch relay records the stream it is already encoding (profile `AdvOut`: `RecEncoder = none`,
+hybrid MP4, a new file every 60 min) into `~/Movies/twitch_capture`; no second encode. The detached
+daemon `tools/stream_archive.py` (started by `launch_dual.sh`, log `/tmp/stream_archive.log`) keeps
+that recording running and moves each finished hour to `/Volumes/Archive/obs_twitch_capture/YYYY-MM/`
+(copy, size check, then delete locally). If the share is away the files wait locally and the
+recording stops only when the local disk falls below 6 GB. About 2.7 GB/h, 66 GB/day.
+
+It warns when the Archive volume is 50 % full: in the log and as a pill in the control surface's
+status bar (which also shows "Archive NN%" when all is well). OBS reads the recording encoder only
+at launch: after changing it, run `tools/relaunch_twitch.sh` (Twitch drops for about 30 s). The
+daemon stops a recording that runs far above the stream bitrate, which is what a relay still on
+its old ProRes recording encoder produces.

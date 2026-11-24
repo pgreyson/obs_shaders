@@ -139,6 +139,13 @@ if ! pgrep -f tools/pi_watchdog.py >/dev/null; then
   echo "pi watchdog started (log: /tmp/pi_watchdog.log)"
 fi
 
+# Stream archive: the Twitch relay records its own stream locally in hourly files and
+# tools/stream_archive.py moves them to /Volumes/Archive. Detached; skipped if already running.
+if ! pgrep -f tools/stream_archive.py >/dev/null; then
+  nohup "$HERE/control_bridge/.venv/bin/python3" "$HERE/tools/stream_archive.py" > /tmp/stream_archive.log 2>&1 &
+  echo "stream archive started (log: /tmp/stream_archive.log)"
+fi
+
 # Touch control surface for the iPad (control_surface/server.py): every filter parameter of
 # main on one page, http://<this mac>:8080/. Detached; skipped if already running. It
 # reconnects to main by itself, so it does not care about launch order.
