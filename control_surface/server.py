@@ -782,6 +782,12 @@ def make_http(preview):
             body, ctype, code, reason = (HERE / "index.html").read_bytes(), "text/html; charset=utf-8", 200, "OK"
         elif path == "/view":
             body, ctype, code, reason = (HERE / "view.html").read_bytes(), "text/html; charset=utf-8", 200, "OK"
+        elif path == "/recordings":
+            body, ctype, code, reason = (HERE / "recordings.html").read_bytes(), "text/html; charset=utf-8", 200, "OK"
+        elif path == "/recordings.json":
+            recs = await asyncio.to_thread(list_recordings)
+            body = json.dumps({"offset": MEDIA_PORT_OFFSET, "recordings": recs}).encode()
+            ctype, code, reason = "application/json", 200, "OK"
         elif path == "/manifest.json":
             # one web app covering both pages, so a Home Screen icon stays chrome-free on either
             body = json.dumps({"name": "Rig", "short_name": "Rig", "start_url": "/view", "scope": "/",
@@ -811,6 +817,115 @@ def make_http(preview):
     return http
 
 
+# ---- recordings: list + play back the continuous archive --------------------------------
+
+REC_ROOTS = {"l": Path.home() / "Movies" / "archive_capture",       # still on this machine
+             "a": Path("/Volumes/Archive/obs_archive")}             # moved to the Archive volume
+REC_NAME = re.compile(r"^(\d{4})-(\d\d)-(\d\d) (\d\d)-(\d\d)-(\d\d)\.(mp4|mov)$")
+MEDIA_PORT_OFFSET = 10      # media is served on (page port + 10): 8090 plain, 8453 TLS
+
+
+def list_recordings():
+    """Every archive file, oldest first: {id, start (epoch), end (epoch), gb, open}."""
+    out, seen = [], set()
+    def add(root, rel, p):
+        m = REC_NAME.match(p.name)
+        if not m or p.name in seen:
+            return
+        try:
+            st = p.stat()
+        except OSError:
+            return
+        seen.add(p.name)
+        start = time.mktime(tuple(int(x) for x in m.groups()[:6]) + (0, 0, -1))
+        out.append({"id": f"{root}/{rel}", "name": p.name, "start": start, "end": st.st_mtime,
+                    "gb": round(st.st_size / 1e9, 2), "open": time.time() - st.st_mtime < 20})
+    a = REC_ROOTS["a"]
+    if a.is_dir():
+        for month in sorted(a.iterdir()):
+            if month.is_dir() and re.fullmatch(r"\d{4}-\d\d", month.name):
+                for p in month.iterdir():
+                    add("a", f"{month.name}/{p.name}", p)
+    loc = REC_ROOTS["l"]
+    if loc.is_dir():
+        for p in loc.iterdir():
+            add("l", p.name, p)
+    out.sort(key=lambda r: r["start"])
+    return out
+
+
+def media_path(url_path):
+    """/media/<root>/<[month/]name> -> a file inside one of REC_ROOTS, or None."""
+    from urllib.parse import unquote
+    parts = unquote(url_path).split("/")
+    if len(parts) < 4 or parts[1] != "media" or parts[2] not in REC_ROOTS:
+        return None
+    rest = parts[3:]
+    if not REC_NAME.match(rest[-1]) or len(rest) > 2:
+        return None
+    if len(rest) == 2 and not re.fullmatch(r"\d{4}-\d\d", rest[0]):
+        return None
+    p = REC_ROOTS[parts[2]].joinpath(*rest)
+    return p if p.is_file() else None
+
+
+async def media_client(reader, writer):
+    """One GET of a recording, with byte ranges (which is what a <video> element asks for).
+    A tiny HTTP server of its own: the websocket library's handler can only answer with a
+    whole body in memory, and these files are gigabytes."""
+    try:
+        head = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 10)
+        lines = head.decode("latin-1").split("\r\n")
+        method, target, _ = lines[0].split(" ", 2)
+        hdr = {k.strip().lower(): v.strip() for k, _, v in (ln.partition(":") for ln in lines[1:] if ln)}
+        p = media_path(target.partition("?")[0]) if method in ("GET", "HEAD") else None
+        if p is None:
+            writer.write(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+            return
+        size = p.stat().st_size
+        a, b, code = 0, size - 1, 200
+        m = re.match(r"bytes=(\d*)-(\d*)$", hdr.get("range", ""))
+        if m and (m.group(1) or m.group(2)):
+            if m.group(1):
+                a = int(m.group(1)); b = min(int(m.group(2)), size - 1) if m.group(2) else size - 1
+            else:
+                a = max(0, size - int(m.group(2)))
+            if a > b or a >= size:
+                writer.write(f"HTTP/1.1 416 Range Not Satisfiable\r\nContent-Range: bytes */{size}\r\n"
+                             "Content-Length: 0\r\nConnection: close\r\n\r\n".encode())
+                return
+            code = 206
+        h = [f"HTTP/1.1 {code} {'Partial Content' if code == 206 else 'OK'}",
+             f"Content-Type: {'video/quicktime' if p.suffix == '.mov' else 'video/mp4'}",
+             f"Content-Length: {b - a + 1}", "Accept-Ranges: bytes", "Cache-Control: no-store", "Connection: close"]
+        if code == 206:
+            h.append(f"Content-Range: bytes {a}-{b}/{size}")
+        writer.write(("\r\n".join(h) + "\r\n\r\n").encode())
+        if method == "HEAD":
+            return
+        f = await asyncio.to_thread(open, p, "rb")
+        try:
+            await asyncio.to_thread(f.seek, a)
+            left = b - a + 1
+            while left > 0:
+                chunk = await asyncio.to_thread(f.read, min(262144, left))
+                if not chunk:
+                    break
+                writer.write(chunk)
+                await writer.drain()
+                left -= len(chunk)
+        finally:
+            f.close()
+    except (ConnectionError, asyncio.IncompleteReadError, asyncio.TimeoutError, ValueError):
+        pass
+    finally:
+        try:
+            await writer.drain()
+        except Exception:
+            pass
+        writer.close()
+
+
 def lan_address():
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -835,6 +950,7 @@ async def main():
     async with contextlib.AsyncExitStack() as stack:
         await stack.enter_async_context(serve(wsh, "0.0.0.0", args.port, process_request=http, ping_interval=20))
         log(f"control surface: http://{lan_address()}:{args.port}/   viewer: /view")
+        await stack.enter_async_context(await asyncio.start_server(media_client, "0.0.0.0", args.port + MEDIA_PORT_OFFSET))
         if (CERTS / "server.crt").exists():
             # HTTPS too, for phones with Safari's HTTPS-only setting (certificate from our own
             # local authority in certs/, which each device has to trust once: see README)
@@ -843,6 +959,7 @@ async def main():
             await stack.enter_async_context(serve(wsh, "0.0.0.0", args.tls_port, process_request=http,
                                                   ping_interval=20, ssl=ctx))
             log(f"                 https://{lan_address()}:{args.tls_port}/")
+            await stack.enter_async_context(await asyncio.start_server(media_client, "0.0.0.0", args.tls_port + MEDIA_PORT_OFFSET, ssl=ctx))
         await asyncio.gather(s.keeper(), s.writer(), s.pusher(), s.saver(), s.poller(), preview.run())
 
 

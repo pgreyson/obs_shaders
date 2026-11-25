@@ -72,6 +72,8 @@ def move_one(path):
         if os.path.getsize(part) != size:
             os.remove(part)
             raise IOError(f"size mismatch after copy: {os.path.basename(path)}")
+        st = os.stat(path)
+        os.utime(part, (st.st_atime, st.st_mtime))      # keep the end-of-recording time
         os.replace(part, dest)
     os.remove(path)
     return dest, size

@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="/manifest.json">
+<title>Recordings</title>
+<style>
+:root {
+  --bg: #0e1013; --panel: #171a1f; --panel2: #1e2228; --line: #2a2f37;
+  --text: #e8eaed; --dim: #8b929c; --accent: #5cc8ff; --accent-dim: #1d4a63;
+  --on: #58d68d; --warn: #f5b041; --bad: #ec7063;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.4 -apple-system, system-ui, sans-serif; }
+header { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line);
+  padding: calc(env(safe-area-inset-top) + 8px) 12px 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pill { font: inherit; font-size: 12px; padding: 5px 10px; border-radius: 999px; background: var(--panel2);
+  color: var(--dim); white-space: nowrap; border: 0; text-decoration: none; font-variant-numeric: tabular-nums; }
+.pill.on { background: var(--accent-dim); color: var(--text); }
+.grow { flex: 1; }
+#stage { position: sticky; top: 46px; z-index: 4; background: #000; display: none; }
+#clip { overflow: hidden; width: 100%; background: #000; }
+video { display: block; width: 100%; background: #000; }
+#clip.one video { width: 200%; }                 /* left eye only: the left half of the SBS frame */
+#bar { display: flex; gap: 8px; align-items: center; padding: 8px 12px; background: var(--panel);
+  border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+#now { font-variant-numeric: tabular-nums; color: var(--text); font-size: 13px; }
+main { padding: 4px 12px calc(env(safe-area-inset-bottom) + 30px); }
+h2 { font-size: 13px; font-weight: 600; color: var(--dim); margin: 18px 0 6px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 6px; }
+.rec { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px;
+  color: var(--text); font: inherit; text-align: left; font-variant-numeric: tabular-nums; }
+.rec small { display: block; color: var(--dim); font-size: 11px; margin-top: 2px; }
+.rec.cur { border-color: var(--accent); background: var(--accent-dim); }
+.rec.open small { color: var(--warn); }
+#empty { color: var(--dim); padding: 40px 10px; text-align: center; }
+</style>
+</head>
+<body>
+<header>
+  <a class="pill" href="/">Controls</a>
+  <a class="pill" href="/view">View</a>
+  <span class="grow"></span>
+  <span class="pill" id="count"></span>
+  <button class="pill" id="refresh">Refresh</button>
+</header>
+<div id="stage">
+  <div id="clip"><video id="v" controls playsinline preload="metadata"></video></div>
+  <div id="bar">
+    <span id="now"></span>
+    <span class="grow"></span>
+    <button class="pill" id="prev">Previous hour</button>
+    <button class="pill" id="next">Next hour</button>
+    <span id="speeds"></span>
+    <button class="pill" id="eye">One eye</button>
+    <button class="pill" id="close">Close</button>
+  </div>
+</div>
+<main id="list"><div id="empty">Loading…</div></main>
+<script>
+const $ = (s) => document.querySelector(s);
+const v = $("#v"), stage = $("#stage"), clip = $("#clip");
+let recs = [], cur = -1, offset = 10, rate = 1;
+const two = (n) => String(n).padStart(2, "0");
+const hm = (t) => { const d = new Date(t * 1000); return two(d.getHours()) + ":" + two(d.getMinutes()); };
+const day = (t) => new Date(t * 1000).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+const mediaUrl = (r) => location.protocol + "//" + location.hostname + ":" + (parseInt(location.port || (location.protocol === "https:" ? 443 : 80), 10) + offset)
+  + "/media/" + r.id.split("/").map(encodeURIComponent).join("/");
+
+function pref(k, d) { try { const x = localStorage.getItem(k); return x === null ? d : x; } catch (e) { return d; } }
+function keep(k, x) { try { localStorage.setItem(k, x); } catch (e) {} }
+
+function draw() {
+  const list = $("#list"); list.textContent = "";
+  $("#count").textContent = recs.length ? recs.length + " files · " + Math.round(recs.reduce((a, r) => a + r.gb, 0)) + " GB" : "";
+  if (!recs.length) { const e = document.createElement("div"); e.id = "empty"; e.textContent = "No archive recordings found."; list.append(e); return; }
+  let lastDay = "", grid = null;
+  for (let i = recs.length - 1; i >= 0; i--) {           // newest day first, newest hour first
+    const r = recs[i], d = day(r.start);
+    if (d !== lastDay) {
+      lastDay = d;
+      const h = document.createElement("h2"); h.textContent = d; list.append(h);
+      grid = document.createElement("div"); grid.className = "grid"; list.append(grid);
+    }
+    const b = document.createElement("button");
+    b.className = "rec" + (i === cur ? " cur" : "") + (r.open ? " open" : "");
+    const mins = Math.max(0, Math.round((r.end - r.start) / 60));
+    b.append(hm(r.start));
+    const s = document.createElement("small");
+    s.textContent = r.open ? "recording now" : mins + " min · " + r.gb.toFixed(1) + " GB";
+    b.append(s);
+    b.onclick = () => play(i, 0);
+    grid.append(b);
+  }
+}
+
+function label() {
+  if (cur < 0) return;
+  const r = recs[cur], t = r.start + (v.currentTime || 0), d = new Date(t * 1000);
+  $("#now").textContent = d.toLocaleDateString(undefined, { day: "numeric", month: "short" }) + " "
+    + two(d.getHours()) + ":" + two(d.getMinutes()) + ":" + two(d.getSeconds());
+}
+
+function play(i, at) {
+  if (i < 0 || i >= recs.length) return;
+  cur = i;
+  stage.style.display = "block";
+  v.src = mediaUrl(recs[i]);
+  v.onloadedmetadata = () => { if (at) v.currentTime = at; v.playbackRate = rate; v.play().catch(() => {}); };
+  v.load();
+  draw(); label();
+  window.scrollTo({ top: 0 });
+}
+
+v.ontimeupdate = label;
+v.onratechange = () => { if (v.playbackRate !== rate && !v.paused) v.playbackRate = rate; };
+v.onended = () => { if (cur + 1 < recs.length && !recs[cur + 1].open) play(cur + 1, 0); };   // one continuous timeline
+$("#prev").onclick = () => play(cur - 1, 0);
+$("#next").onclick = () => play(cur + 1, 0);
+$("#close").onclick = () => { v.pause(); v.removeAttribute("src"); v.load(); stage.style.display = "none"; cur = -1; draw(); };
+$("#eye").onclick = () => setEye(!clip.classList.contains("one"));
+function setEye(one) { clip.classList.toggle("one", one); $("#eye").classList.toggle("on", one); keep("rec_eye", one ? "1" : "0"); }
+for (const sp of [1, 2, 4, 8, 16]) {
+  const b = document.createElement("button"); b.className = "pill"; b.textContent = sp + "×"; b.dataset.sp = sp;
+  b.onclick = () => setRate(sp); $("#speeds").append(b, " ");
+}
+function setRate(sp) {
+  rate = sp; v.playbackRate = sp; keep("rec_rate", String(sp));
+  for (const b of $("#speeds").children) b.classList.toggle("on", Number(b.dataset.sp) === sp);
+}
+
+async function load() {
+  try {
+    const j = await (await fetch("/recordings.json", { cache: "no-store" })).json();
+    const curId = cur >= 0 ? recs[cur].id.split("/").pop() : null;
+    recs = j.recordings; offset = j.offset;
+    cur = curId ? recs.findIndex((r) => r.id.split("/").pop() === curId) : -1;   // a file may have moved to the Archive
+  } catch (e) { recs = []; }
+  draw();
+}
+$("#refresh").onclick = load;
+setEye(pref("rec_eye", "1") === "1");
+setRate(Number(pref("rec_rate", "1")) || 1);
+load();
+setInterval(() => { if (document.visibilityState === "visible") load(); }, 60000);
+</script>
+</body>
+</html>

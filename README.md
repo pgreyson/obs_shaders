@@ -243,3 +243,13 @@ the log and as a pill in the control surface's status bar ("Archive NN%" when al
 `tools/relaunch_archive.sh` restarts only this instance. The first launch of the clone asks for
 microphone and camera access on the mini's screen; until both are allowed the instance sits at
 "OBS is not ready".
+
+### Playing the archive back (`/recordings` on the control surface)
+
+The **Recordings** pill on the control page opens a list of every archive file (those still on the
+mini and those on the Archive volume), grouped by day. Tapping an hour plays it in the page: scrub
+bar, 1x to 16x speed, previous/next hour, one-eye or full side-by-side picture, and it runs on into
+the next hour by itself. The clock shown is the wall-clock time of the frame on screen. Files are
+served with byte ranges by a small HTTP server inside `server.py` on the page port + 10 (8090 plain,
+8453 TLS), restricted to archive file names inside the two archive folders. ProRes recordings on
+Workspace are not listed: Safari cannot play them.
