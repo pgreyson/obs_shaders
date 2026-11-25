@@ -906,12 +906,13 @@ async def media_client(reader, writer):
         writer.write(("\r\n".join(h) + "\r\n\r\n").encode())
         if method == "HEAD":
             return
+        writer.transport.set_write_buffer_limits(high=4194304)
         f = await asyncio.to_thread(open, p, "rb")
         try:
             await asyncio.to_thread(f.seek, a)
             left = b - a + 1
             while left > 0:
-                chunk = await asyncio.to_thread(f.read, min(262144, left))
+                chunk = await asyncio.to_thread(f.read, min(2097152, left))
                 if not chunk:
                     break
                 writer.write(chunk)

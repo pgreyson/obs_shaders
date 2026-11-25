@@ -18,17 +18,41 @@ html, body { margin: 0; background: var(--bg); color: var(--text);
   font: 15px/1.4 -apple-system, system-ui, sans-serif; }
 header { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line);
   padding: calc(env(safe-area-inset-top) + 8px) 12px 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.pill { font: inherit; font-size: 12px; padding: 5px 10px; border-radius: 999px; background: var(--panel2);
+.pill { font: inherit; font-size: 12px; padding: 6px 11px; border-radius: 999px; background: var(--panel2);
   color: var(--dim); white-space: nowrap; border: 0; text-decoration: none; font-variant-numeric: tabular-nums; }
 .pill.on { background: var(--accent-dim); color: var(--text); }
 .grow { flex: 1; }
-#stage { position: sticky; top: 46px; z-index: 4; background: #000; display: none; }
-#clip { overflow: hidden; width: 100%; background: #000; }
-video { display: block; width: 100%; background: #000; }
+
+/* The player. Portrait: picture across the top, list under it. Landscape: the picture alone
+   fills the screen and a tap brings the controls up for a few seconds. */
+#stage { display: none; background: #000; }
+body.playing #stage { display: block; }
+#clip { overflow: hidden; width: 100%; aspect-ratio: 32 / 9; background: #000; margin: 0 auto; }
+#clip.one { aspect-ratio: 16 / 9; }
+video { display: block; width: 100%; height: 100%; background: #000; }
 #clip.one video { width: 200%; }                 /* left eye only: the left half of the SBS frame */
-#bar { display: flex; gap: 8px; align-items: center; padding: 8px 12px; background: var(--panel);
-  border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-#now { font-variant-numeric: tabular-nums; color: var(--text); font-size: 13px; }
+#bar { background: var(--panel); border-bottom: 1px solid var(--line); padding: 8px 12px; }
+#bar .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+#bar .row + .row { margin-top: 8px; }
+#now { font-variant-numeric: tabular-nums; font-size: 13px; min-width: 9.5em; }
+#seek { flex: 1; min-width: 120px; accent-color: var(--accent); height: 28px; }
+#wait { color: var(--warn); font-size: 12px; }
+@media (orientation: portrait) {
+  body.playing #stage { position: sticky; top: 0; z-index: 6; padding-top: env(safe-area-inset-top); }
+  body.playing header { position: static; }
+}
+@media (orientation: landscape) {
+  body.playing { overflow: hidden; }
+  body.playing header, body.playing main { display: none; }
+  body.playing #stage { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center; }
+  body.playing #clip { width: min(100vw, calc(100dvh * 32 / 9)); }
+  body.playing #clip.one { width: min(100vw, calc(100dvh * 16 / 9)); }
+  body.playing #bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 11; border: 0;
+    background: rgba(14, 16, 19, .86); display: none;
+    padding: 10px max(14px, env(safe-area-inset-left)) calc(10px + env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-right)); }
+  body.playing.ui #bar { display: block; }
+}
+
 main { padding: 4px 12px calc(env(safe-area-inset-bottom) + 30px); }
 h2 { font-size: 13px; font-weight: 600; color: var(--dim); margin: 18px 0 6px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 6px; }
@@ -44,29 +68,36 @@ h2 { font-size: 13px; font-weight: 600; color: var(--dim); margin: 18px 0 6px; }
 </head>
 <body>
 <header>
+  <a class="pill" href="/view">Live</a>
   <a class="pill" href="/">Controls</a>
-  <a class="pill" href="/view">View</a>
   <span class="grow"></span>
   <span class="pill" id="count"></span>
   <button class="pill" id="refresh">Refresh</button>
 </header>
 <div id="stage">
-  <div id="clip"><video id="v" controls playsinline preload="metadata"></video></div>
+  <div id="clip"><video id="v" playsinline webkit-playsinline preload="auto"></video></div>
   <div id="bar">
-    <span id="now"></span>
-    <span class="grow"></span>
-    <button class="pill" id="prev">Previous</button>
-    <button class="pill" id="next">Next</button>
-    <span id="speeds"></span>
-    <button class="pill" id="eye">One eye</button>
-    <button class="pill" id="close">Close</button>
+    <div class="row">
+      <button class="pill on" id="pp">Pause</button>
+      <span id="now"></span>
+      <input type="range" id="seek" min="0" max="1000" value="0" step="1">
+      <span id="wait"></span>
+    </div>
+    <div class="row">
+      <button class="pill" id="prev">Previous</button>
+      <button class="pill" id="next">Next</button>
+      <span id="speeds"></span>
+      <span class="grow"></span>
+      <button class="pill" id="eye">One eye</button>
+      <button class="pill" id="close">Close</button>
+    </div>
   </div>
 </div>
 <main id="list"><div id="empty">Loading…</div></main>
 <script>
 const $ = (s) => document.querySelector(s);
-const v = $("#v"), stage = $("#stage"), clip = $("#clip");
-let recs = [], cur = -1, offset = 10, rate = 1;
+const v = $("#v"), clip = $("#clip"), seek = $("#seek");
+let recs = [], cur = -1, offset = 10, rate = 1, dragging = false, uiTimer = null;
 const two = (n) => String(n).padStart(2, "0");
 const hm = (t) => { const d = new Date(t * 1000); return two(d.getHours()) + ":" + two(d.getMinutes()); };
 const day = (t) => new Date(t * 1000).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
@@ -78,8 +109,9 @@ function keep(k, x) { try { localStorage.setItem(k, x); } catch (e) {} }
 
 function draw() {
   const list = $("#list"); list.textContent = "";
-  $("#count").textContent = recs.length ? recs.length + " files · " + Math.round(recs.reduce((a, r) => a + r.gb, 0)) + " GB" : "";
-  if (!recs.length) { const e = document.createElement("div"); e.id = "empty"; e.textContent = "No archive recordings found."; list.append(e); return; }
+  const arch = recs.filter((r) => r.kind === "archive");
+  $("#count").textContent = arch.length ? arch.length + " archive hours · " + Math.round(arch.reduce((a, r) => a + r.gb, 0)) + " GB" : "";
+  if (!recs.length) { const e = document.createElement("div"); e.id = "empty"; e.textContent = "No recordings found."; list.append(e); return; }
   let lastDay = "", grid = null;
   for (let i = recs.length - 1; i >= 0; i--) {           // newest day first, newest hour first
     const r = recs[i], d = day(r.start);
@@ -94,7 +126,7 @@ function draw() {
     b.append(hm(r.start));
     if (r.kind === "prores") { const t = document.createElement("b"); t.textContent = "ProRes"; b.append(t); }
     const s = document.createElement("small");
-    s.textContent = r.open ? "recording now" : mins + " min · " + r.gb.toFixed(1) + " GB";
+    s.textContent = r.open ? "recording now" : (mins >= 1 ? mins + " min" : "under 1 min") + " · " + r.gb.toFixed(1) + " GB";
     b.append(s);
     b.onclick = () => play(i, 0);
     grid.append(b);
@@ -106,21 +138,34 @@ function label() {
   const r = recs[cur], t = r.start + (v.currentTime || 0), d = new Date(t * 1000);
   $("#now").textContent = d.toLocaleDateString(undefined, { day: "numeric", month: "short" }) + " "
     + two(d.getHours()) + ":" + two(d.getMinutes()) + ":" + two(d.getSeconds());
+  if (!dragging && isFinite(v.duration) && v.duration > 0) seek.value = Math.round(1000 * v.currentTime / v.duration);
 }
+
+// controls: always there in portrait; in landscape a tap on the picture shows them for a while
+function showUi(on) {
+  document.body.classList.toggle("ui", on);
+  clearTimeout(uiTimer);
+  if (on) uiTimer = setTimeout(() => { if (!dragging) showUi(false); }, 5000);
+}
+clip.onclick = () => showUi(!document.body.classList.contains("ui"));
+$("#bar").addEventListener("pointerdown", () => showUi(true));
 
 function play(i, at) {
   if (i < 0 || i >= recs.length) return;
   cur = i;
-  stage.style.display = "block";
+  document.body.classList.add("playing");
+  $("#wait").textContent = "";
   v.src = mediaUrl(recs[i]);
   v.onloadedmetadata = () => { if (at) v.currentTime = at; v.playbackRate = rate; v.play().catch(() => {}); };
   v.load();
-  draw(); label();
+  draw(); label(); showUi(true);
   window.scrollTo({ top: 0 });
 }
+function stop() {
+  v.pause(); v.removeAttribute("src"); v.load();
+  document.body.classList.remove("playing", "ui"); cur = -1; draw();
+}
 
-v.ontimeupdate = label;
-v.onratechange = () => { if (v.playbackRate !== rate && !v.paused) v.playbackRate = rate; };
 // previous/next file of the same kind: the archive hours form one continuous timeline, and the
 // ProRes clips (which overlap it in time) are stepped through separately
 function step(dir) {
@@ -128,11 +173,19 @@ function step(dir) {
   for (let i = cur + dir; i >= 0 && i < recs.length; i += dir) if (recs[i].kind === recs[cur].kind) return i;
   return -1;
 }
+v.ontimeupdate = label;
+v.onplay = () => { $("#pp").textContent = "Pause"; $("#pp").classList.add("on"); if (v.playbackRate !== rate) v.playbackRate = rate; };
+v.onpause = () => { $("#pp").textContent = "Play"; $("#pp").classList.remove("on"); };
+v.onwaiting = () => { $("#wait").textContent = "buffering…"; };
+v.onplaying = v.oncanplay = () => { $("#wait").textContent = ""; };
 v.onended = () => { const n = step(1); if (n >= 0 && !recs[n].open && recs[cur].kind === "archive") play(n, 0); };
-v.onerror = () => { if (cur >= 0) $("#now").textContent = "This device cannot play " + recs[cur].name; };
+v.onerror = () => { if (cur >= 0) $("#wait").textContent = "This device cannot play " + recs[cur].name; };
+$("#pp").onclick = () => { if (v.paused) v.play().catch(() => {}); else v.pause(); };
+seek.oninput = () => { dragging = true; };
+seek.onchange = () => { if (isFinite(v.duration)) v.currentTime = v.duration * seek.value / 1000; dragging = false; };
 $("#prev").onclick = () => play(step(-1), 0);
 $("#next").onclick = () => play(step(1), 0);
-$("#close").onclick = () => { v.pause(); v.removeAttribute("src"); v.load(); stage.style.display = "none"; cur = -1; draw(); };
+$("#close").onclick = stop;
 $("#eye").onclick = () => setEye(!clip.classList.contains("one"));
 function setEye(one) { clip.classList.toggle("one", one); $("#eye").classList.toggle("on", one); keep("rec_eye", one ? "1" : "0"); }
 for (const sp of [1, 2, 4, 8, 16]) {
@@ -147,9 +200,9 @@ function setRate(sp) {
 async function load() {
   try {
     const j = await (await fetch("/recordings.json", { cache: "no-store" })).json();
-    const curId = cur >= 0 ? recs[cur].id.split("/").pop() : null;
+    const curName = cur >= 0 ? recs[cur].name : null;
     recs = j.recordings; offset = j.offset;
-    cur = curId ? recs.findIndex((r) => r.id.split("/").pop() === curId) : -1;   // a file may have moved to the Archive
+    cur = curName ? recs.findIndex((r) => r.name === curName) : -1;   // a file may have moved to the Archive
   } catch (e) { recs = []; }
   draw();
 }
@@ -157,7 +210,7 @@ $("#refresh").onclick = load;
 setEye(pref("rec_eye", "1") === "1");
 setRate(Number(pref("rec_rate", "1")) || 1);
 load();
-setInterval(() => { if (document.visibilityState === "visible") load(); }, 60000);
+setInterval(() => { if (document.visibilityState === "visible" && cur < 0) load(); }, 60000);
 </script>
 </body>
 </html>
