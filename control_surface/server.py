@@ -786,7 +786,8 @@ def make_http(preview):
             body, ctype, code, reason = (HERE / "recordings.html").read_bytes(), "text/html; charset=utf-8", 200, "OK"
         elif path == "/recordings.json":
             recs = await asyncio.to_thread(list_recordings)
-            body = json.dumps({"offset": MEDIA_PORT_OFFSET, "recordings": recs}).encode()
+            body = json.dumps({"offset": MEDIA_PORT_OFFSET, "recordings": recs,
+                               "gap_pct": await stream_gap_pct(preview.relays)}).encode()
             ctype, code, reason = "application/json", 200, "OK"
         elif path == "/manifest.json":
             # one web app covering both pages, so a Home Screen icon stays chrome-free on either
@@ -857,6 +858,32 @@ def list_recordings():
     return out
 
 
+_gap = {"t": 0.0, "pct": 3.0}
+
+
+async def stream_gap_pct(relays):
+    """Gap between the two eye pictures on the streams, in % of the stream width (what
+    tools/stream_gap.py set on the relays), so the Recordings player can use the same layout."""
+    if time.monotonic() - _gap["t"] < 60:
+        return _gap["pct"]
+    _gap["t"] = time.monotonic()
+    for r in relays.values():
+        try:
+            if not r.ok:
+                continue
+            cw = (await r.call("GetVideoSettings"))["baseWidth"]
+            for it in (await r.call("GetSceneItemList", {"sceneName": "full_sbs"}))["sceneItems"]:
+                t = it["sceneItemTransform"]
+                if it["sourceName"].startswith("Viture Program") and t.get("boundsType") == "OBS_BOUNDS_STRETCH":
+                    _gap["pct"] = round(100.0 * (cw / 2 - t["boundsWidth"]) / cw, 2)
+                    return _gap["pct"]
+            _gap["pct"] = 0.0
+            return 0.0
+        except Exception:
+            continue
+    return _gap["pct"]
+
+
 def media_path(url_path):
     """/media/<root>/<[month/]name> -> a file inside one of REC_ROOTS, or None."""
     from urllib.parse import unquote
@@ -908,6 +935,7 @@ async def media_client(reader, writer):
             return
         writer.transport.set_write_buffer_limits(high=4194304)
         f = await asyncio.to_thread(open, p, "rb")
+        t0, sent, peer = time.monotonic(), 0, (writer.get_extra_info("peername") or ["?"])[0]
         try:
             await asyncio.to_thread(f.seek, a)
             left = b - a + 1
@@ -918,8 +946,13 @@ async def media_client(reader, writer):
                 writer.write(chunk)
                 await writer.drain()
                 left -= len(chunk)
+                sent += len(chunk)
         finally:
             f.close()
+            dt = time.monotonic() - t0
+            if sent > 4e6 or dt > 3:       # how fast each player actually takes the data
+                log(f"media {peer}: {p.name} from {a / 1e6:.0f} MB, sent {sent / 1e6:.0f} MB in {dt:.1f} s "
+                    f"({sent * 8 / 1e6 / max(dt, 0.01):.0f} Mbit/s){'' if left <= 0 else ', player stopped reading'}")
     except (ConnectionError, asyncio.IncompleteReadError, asyncio.TimeoutError, ValueError):
         pass
     finally:

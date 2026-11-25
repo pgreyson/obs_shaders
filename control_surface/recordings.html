@@ -41,12 +41,18 @@ video { display: block; width: 100%; height: 100%; background: #000; }
   body.playing #stage { position: sticky; top: 0; z-index: 6; padding-top: env(safe-area-inset-top); }
   body.playing header { position: static; }
 }
+#cv { display: none; }
 @media (orientation: landscape) {
+  /* Landscape = the layout of the Twitch/YouTube streams: a 16:9 stream picture fitted to the
+     screen, in it the two eyes at the quarter points with the streams' gap between them and a
+     hairline frame round each. It is painted on a canvas from the (hidden) video, because one
+     video element cannot be shown as two separated halves. */
   body.playing { overflow: hidden; }
   body.playing header, body.playing main { display: none; }
-  body.playing #stage { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center; }
-  body.playing #clip { width: min(100vw, calc(100dvh * 32 / 9)); }
-  body.playing #clip.one { width: min(100vw, calc(100dvh * 16 / 9)); }
+  body.playing #stage { position: fixed; inset: 0; z-index: 10; }
+  body.playing #cv { display: block; position: fixed; left: 0; top: 0; width: 100vw; height: 100dvh; }
+  body.playing #clip, body.playing #clip.one { position: fixed; left: 0; top: 0; width: 8px; height: 2px;
+    opacity: .01; pointer-events: none; }
   body.playing #bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 11; border: 0;
     background: rgba(14, 16, 19, .86); display: none;
     padding: 10px max(14px, env(safe-area-inset-left)) calc(10px + env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-right)); }
@@ -75,6 +81,7 @@ h2 { font-size: 13px; font-weight: 600; color: var(--dim); margin: 18px 0 6px; }
   <button class="pill" id="refresh">Refresh</button>
 </header>
 <div id="stage">
+  <canvas id="cv"></canvas>
   <div id="clip"><video id="v" playsinline webkit-playsinline preload="auto"></video></div>
   <div id="bar">
     <div class="row">
@@ -97,7 +104,7 @@ h2 { font-size: 13px; font-weight: 600; color: var(--dim); margin: 18px 0 6px; }
 <script>
 const $ = (s) => document.querySelector(s);
 const v = $("#v"), clip = $("#clip"), seek = $("#seek");
-let recs = [], cur = -1, offset = 10, rate = 1, dragging = false, uiTimer = null;
+let recs = [], cur = -1, offset = 10, rate = 1, dragging = false, uiTimer = null, gapPct = 3;
 const two = (n) => String(n).padStart(2, "0");
 const hm = (t) => { const d = new Date(t * 1000); return two(d.getHours()) + ":" + two(d.getMinutes()); };
 const day = (t) => new Date(t * 1000).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
@@ -148,6 +155,37 @@ function showUi(on) {
   if (on) uiTimer = setTimeout(() => { if (!dragging) showUi(false); }, 5000);
 }
 clip.onclick = () => showUi(!document.body.classList.contains("ui"));
+$("#cv").onclick = () => showUi(!document.body.classList.contains("ui"));
+
+// ---- landscape: paint the stream layout ----
+const cv = $("#cv"), ctx = cv.getContext("2d");
+const landscape = () => window.matchMedia("(orientation: landscape)").matches;
+function paint() {
+  if (cur < 0 || !landscape()) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const W = Math.round(cv.clientWidth * dpr), H = Math.round(cv.clientHeight * dpr);
+  if (!W || !H) return;
+  if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+  ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
+  const S = Math.min(W / 1920, H / 1080), ox = (W - 1920 * S) / 2, oy = (H - 1080 * S) / 2;
+  const gap = gapPct / 100 * 1920, w = 960 - gap, h = w * 9 / 16, vw = v.videoWidth, vh = v.videoHeight;
+  for (let k = 0; k < 2; k++) {
+    const x = 480 + k * 960 - w / 2, y = 540 - h / 2;
+    if (vw) ctx.drawImage(v, k * vw / 2, 0, vw / 2, vh, ox + x * S, oy + y * S, w * S, h * S);
+    if (gap > 0) {                                  // hairline frame, as tools/stream_gap.py draws it
+      const lw = Math.max(1, 2 * S), m = 6 * S + lw / 2;
+      ctx.strokeStyle = "rgb(48,48,48)"; ctx.lineWidth = lw;
+      ctx.strokeRect(ox + x * S - m, oy + y * S - m, w * S + 2 * m, h * S + 2 * m);
+    }
+  }
+}
+function loop() {
+  paint();
+  if (v.requestVideoFrameCallback) v.requestVideoFrameCallback(loop); else requestAnimationFrame(loop);
+}
+loop();
+v.addEventListener("seeked", paint);
+window.addEventListener("resize", () => setTimeout(paint, 60));
 $("#bar").addEventListener("pointerdown", () => showUi(true));
 
 function play(i, at) {
@@ -158,7 +196,7 @@ function play(i, at) {
   v.src = mediaUrl(recs[i]);
   v.onloadedmetadata = () => { if (at) v.currentTime = at; v.playbackRate = rate; v.play().catch(() => {}); };
   v.load();
-  draw(); label(); showUi(true);
+  draw(); label(); showUi(true); paint();
   window.scrollTo({ top: 0 });
 }
 function stop() {
@@ -202,6 +240,7 @@ async function load() {
     const j = await (await fetch("/recordings.json", { cache: "no-store" })).json();
     const curName = cur >= 0 ? recs[cur].name : null;
     recs = j.recordings; offset = j.offset;
+    if (typeof j.gap_pct === "number") gapPct = j.gap_pct;
     cur = curName ? recs.findIndex((r) => r.name === curName) : -1;   // a file may have moved to the Archive
   } catch (e) { recs = []; }
   draw();
