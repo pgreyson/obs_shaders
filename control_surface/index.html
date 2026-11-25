@@ -204,6 +204,7 @@ function setLink(st) {
     const txt = a.warn ? a.warn : "Archive" + (a.used != null ? " " + Math.round(a.used) + "%" : "") + (a.backlog > 1 ? " · " + Math.round(a.backlog) + " GB waiting" : "");
     rel.append(el("span", "pill " + (a.warn ? "warn" : "ok"), txt));
   }
+  if (st.mem) rel.append(el("span", "pill bad", st.mem));
 }
 let savedT;
 function flashSaved() { const s = $("#saved"); s.style.visibility = "visible"; clearTimeout(savedT); savedT = setTimeout(() => s.style.visibility = "hidden", 2500); }

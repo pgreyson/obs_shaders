@@ -159,6 +159,13 @@ if ! pgrep -f tools/stream_archive.py >/dev/null; then
   echo "stream archive started (log: /tmp/stream_archive.log)"
 fi
 
+# Memory guard: logs every instance's footprint, warns on the control surface when one has
+# leaked, restarts the projector instance (only that one) if it does. Detached.
+if ! pgrep -f tools/mem_guard.py >/dev/null; then
+  nohup "$HERE/control_bridge/.venv/bin/python3" "$HERE/tools/mem_guard.py" >> /tmp/mem_guard.log 2>&1 &
+  echo "memory guard started (log: /tmp/mem_guard.log)"
+fi
+
 # Touch control surface for the iPad (control_surface/server.py): every filter parameter of
 # main on one page, http://<this mac>:8080/. Detached; skipped if already running. It
 # reconnects to main by itself, so it does not care about launch order.

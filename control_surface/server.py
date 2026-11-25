@@ -651,6 +651,12 @@ class Surface:
                                  if time.time() - ar.get("t", 0) < 120 else {"rec": False, "warn": "Stream archive daemon not running"})
             except Exception:
                 pass
+            try:      # tools/mem_guard.py: OBS instances that have grown far past their normal size
+                mg = json.loads(Path("/tmp/mem_guard.json").read_text())
+                if time.time() - mg.get("t", 0) < 300 and mg.get("warn"):
+                    st["mem"] = mg["warn"]
+            except Exception:
+                pass
             self.status = st
             await self.send_all({"t": "status", **st})
             try:

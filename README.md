@@ -244,7 +244,16 @@ the log and as a pill in the control surface's status bar ("Archive NN%" when al
 microphone and camera access on the mini's screen; until both are allowed the instance sits at
 "OBS is not ready".
 
-### Playing the archive back (`/recordings` on the control surface)
+### Memory guard (`tools/mem_guard.py`)
+
+The mini has 8 GB and an OBS instance that leaks takes the whole rig down (seen: the projector
+instance at 20 GB, main at 12 GB). The guard reads every instance's memory footprint once a
+minute, logs all of them every 10 minutes to `/tmp/mem_guard.log`, and shows a red
+"OBS memory: main 12 GB" pill on the control surface above 3 GB. It restarts the projector
+instance by itself above 3 GB (it streams and records nothing); the others are only reported.
+`launch_dual.sh` starts it.
+
+## Playing the archive back (`/recordings` on the control surface)
 
 The **Recordings** pill on the control page opens a list of every archive file (those still on the
 mini and those on the Archive volume), grouped by day. Tapping an hour plays it in the page: scrub
