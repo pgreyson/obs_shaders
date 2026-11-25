@@ -70,6 +70,19 @@ def other_hogs():
     return hogs
 
 
+def watched():
+    """Footprint of the Blackmagic camera extension for the periodic log line (it leaked to
+    16 GB in four days; this gives the growth curve)."""
+    try:
+        pid = subprocess.run(["pgrep", "-f", "BlackmagicCameraExtension"], capture_output=True,
+                             text=True).stdout.split()[0]
+        out = subprocess.run(["top", "-l", "1", "-pid", pid, "-stats", "mem"], capture_output=True,
+                             text=True, timeout=30).stdout.split()
+        return f"  blackmagic-camera-ext {out[-1]}"
+    except Exception:
+        return ""
+
+
 def restart_projector(pid):
     os.kill(pid, 15)
     for _ in range(40):
@@ -99,7 +112,7 @@ def main():
                 gb[name] = (pid, g)
         if time.time() - last_log > LOG_EVERY_S:
             last_log = time.time()
-            log("  ".join(f"{n} {g:.2f}" for n, (_, g) in sorted(gb.items())) + "  (GB)")
+            log("  ".join(f"{n} {g:.2f}" for n, (_, g) in sorted(gb.items())) + "  (GB)" + watched())
         warn = []
         for name, (pid, g) in gb.items():
             if name == "projector" and g > RESTART_GB:
