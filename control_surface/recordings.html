@@ -37,6 +37,8 @@ h2 { font-size: 13px; font-weight: 600; color: var(--dim); margin: 18px 0 6px; }
 .rec small { display: block; color: var(--dim); font-size: 11px; margin-top: 2px; }
 .rec.cur { border-color: var(--accent); background: var(--accent-dim); }
 .rec.open small { color: var(--warn); }
+.rec.prores { border-style: dashed; }
+.rec.prores b { color: var(--accent); font-weight: 600; font-size: 11px; margin-left: 5px; }
 #empty { color: var(--dim); padding: 40px 10px; text-align: center; }
 </style>
 </head>
@@ -53,8 +55,8 @@ h2 { font-size: 13px; font-weight: 600; color: var(--dim); margin: 18px 0 6px; }
   <div id="bar">
     <span id="now"></span>
     <span class="grow"></span>
-    <button class="pill" id="prev">Previous hour</button>
-    <button class="pill" id="next">Next hour</button>
+    <button class="pill" id="prev">Previous</button>
+    <button class="pill" id="next">Next</button>
     <span id="speeds"></span>
     <button class="pill" id="eye">One eye</button>
     <button class="pill" id="close">Close</button>
@@ -87,9 +89,10 @@ function draw() {
       grid = document.createElement("div"); grid.className = "grid"; list.append(grid);
     }
     const b = document.createElement("button");
-    b.className = "rec" + (i === cur ? " cur" : "") + (r.open ? " open" : "");
+    b.className = "rec" + (i === cur ? " cur" : "") + (r.open ? " open" : "") + (r.kind === "prores" ? " prores" : "");
     const mins = Math.max(0, Math.round((r.end - r.start) / 60));
     b.append(hm(r.start));
+    if (r.kind === "prores") { const t = document.createElement("b"); t.textContent = "ProRes"; b.append(t); }
     const s = document.createElement("small");
     s.textContent = r.open ? "recording now" : mins + " min · " + r.gb.toFixed(1) + " GB";
     b.append(s);
@@ -118,9 +121,17 @@ function play(i, at) {
 
 v.ontimeupdate = label;
 v.onratechange = () => { if (v.playbackRate !== rate && !v.paused) v.playbackRate = rate; };
-v.onended = () => { if (cur + 1 < recs.length && !recs[cur + 1].open) play(cur + 1, 0); };   // one continuous timeline
-$("#prev").onclick = () => play(cur - 1, 0);
-$("#next").onclick = () => play(cur + 1, 0);
+// previous/next file of the same kind: the archive hours form one continuous timeline, and the
+// ProRes clips (which overlap it in time) are stepped through separately
+function step(dir) {
+  if (cur < 0) return -1;
+  for (let i = cur + dir; i >= 0 && i < recs.length; i += dir) if (recs[i].kind === recs[cur].kind) return i;
+  return -1;
+}
+v.onended = () => { const n = step(1); if (n >= 0 && !recs[n].open && recs[cur].kind === "archive") play(n, 0); };
+v.onerror = () => { if (cur >= 0) $("#now").textContent = "This device cannot play " + recs[cur].name; };
+$("#prev").onclick = () => play(step(-1), 0);
+$("#next").onclick = () => play(step(1), 0);
 $("#close").onclick = () => { v.pause(); v.removeAttribute("src"); v.load(); stage.style.display = "none"; cur = -1; draw(); };
 $("#eye").onclick = () => setEye(!clip.classList.contains("one"));
 function setEye(one) { clip.classList.toggle("one", one); $("#eye").classList.toggle("on", one); keep("rec_eye", one ? "1" : "0"); }

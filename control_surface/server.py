@@ -820,7 +820,8 @@ def make_http(preview):
 # ---- recordings: list + play back the continuous archive --------------------------------
 
 REC_ROOTS = {"l": Path.home() / "Movies" / "archive_capture",       # still on this machine
-             "a": Path("/Volumes/Archive/obs_archive")}             # moved to the Archive volume
+             "a": Path("/Volumes/Archive/obs_archive"),             # moved to the Archive volume
+             "p": Path("/Volumes/Workspace/obs_recordings")}        # main's ProRes recordings
 REC_NAME = re.compile(r"^(\d{4})-(\d\d)-(\d\d) (\d\d)-(\d\d)-(\d\d)\.(mp4|mov)$")
 MEDIA_PORT_OFFSET = 10      # media is served on (page port + 10): 8090 plain, 8453 TLS
 
@@ -839,6 +840,7 @@ def list_recordings():
         seen.add(p.name)
         start = time.mktime(tuple(int(x) for x in m.groups()[:6]) + (0, 0, -1))
         out.append({"id": f"{root}/{rel}", "name": p.name, "start": start, "end": st.st_mtime,
+                    "kind": "prores" if root == "p" else "archive",
                     "gb": round(st.st_size / 1e9, 2), "open": time.time() - st.st_mtime < 20})
     a = REC_ROOTS["a"]
     if a.is_dir():
@@ -846,10 +848,11 @@ def list_recordings():
             if month.is_dir() and re.fullmatch(r"\d{4}-\d\d", month.name):
                 for p in month.iterdir():
                     add("a", f"{month.name}/{p.name}", p)
-    loc = REC_ROOTS["l"]
-    if loc.is_dir():
-        for p in loc.iterdir():
-            add("l", p.name, p)
+    for root in ("l", "p"):
+        d = REC_ROOTS[root]
+        if d.is_dir():
+            for p in d.iterdir():
+                add(root, p.name, p)
     out.sort(key=lambda r: r["start"])
     return out
 

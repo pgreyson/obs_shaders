@@ -251,5 +251,6 @@ mini and those on the Archive volume), grouped by day. Tapping an hour plays it 
 bar, 1x to 16x speed, previous/next hour, one-eye or full side-by-side picture, and it runs on into
 the next hour by itself. The clock shown is the wall-clock time of the frame on screen. Files are
 served with byte ranges by a small HTTP server inside `server.py` on the page port + 10 (8090 plain,
-8453 TLS), restricted to archive file names inside the two archive folders. ProRes recordings on
-Workspace are not listed: Safari cannot play them.
+8453 TLS), restricted to archive file names inside the two archive folders. Main's ProRes
+recordings on Workspace are listed too (dashed, tagged ProRes) and served the same way; whether
+they play depends on the device's decoder and on the network carrying about 265 Mbit/s.
