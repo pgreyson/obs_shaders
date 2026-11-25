@@ -252,5 +252,7 @@ bar, 1x to 16x speed, previous/next hour, one-eye or full side-by-side picture, 
 the next hour by itself. The clock shown is the wall-clock time of the frame on screen. Files are
 served with byte ranges by a small HTTP server inside `server.py` on the page port + 10 (8090 plain,
 8453 TLS), restricted to archive file names inside the two archive folders. Main's ProRes
-recordings on Workspace are listed too (dashed, tagged ProRes) and served the same way; whether
-they play depends on the device's decoder and on the network carrying about 265 Mbit/s.
+recordings on Workspace are listed too (dashed, tagged ProRes) as markers: tapping one plays the
+archive from that session's start time (15 Mbit/s instead of 265). Only sessions older than the
+archive are played from the ProRes file itself. In landscape the player uses the streams' layout
+(gap and hairline frames as set by `tools/stream_gap.py`).

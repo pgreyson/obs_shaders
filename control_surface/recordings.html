@@ -135,9 +135,19 @@ function draw() {
     const s = document.createElement("small");
     s.textContent = r.open ? "recording now" : (mins >= 1 ? mins + " min" : "under 1 min") + " · " + r.gb.toFixed(1) + " GB";
     b.append(s);
-    b.onclick = () => play(i, 0);
+    const ai = r.kind === "prores" ? archiveAt(r.start) : -1;
+    if (r.kind === "prores") s.textContent = (ai >= 0 ? "from the archive · " : "ProRes file only · ") + (mins >= 1 ? mins + " min" : "under 1 min");
+    b.onclick = () => (ai >= 0 ? play(ai, r.start - recs[ai].start) : play(i, 0));
     grid.append(b);
   }
+}
+
+// A ProRes session is a marker on the continuous archive: it is played from the archive hour
+// that covers its start (15 Mbit/s instead of 265). Only sessions from before the archive
+// existed fall back to the ProRes file itself.
+function archiveAt(t) {
+  for (let i = 0; i < recs.length; i++) if (recs[i].kind === "archive" && recs[i].start <= t && t < recs[i].end - 2) return i;
+  return -1;
 }
 
 function label() {
