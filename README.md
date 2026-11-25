@@ -249,7 +249,7 @@ microphone and camera access on the mini's screen; until both are allowed the in
 The mini has 8 GB and an OBS instance that leaks takes the whole rig down (seen: the projector
 instance at 20 GB, main at 12 GB). The guard reads every instance's memory footprint once a
 minute, logs all of them every 10 minutes to `/tmp/mem_guard.log`, and shows a red
-"OBS memory: main 12 GB" pill on the control surface above 3 GB. It restarts the projector
+"Memory: main 12 GB" pill on the control surface above 3 GB. It also reports any other process that large (the Blackmagic camera extension reached 16 GB). It restarts the projector
 instance by itself above 3 GB (it streams and records nothing); the others are only reported.
 `launch_dual.sh` starts it.
 

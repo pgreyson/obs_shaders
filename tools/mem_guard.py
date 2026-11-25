@@ -7,7 +7,8 @@ The mini has 8 GB. An OBS instance that leaks (seen: the projector instance at 2
   * reads each instance's physical footprint once a minute (what Activity Monitor calls
     Memory; RSS is useless here, a swapped-out leak shows a small RSS);
   * logs all of them every LOG_EVERY_S, so a leak's rate and start time can be read back;
-  * warns (log, and STATUS for the control surface's status bar) above WARN_GB;
+  * warns (log, and STATUS for the control surface's status bar) above WARN_GB, for the
+    OBS instances and for any other process (seen: the Blackmagic camera extension, 16 GB);
   * restarts the PROJECTOR instance above RESTART_GB. Only that one: it streams and records
     nothing, so a restart costs a few seconds of projector picture. The others are on air or
     recording and are only reported.
@@ -54,6 +55,21 @@ def instances():
     return found
 
 
+def other_hogs():
+    """Non-OBS processes above WARN_GB, as [(name, gb)]. Uses top, which can also read other
+    users' processes (seen: the Blackmagic camera system extension at 16 GB)."""
+    out = subprocess.run(["top", "-l", "1", "-o", "mem", "-n", "8", "-stats", "pid,mem,command"],
+                         capture_output=True, text=True, timeout=30).stdout
+    hogs = []
+    for line in out.splitlines():
+        m = re.match(r"\s*(\d+)\s+(\d+)([KMG])[+-]?\s+(.+?)\s*$", line)
+        if m and m[4] != "OBS":
+            gb = int(m[2]) * {"K": 1e-6, "M": 1e-3, "G": 1.0}[m[3]]
+            if gb > WARN_GB:
+                hogs.append((m[4], gb))
+    return hogs
+
+
 def restart_projector(pid):
     os.kill(pid, 15)
     for _ in range(40):
@@ -98,8 +114,16 @@ def main():
                 if time.time() - warned.get(name, 0) > 3600:
                     warned[name] = time.time()
                     log(f"WARNING: {name} instance at {g:.1f} GB (relaunch it when you can)")
+        try:
+            for name, g in other_hogs():
+                warn.append(f"{name} {g:.0f} GB")
+                if time.time() - warned.get(name, 0) > 3600:
+                    warned[name] = time.time()
+                    log(f"WARNING: {name} at {g:.0f} GB")
+        except Exception:
+            pass
         st = {"t": time.time(), "gb": {n: round(g, 2) for n, (_, g) in gb.items()},
-              "warn": ("OBS memory: " + ", ".join(warn)) if warn else ""}
+              "warn": ("Memory: " + ", ".join(warn)) if warn else ""}
         try:
             with open(STATUS + ".tmp", "w") as f:
                 json.dump(st, f)
