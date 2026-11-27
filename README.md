@@ -244,7 +244,16 @@ the log and as a pill in the control surface's status bar ("Archive NN%" when al
 microphone and camera access on the mini's screen; until both are allowed the instance sits at
 "OBS is not ready".
 
-### Memory guard (`tools/mem_guard.py`)
+### Sidecar iPad after a restart (`tools/sidecar/`)
+
+macOS does not reconnect a Sidecar iPad after a restart. `tools/sidecar/sidecar` (built from
+`sidecar.m`; it calls the private SidecarCore framework the Displays menu uses) does
+`list`, `connect [NAME] [--wait SECONDS]` and `disconnect`. The login agent
+`~/Library/LaunchAgents/com.obs-shaders.sidecar.plist` (copy in `tools/sidecar/`) runs
+`sidecar connect --wait 900` at login, retrying every 10 s for 15 minutes; its output is in
+`/tmp/sidecar_connect.log`. The iPad must be awake, unlocked and near the mini.
+
+## Memory guard (`tools/mem_guard.py`)
 
 The mini has 8 GB and an OBS instance that leaks takes the whole rig down (seen: the projector
 instance at 20 GB, main at 12 GB). The guard reads every instance's memory footprint once a
