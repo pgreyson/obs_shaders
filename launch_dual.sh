@@ -57,6 +57,9 @@ HALFSBS_PROFILE='full_sbs->projector'
 HALFSBS_COLLECTION='full_sbs->projector'
 HALFSBS_WS_PORT=4458
 
+# Recordings and the archive live on the Mac Studio's shares; mount them if a restart dropped them.
+"$(cd "$(dirname "$0")" && pwd)/tools/mount_shares.sh" >> /tmp/mount_shares.log 2>&1 &
+
 echo "Stopping any existing OBS instances..."
 # OBS sometimes hangs on a hidden "save changes?" dialog and ignores both
 # osascript quit and SIGTERM. Try the polite paths, then escalate to KILL

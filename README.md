@@ -244,7 +244,16 @@ the log and as a pill in the control surface's status bar ("Archive NN%" when al
 microphone and camera access on the mini's screen; until both are allowed the instance sits at
 "OBS is not ready".
 
-### Sidecar iPad after a restart (`tools/sidecar/`)
+### File shares after a restart (`tools/mount_shares.sh`)
+
+Main records ProRes to `/Volumes/Workspace/obs_recordings` and the archive lives on
+`/Volumes/Archive`; both are shares on the Mac Studio and macOS does not remount them after a
+restart. `tools/mount_shares.sh` mounts both with the keychain password, retrying for 10
+minutes. The login agent `~/Library/LaunchAgents/com.obs-shaders.shares.plist` (copy in
+`tools/`) and `launch_dual.sh` run it; log `/tmp/mount_shares.log`. If the Studio's file
+sharing does not answer (port 445 timing out, seen 2026-11-27), toggle File Sharing on the Studio.
+
+## Sidecar iPad after a restart (`tools/sidecar/`)
 
 macOS does not reconnect a Sidecar iPad after a restart. `tools/sidecar/sidecar` (built from
 `sidecar.m`; it calls the private SidecarCore framework the Displays menu uses) does
